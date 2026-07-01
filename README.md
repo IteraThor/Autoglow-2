@@ -29,14 +29,4 @@
    * Configures dialout permissions for USB/Serial connections.
    * Registers and enables system background services (`systemd`).
 
-3. **Running & Managing Linux Services:**
-   AutoGlow runs as two separate background services:
-   * **AutoGlow Sync Daemon (`autoglow.service`):**
-     * Check status: `sudo systemctl status autoglow.service`
-     * Restart: `sudo systemctl restart autoglow.service`
-     * Logs: `journalctl -u autoglow.service -f`
-   * **AutoGlow Web Config Server (`autoglow-web.service`):**
-     * Access UI: Open **`http://<your-ip>:8080`** in your browser.
-     * Check status: `sudo systemctl status autoglow-web.service`
-     * Restart: `sudo systemctl restart autoglow-web.service`
-     * Logs: `journalctl -u autoglow-web.service -f`
+3. ** Access UI: Open **`http://localhost:8080`** in your browser.
