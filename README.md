@@ -29,4 +29,4 @@
    * Configures dialout permissions for USB/Serial connections.
    * Registers and enables system background services (`systemd`).
 
-3. ** Access UI: Open **`http://localhost:8080`** in your browser.
+3. ** Access UI: Open ** `http://localhost:8080`** in your browser.
