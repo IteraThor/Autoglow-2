@@ -24,10 +24,5 @@
    ```bash
    sudo bash setup.sh
    ```
-   * *Ubuntu/Debian:* Automatically installs required dependencies via `apt`.
-   * *Fedora:* Automatically installs required dependencies via `dnf`.
-   * Configures dialout permissions for USB/Serial connections.
-   * Registers and enables system background services (`systemd`).
-
 3. **Access UI: Open**
 `http://localhost:8080` in your browser.
