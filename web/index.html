@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoGlow 2 - Configuration</title>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css?v=10">
+</head>
+<body>
+    <button type="button" id="btn-debug-reset" class="btn-debug" title="Reset config for first-time onboarding simulation">Reset Config</button>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header" style="position: relative;">
+            <div class="left-controls" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 8px;">
+                <button type="button" id="btn-home" class="btn-action-icon" title="Home" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></button>
+            </div>
+            <div class="logo-area">
+                <span class="logo-text">AutoGlow <span class="accent-number">2</span></span>
+            </div>
+            <div class="header-controls" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 8px;">
+                <button type="button" id="btn-profile-manage" class="btn-action-icon" title="Manage Profiles" style="width: 32px; height: 32px; display: none; align-items: center; justify-content: center;"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+            </div>
+        </header>
+
+
+
+        <!-- Main Menu Screen -->
+        <main class="config-card" id="screen-main-menu" style="display: none;">
+
+            <!-- States/Profiles List Container -->
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;" id="states-list-container">
+                <!-- Dynamically loaded list of states -->
+            </div>
+
+            <!-- Footer / Actions -->
+            <div class="card-footer" style="display: flex; gap: 12px; align-items: center; margin-top: 10px;">
+                <button type="button" id="btn-save-all" class="btn-primary" style="flex: 1;">
+                    <span class="btn-text">Save All Settings</span>
+                    <span class="spinner"></span>
+                </button>
+            </div>
+        </main>
+
+        <!-- Device Manager Screen -->
+        <main class="config-card" id="screen-devices" style="display: none;">
+
+            <!-- Device Manager Header -->
+            <div class="device-manager-header">
+                <div class="device-manager-title">
+                    <span style="font-family: var(--font-display); font-size: 18px; font-weight: 700;">WLED Devices</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" id="btn-scan-devices" class="btn-action-icon" title="Scan network for WLED devices" style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                        <span class="btn-scan-icon" style="display: flex; align-items: center; justify-content: center;"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+                        <span class="spinner" style="width: 14px; height: 14px;"></span>
+                    </button>
+                    <button type="button" id="btn-add-device" class="btn-primary" style="width: auto; padding: 0 14px; height: 36px; font-size: 13px; gap: 6px;">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span>Add Device</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Devices Table -->
+            <div id="devices-table-container">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="devices-empty-state" style="display: none; text-align: center; padding: 32px 16px; color: var(--text-secondary);">
+                <div style="font-size: 40px; margin-bottom: 12px;">📡</div>
+                <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">No Devices Yet</div>
+                <div style="font-size: 12px; line-height: 1.5;">Click <strong>Add Device</strong> to manually add a WLED controller, or use <strong>Scan</strong> to discover devices on your local network.</div>
+            </div>
+
+            <!-- Autodarts Account Linking (global — one per service) -->
+            <div style="border-top: 1px solid var(--input-border); margin-top: 8px; padding-top: 16px;">
+                <div style="display: flex; gap: 16px; width: 100%; max-width: 1000px; margin: 0 auto; align-items: stretch;">
+                    <!-- Column 1: Autodarts Account -->
+                    <div id="autodarts-account-section" style="flex: 1; background: rgba(255, 255, 255, 0.015); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--input-border); display: flex; flex-direction: column; justify-content: center; min-height: 114px;">
+                        <!-- Login form and Status -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between;">
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    Autodarts Account
+                                    <span style="font-size: 13px; font-weight: normal; cursor: help; color: var(--text-secondary);" title="To access online in-game WLED effects (like Busts, 180s, player throws, leg, or match wins), link your Autodarts account. Otherwise, the system only processes local board events.">ⓘ</span>
+                                </span>
+                                <span id="autodarts-auth-badge" class="auth-badge auth-badge--disconnected">Disconnected</span>
+                            </div>
+
+                            <!-- Disconnected State form -->
+                            <div id="autodarts-auth-form" style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <input type="text" id="autodarts-email-input" placeholder="Email or Username" autocomplete="username" style="width: 100%;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <input type="password" id="autodarts-password-input" placeholder="Password" autocomplete="current-password" style="width: 100%;">
+                                </div>
+                                <button type="button" id="btn-autodarts-link" class="btn-primary" style="justify-content: center; height: 38px; font-size: 13px;">
+                                    <span class="btn-text">Link Account</span>
+                                    <span class="spinner"></span>
+                                </button>
+                            </div>
+
+                            <!-- Connected State status -->
+                            <div id="autodarts-auth-status" style="display: none; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div class="avatar-circle" id="autodarts-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; color: #101010;"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <span id="autodarts-profile-name" style="font-size: 13px; font-weight: 600; color: var(--text-primary);">IteraThor</span>
+                                        <span id="autodarts-profile-email" style="font-size: 11px; color: var(--text-secondary);">user@autodarts.io</span>
+                                    </div>
+                                </div>
+                                <button type="button" id="btn-autodarts-disconnect" class="btn-danger" style="height: 32px; font-size: 12px; padding: 0 12px; font-weight: 600;">Disconnect</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Connection Status -->
+                    <div style="width: 320px; background: rgba(255, 255, 255, 0.015); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--input-border); display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                📡 API Feed Connection Status
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--input-border); padding: 6px 10px; border-radius: var(--radius-sm);">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 12px;">📡</span>
+                                        <span style="font-size: 11px; font-weight: 600;">Local API Feed</span>
+                                    </div>
+                                    <span id="status-local-api" class="auth-badge auth-badge--disconnected" style="font-size: 10px; padding: 2px 6px;">Offline</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--input-border); padding: 6px 10px; border-radius: var(--radius-sm);">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 12px;">🌐</span>
+                                        <span style="font-size: 11px; font-weight: 600;">Online API Feed</span>
+                                    </div>
+                                    <span id="status-online-api" class="auth-badge auth-badge--disconnected" style="font-size: 10px; padding: 2px 6px;">Offline</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/app.js?v=66"></script>
+
+    <!-- Easy Setup Modal -->
+    <div id="easy-setup-modal" class="easy-setup-modal">
+        <div class="easy-setup-content">
+            <div class="easy-setup-header">
+                <h3 id="easy-setup-title">Easy Setup Scan</h3>
+                <p id="easy-setup-subtitle" style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Checking available connection paths...</p>
+            </div>
+            
+            <div class="scan-items">
+                <div class="scan-item" id="scan-item-serial">
+                    <span class="scan-item-label">USB</span>
+                    <span class="scan-item-status" id="scan-status-serial"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                </div>
+                <div class="scan-item" id="scan-item-network">
+                    <span class="scan-item-label">Network</span>
+                    <span class="scan-item-status" id="scan-status-network"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                </div>
+                <div class="scan-item" id="scan-item-wifi">
+                    <span class="scan-item-label">WiFi</span>
+                    <span class="scan-item-status" id="scan-status-wifi"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+                </div>
+            </div>
+
+            <!-- Selection area (when multiple options discovered) -->
+            <div id="easy-setup-selection-area" style="display: none;">
+                <p class="selection-title">Select configuration to proceed:</p>
+                <div class="option-select-list" id="easy-setup-options-list">
+                    <!-- Discovered options buttons rendered here -->
+                </div>
+            </div>
+
+            <!-- Dynamic message field -->
+            <p id="easy-setup-message" style="font-size: 14px; text-align: center; color: var(--text-secondary); margin-top: 10px; display: none;"></p>
+
+            <div class="easy-setup-actions" style="display: flex; gap: 12px; margin-top: 10px;">
+                <button type="button" id="btn-easy-setup-action" class="btn-primary" style="flex: 1; justify-content: center; display: none;">Auto Setup</button>
+                <button type="button" id="btn-easy-setup-close" class="btn-secondary" style="flex: 1; justify-content: center;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden toggles for compatibility with app.js business logic -->
+    <input type="checkbox" id="local-board-api-toggle" style="display: none;">
+    <input type="checkbox" id="online-board-api-toggle" style="display: none;">
+
+    <!-- Profile Management Modal -->
+    <div id="profile-modal" class="easy-setup-modal">
+        <div class="easy-setup-content" style="max-width: 320px;">
+            <div class="easy-setup-header">
+                <h3>Profiles</h3>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
+                <!-- Profile Selection -->
+                <div class="form-group" style="background: rgba(255, 255, 255, 0.015); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--input-border); margin-bottom: 0;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <div class="select-wrapper" style="flex: 1;">
+                            <select id="profile-select" style="height: 36px; padding: 0 36px 0 12px; font-size: 13px; width: 100%;">
+                                <option value="Default">Default</option>
+                            </select>
+                        </div>
+                        <button type="button" id="btn-profile-rename" class="btn-secondary" style="width: 36px; height: 36px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: var(--radius-sm);" title="Rename Profile"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+                        <button type="button" id="btn-profile-create" class="btn-primary" style="width: 36px; height: 36px; padding: 0; display: flex; justify-content: center; align-items: center; border-radius: var(--radius-sm);" title="Add New Profile"><svg class="icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                    </div>
+                </div>
+
+                <!-- Delete Selected Profile -->
+                <button type="button" id="btn-profile-delete" class="btn-danger" style="width: 100%; justify-content: center; height: 36px; font-size: 13px; font-weight: 600;">
+                    Delete
+                </button>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 14px;">
+                <button type="button" id="btn-profile-apply" class="btn-primary" style="flex: 1; justify-content: center; height: 36px; font-size: 13px;">Apply</button>
+                <button type="button" id="btn-profile-close" class="btn-secondary" style="flex: 1; justify-content: center; height: 36px; font-size: 13px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="easy-setup-modal">
+        <div class="easy-setup-content" style="max-width: 340px; text-align: center;">
+            <h3 id="confirm-modal-title" style="margin-top: 0; font-size: 18px;">Confirm Action</h3>
+            <p id="confirm-modal-message" style="color: var(--text-secondary); font-size: 13px; margin: 16px 0 20px 0; line-height: 1.5;"></p>
+            <div style="display: flex; gap: 12px;">
+                <button type="button" id="btn-confirm-yes" class="btn-danger" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Confirm</button>
+                <button type="button" id="btn-confirm-no" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Modal -->
+    <div id="prompt-modal" class="easy-setup-modal">
+        <div class="easy-setup-content" style="max-width: 340px; text-align: center;">
+            <h3 id="prompt-modal-title" style="margin-top: 0; font-size: 18px;">Input Required</h3>
+            <p id="prompt-modal-message" style="color: var(--text-secondary); font-size: 13px; margin: 16px 0 12px 0; line-height: 1.5;"></p>
+            <div style="margin-bottom: 20px;">
+                <input type="text" id="prompt-modal-input" placeholder="Enter name..." style="width: 100%; height: 38px; padding: 8px 12px; font-size: 13px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); color: white; outline: none;">
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button type="button" id="btn-prompt-ok" class="btn-primary" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">OK</button>
+                <button type="button" id="btn-prompt-cancel" class="btn-secondary" style="flex: 1; justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="easy-setup-modal">
+        <div class="easy-setup-content" style="max-width: 450px;">
+            <div class="easy-setup-header" style="border-bottom: 1px solid var(--input-border); padding-bottom: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Device Settings</h3>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">Configure connection and preferences</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span id="settings-ws-local" class="ws-led ws-led--checking" title="Local Connection Status" style="width: 8px; height: 8px; border-radius: 50%; display: inline-block;"></span>
+                    <span id="settings-ws-online" class="ws-led ws-led--disabled" title="Online Connection Status" style="width: 8px; height: 8px; border-radius: 50%; display: inline-block;"></span>
+                </div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+
+                <!-- Global Brightness -->
+                <div class="form-group" style="margin-bottom: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Global Brightness</label>
+                        <span id="settings-brightness-val" style="font-size: 12px; font-weight: bold; color: var(--accent-blue);">100%</span>
+                    </div>
+                    <input type="range" id="settings-brightness-slider" min="0" max="100" value="100" style="width: 100%; height: 5px; background: var(--input-border); border-radius: 3px; outline: none; -webkit-appearance: none; cursor: pointer;">
+                </div>
+
+                <!-- Transition Crossfade -->
+                <div class="form-group toggle-row" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; height: 100%; padding-top: 4px;">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Transition Crossfade</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="settings-crossfade-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Power Up State -->
+                <div class="form-group toggle-row" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between; height: 100%; padding-top: 4px;">
+                    <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Power Up State (Boot On)</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="settings-booton-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid var(--input-border); padding-top: 16px; margin-top: 20px;">
+                <button type="button" id="btn-settings-save" class="btn-primary" style="height: 34px; font-size: 12px; font-weight: 600; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1;">
+                    <span class="btn-text">Save Changes</span>
+                </button>
+                <button type="button" id="btn-settings-cancel" class="btn-secondary" style="height: 34px; font-size: 12px; font-weight: 600; padding: 0 16px; flex: 1;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unsaved Changes Modal -->
+    <div id="unsaved-modal" class="easy-setup-modal">
+        <div class="easy-setup-content" style="max-width: 360px; text-align: center;">
+            <h3 id="unsaved-modal-title" style="margin-top: 0; font-size: 18px;">Unsaved Changes</h3>
+            <p id="unsaved-modal-message" style="color: var(--text-secondary); font-size: 13px; margin: 16px 0 20px 0; line-height: 1.5;">You have unsaved changes in your active profile. Would you like to save them before proceeding?</p>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" id="btn-unsaved-save" class="btn-primary" style="justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Save & Proceed</button>
+                <button type="button" id="btn-unsaved-discard" class="btn-danger" style="justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Discard Changes</button>
+                <button type="button" id="btn-unsaved-cancel" class="btn-secondary" style="justify-content: center; height: 38px; font-weight: 600; font-size: 13px;">Cancel</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

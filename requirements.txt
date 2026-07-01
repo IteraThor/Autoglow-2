@@ -1,0 +1,4 @@
+websockets
+pyserial
+pystray
+Pillow

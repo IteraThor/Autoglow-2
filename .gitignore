@@ -1,0 +1,18 @@
+# Ignore virtual environment
+venv/
+
+# Ignore configuration and cache files (contains secrets)
+config.json
+online_signals.jsonl
+.sync_status.json
+
+# Ignore PyInstaller builds
+build/
+dist/
+
+# Ignore Python caches
+__pycache__/
+*.pyc
+
+# Ignore system/log files
+*.log

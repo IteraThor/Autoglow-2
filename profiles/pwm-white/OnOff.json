@@ -1,0 +1,240 @@
+{
+    "180": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Throw": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Takeout in progress": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Takeout": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Starting": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": true,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Stopped": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": true,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            ]
+        }
+    },
+    "Calibrating": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Error": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Bust": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Throw Player 1": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Throw Player 2": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Leg Won": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Match Won": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    },
+    "Triple": {
+        "on": true,
+        "bri": 255,
+        "tt": 0,
+        "enabled": false,
+        "seg": {
+            "fx": 0,
+            "col": [
+                [
+                    255,
+                    255,
+                    255,
+                    255
+                ]
+            ]
+        }
+    }
+}
