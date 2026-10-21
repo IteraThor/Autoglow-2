@@ -181,6 +181,10 @@ class AutoGlowEngine:
         self.app_config.lighting_mode = mode
         logger.info(f"AutoGlow Engine active lighting mode set to: {mode.value}")
 
+    def _is_flow_mode(self) -> bool:
+        """True while the Flow Matrix (not the Event Matrix) decides what plays."""
+        return bool(self.app_config) and self.app_config.lighting_mode == LightingMode.FLOW
+
     def reload_game_flow(self, flow: Optional[GameFlow] = None) -> None:
         """Reload Game Flow from disk or apply in-memory instance."""
         if flow:
@@ -332,7 +336,7 @@ class AutoGlowEngine:
 
     def _get_max_effect_duration(self, event_key: str) -> float:
         """Calculate the maximum configured duration for a given event across enabled devices and segments."""
-        if self.app_config and self.app_config.lighting_mode == LightingMode.FLOW:
+        if self._is_flow_mode():
             max_flow_dur = 0.0
             p = self.game_flow.get_phase(event_key)
             if p and p.effect and p.effect.enabled and p.effect.duration > 0:
@@ -345,7 +349,7 @@ class AutoGlowEngine:
                 for seg in dev.segments or []:
                     if _is_pwm_segment(seg):
                         continue
-                    seg_flow = self.game_flow_storage.load_for_segment(dev.ip, _seg_id(seg))
+                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, _seg_id(seg))
                     sp = seg_flow.get_phase(event_key)
                     if sp and sp.effect and sp.effect.enabled and sp.effect.duration > 0:
                         max_flow_dur = max(max_flow_dur, sp.effect.duration)
@@ -425,7 +429,7 @@ class AutoGlowEngine:
 
             if max_game_start_dur > 0.0:
                 self._game_start_end_time = time.time() + max_game_start_dur
-                if self.app_config.lighting_mode != LightingMode.FLOW:
+                if not self._is_flow_mode():
                     self._game_start_task = asyncio.create_task(self._await_game_start_transition(max_game_start_dur))
             else:
                 self._game_start_end_time = 0.0
@@ -530,7 +534,7 @@ class AutoGlowEngine:
 
         match_players = getattr(self.autodarts, "current_players", []) if self.autodarts else []
 
-        if self.app_config.lighting_mode == LightingMode.FLOW:
+        if self._is_flow_mode():
             await self._dispatch_flow_event(event)
             dispatched_any = True
         else:
@@ -710,12 +714,12 @@ class AutoGlowEngine:
                     if _is_pwm_segment(seg):
                         continue
                     seg_id = _seg_id(seg)
-                    seg_flow = self.game_flow_storage.load_for_segment(dev.ip, seg_id)
+                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, seg_id)
                     target_eff = self._resolve_flow_effect(seg_flow, event)
                     if target_eff:
                         await drv.play_effect(target_eff, segment_id=seg_id, force_enable=True)
             else:
-                seg_flow = self.game_flow_storage.load_for_segment(dev.ip, None)
+                seg_flow = self.game_flow_storage.get_for_segment(dev.ip, None)
                 target_eff = self._resolve_flow_effect(seg_flow, event)
                 if target_eff:
                     await drv.play_effect(target_eff, force_enable=True)
@@ -724,7 +728,7 @@ class AutoGlowEngine:
         """Asynchronously advance the Flow Matrix state machine after an intro or celebration completes."""
         try:
             await asyncio.sleep(delay)
-            if self.app_config.lighting_mode != LightingMode.FLOW:
+            if not self._is_flow_mode():
                 return
             self.flow_active_phase = target_phase_id
 
@@ -738,7 +742,7 @@ class AutoGlowEngine:
                         if _is_pwm_segment(seg):
                             continue
                         seg_id = _seg_id(seg)
-                        seg_flow = self.game_flow_storage.load_for_segment(dev.ip, seg_id)
+                        seg_flow = self.game_flow_storage.get_for_segment(dev.ip, seg_id)
                         p = seg_flow.get_phase(target_phase_id)
                         if p and p.effect and p.effect.enabled:
                             baseline_eff = EffectConfig(
@@ -751,7 +755,7 @@ class AutoGlowEngine:
                             )
                             await drv.play_effect(baseline_eff, segment_id=seg_id, force_enable=True)
                 else:
-                    seg_flow = self.game_flow_storage.load_for_segment(dev.ip, None)
+                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, None)
                     p = seg_flow.get_phase(target_phase_id)
                     if p and p.effect and p.effect.enabled:
                         baseline_eff = EffectConfig(

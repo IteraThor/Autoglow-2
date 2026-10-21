@@ -132,6 +132,11 @@ async def handle_wled_update(request: web.Request) -> web.Response:
         raise PersistenceError("Failed to persist configuration to disk")
     request.app["current_app_config"] = cfg
 
+    # Running drivers pick up the new segments now, not on the next restart
+    engine = request.app.get("engine")
+    if engine:
+        engine.sync_drivers(cfg)
+
     # 2. Attempt physical WLED hardware mutation
     loop = asyncio.get_running_loop()
     readback_data = None

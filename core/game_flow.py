@@ -3,7 +3,9 @@ AutoGlow 2 - Game Flow & Visual State Machine Module
 Defines models, transitions, and storage for the Game Flow Simulator and Visual Planner.
 """
 
+import copy
 import os
+import shutil
 import sys
 import json
 import logging
@@ -14,6 +16,9 @@ from typing import Dict, List, Optional, Any
 from core.models import EffectConfig, AnimationType, RGBColor, _safe_float, _safe_int
 
 logger = logging.getLogger("autoglow.game_flow")
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_FLOW_PATH = os.path.join(PROJECT_ROOT, "game_flows.json")
 
 
 @dataclass
@@ -326,15 +331,43 @@ def create_default_game_flow() -> GameFlow:
 
 class GameFlowStorageManager:
     """
-    Manages thread-safe atomic reading and writing of game_flows.json,
-    supporting both the master default game flow and per-(device, segment) flows.
+    Reads and atomically writes game_flows.json: the master flow plus per-(device, segment) flows.
+
+    Parsed flows are cached and only re-read when the file changes (checked by mtime and size), so the
+    engine can look up a segment's flow on every dart without touching the disk. get()/get_for_segment()
+    return shared cache entries (read-only); load()/load_for_segment() return copies to edit.
     """
 
-    def __init__(self, filepath: str = "game_flows.json"):
-        self.filepath = filepath
-        self.bak_filepath = filepath + ".bak"
+    def __init__(self, filepath: Optional[str] = None):
+        if filepath is None:
+            filepath = DEFAULT_FLOW_PATH
+            _adopt_flow_file_from_cwd(filepath)
+        self.filepath = os.path.abspath(filepath)
+        self.bak_filepath = self.filepath + ".bak"
+        self._stamp: Optional[tuple] = None
+        self._data: Dict[str, Any] = {}
+        self._flows: Dict[tuple, GameFlow] = {}
+
+    def _file_stamp(self) -> Optional[tuple]:
+        try:
+            st = os.stat(self.filepath)
+        except OSError:
+            return None
+        return (st.st_mtime_ns, st.st_size)
+
+    def _remember(self, data: Dict[str, Any], stamp: Optional[tuple]) -> None:
+        self._data = data
+        self._stamp = stamp
+        self._flows.clear()
 
     def _read_raw(self) -> Dict[str, Any]:
+        stamp = self._file_stamp()
+        if stamp is not None and stamp == self._stamp:
+            return self._data
+        self._remember(self._read_file(), stamp)
+        return self._data
+
+    def _read_file(self) -> Dict[str, Any]:
         if not os.path.exists(self.filepath):
             return {}
         try:
@@ -350,21 +383,29 @@ class GameFlowStorageManager:
                     logger.error(f"Backup recovery also failed: {be}")
             return {}
 
-    def load(self) -> GameFlow:
+    def _cached_flow(self, key: tuple, raw: Dict[str, Any]) -> GameFlow:
+        flow = self._flows.get(key)
+        if flow is None:
+            flow = GameFlow.from_dict(raw)
+            self._flows[key] = flow
+        return flow
+
+    def get(self) -> GameFlow:
+        """The master flow as a shared, read-only cache entry (created and saved on first use)."""
         data = self._read_raw()
         if not data:
             flow = create_default_game_flow()
             self.save(flow)
             return flow
-        return GameFlow.from_dict(data)
+        return self._cached_flow(("",), data)
 
-    def load_for_segment(self, ip: Optional[str] = None, seg_id: Optional[Any] = None) -> GameFlow:
+    def get_for_segment(self, ip: Optional[str] = None, seg_id: Optional[Any] = None) -> GameFlow:
         """
-        Load custom GameFlow for a specific (ip, seg_id).
-        If not customized, falls back to the default master flow.
+        The flow customised for (ip, seg_id), falling back to the master flow.
+        Shared and read-only: the engine calls this for every dart.
         """
         if not ip:
-            return self.load()
+            return self.get()
 
         data = self._read_raw()
         dev_flows = data.get("device_flows", {})
@@ -373,10 +414,17 @@ class GameFlowStorageManager:
             if isinstance(dev_map, dict):
                 seg_key = str(seg_id) if seg_id is not None else "0"
                 if seg_key in dev_map and isinstance(dev_map[seg_key], dict):
-                    return GameFlow.from_dict(dev_map[seg_key])
+                    return self._cached_flow((ip, seg_key), dev_map[seg_key])
 
-        # Fallback to default flow
-        return self.load()
+        return self.get()
+
+    def load(self) -> GameFlow:
+        """A private copy of the master flow that the caller may edit."""
+        return copy.deepcopy(self.get())
+
+    def load_for_segment(self, ip: Optional[str] = None, seg_id: Optional[Any] = None) -> GameFlow:
+        """A private copy of the flow for (ip, seg_id) that the caller may edit."""
+        return copy.deepcopy(self.get_for_segment(ip, seg_id))
 
     def save(self, flow: GameFlow) -> bool:
         """Save the default master flow while preserving any existing device_flows."""
@@ -396,7 +444,8 @@ class GameFlowStorageManager:
             return self.save(flow)
 
         try:
-            data = self._read_raw()
+            # Work on a copy so a failed write never leaves unsaved changes in the cache
+            data = copy.deepcopy(self._read_raw())
             if not data:
                 def_flow = create_default_game_flow()
                 data = def_flow.to_dict()
@@ -418,31 +467,52 @@ class GameFlowStorageManager:
     def _write_raw(self, data: Dict[str, Any]) -> bool:
         # SAFETY GUARD: Prevent unit test execution from inadvertently overwriting production game flow
         if ("unittest" in sys.modules or "pytest" in sys.modules) and not os.environ.get("AUTOGLOW_ALLOW_PROD_CONFIG_IN_TEST"):
-            project_flow = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game_flows.json"))
-            if os.path.abspath(self.filepath) == project_flow:
+            if self.filepath == DEFAULT_FLOW_PATH:
                 logger.error(
                     f"SAFETY GUARD ACTIVATED: Blocked attempt to overwrite production game flow '{self.filepath}' "
                     f"during test execution. Tests must specify an isolated flow file."
                 )
                 return False
 
+        temp_name = None
         try:
             json_str = json.dumps(data, indent=2)
             dir_name = os.path.dirname(os.path.abspath(self.filepath))
             with tempfile.NamedTemporaryFile("w", dir=dir_name, delete=False, encoding="utf-8") as tf:
                 tf.write(json_str)
+                tf.flush()
+                os.fsync(tf.fileno())
                 temp_name = tf.name
 
             if os.path.exists(self.filepath):
                 try:
-                    import shutil
                     shutil.copyfile(self.filepath, self.bak_filepath)
                 except Exception as ce:
                     logger.warning(f"Could not create game flow backup: {ce}")
 
             os.replace(temp_name, self.filepath)
+            self._remember(data, self._file_stamp())
             logger.info(f"Successfully saved game flow data to {self.filepath}")
             return True
         except Exception as e:
             logger.exception(f"Error writing game flow data to {self.filepath}: {e}")
+            if temp_name and os.path.exists(temp_name):
+                os.remove(temp_name)
             return False
+
+
+def _adopt_flow_file_from_cwd(target: str) -> None:
+    """
+    Before the flow path was pinned to the project root it was relative to the working directory.
+    If AutoGlow used to be started elsewhere, copy that file over once so no saved flows are lost.
+    """
+    legacy = os.path.abspath("game_flows.json")
+    if legacy == target or os.path.exists(target) or not os.path.isfile(legacy):
+        return
+    if ("unittest" in sys.modules or "pytest" in sys.modules) and not os.environ.get("AUTOGLOW_ALLOW_PROD_CONFIG_IN_TEST"):
+        return
+    try:
+        shutil.copyfile(legacy, target)
+        logger.info(f"Copied game flows from {legacy} to {target} (the original is left in place)")
+    except OSError as e:
+        logger.warning(f"Could not copy legacy game flows from {legacy}: {e}")
