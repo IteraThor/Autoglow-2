@@ -930,7 +930,6 @@ async function saveIdlePreset() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('Saved as WLED Boot Preset 1 successfully.', 'success');
-      logTerminal('WLED', 'PRESET', `Saved Preset 1 on ${idlePresetState.ip} with multi-segment bounds.`);
     } else {
       showToast(`Save failed: ${data.message}`, 'error');
     }
@@ -1179,7 +1178,6 @@ async function testInactivityDim() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('▶ Inactivity Dim executed: Released UDP & restored Idle Preset 1.', 'warning');
-      logTerminal('POWER', 'DIM', 'Triggered test inactivity teardown & dimming.');
     } else if (data.status === 'warning') {
       showToast(`Dim sent: ${data.message}`, 'warning');
     } else {
@@ -1196,7 +1194,6 @@ async function testPowerOff() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('✓ Auto-Off verified on physical hardware (Lights off). Click "↺ Turn On" to restore.', 'info');
-      logTerminal('POWER', 'OFF', 'Verified Standby Auto-Off on physical hardware.');
     } else if (data.status === 'warning') {
       showToast(`Auto-Off sent: ${data.message}`, 'warning');
     } else {
@@ -1213,7 +1210,6 @@ async function testWakeBoard() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('✓ Power restored & verified on hardware (Lights active).', 'success');
-      logTerminal('POWER', 'WAKE', 'Restored & verified active board illumination.');
     } else if (data.status === 'warning') {
       showToast(`Turn On sent: ${data.message}`, 'warning');
     } else {

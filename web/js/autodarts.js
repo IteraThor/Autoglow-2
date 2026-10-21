@@ -94,8 +94,6 @@ async function renderAutodartsTab() {
           const card = document.createElement('div');
           card.style.cssText = `padding: 10px 12px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 6px;`;
           
-          const darts = b.detections ?? b.state?.numThrows ?? 0;
-          const accuracyPct = ((b.accuracy ?? 0) * 100).toFixed(2);
           const rawIp = b.ip || '';
           const parsedIp = parseBoardIp(rawIp);
           const ipUrl = parsedIp.url;
@@ -170,10 +168,6 @@ async function renderAutodartsTab() {
                   : `<span style="color: var(--text-muted);">${escapeHtml(ipClean)}</span>`
                 }
               </div>
-              <div style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary);">
-                <span style="color: var(--text-muted); font-size: 10.5px; min-width: 58px;">Stats:</span>
-                <span>${darts} Darts (${accuracyPct}% Accuracy)</span>
-              </div>
             </div>
           `;
           boardsContainer.appendChild(card);
@@ -193,7 +187,6 @@ async function renderAutodartsTab() {
     // 3. Live Match Status Panel
     const matchBadge = document.getElementById('liveMatchBadge');
     const matchName = document.getElementById('liveMatchName');
-    const matchState = document.getElementById('liveMatchState');
     const matchPlayers = document.getElementById('liveMatchPlayers');
     const matchLastEvent = document.getElementById('liveMatchLastEvent');
     const matchPrevEvent = document.getElementById('liveMatchPrevEvent');
@@ -217,10 +210,6 @@ async function renderAutodartsTab() {
           matchPlayers.innerHTML = formatPlayerNamePlates([email || 'Player'], 0);
         }
       }
-      if (matchState) {
-        matchState.innerText = `Match In Progress`;
-        matchState.style.color = `var(--status-success)`;
-      }
       if (matchLinkContainer && matchLink) {
         matchLinkContainer.style.display = 'block';
         matchLink.href = `https://play.autodarts.com/matches/${data.match.active_match_id}`;
@@ -235,10 +224,6 @@ async function renderAutodartsTab() {
       }
       if (matchPlayers) {
         matchPlayers.innerHTML = `<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">None</span>`;
-      }
-      if (matchState) {
-        matchState.innerText = `Standby`;
-        matchState.style.color = `var(--text-primary)`;
       }
       if (matchLinkContainer) {
         matchLinkContainer.style.display = 'none';
@@ -411,10 +396,7 @@ function renderBridgePanel(bridge) {
   setDot('bridgeTabDot', tabOpen ? 'dot-green' : (linked ? 'dot-yellow' : 'dot-gray'));
   setTextById('bridgeTabText', tabOpen ? (bridge.tab_url || 'play.autodarts.com').replace(/^https?:\/\//, '') : 'Not open');
 
-  const last = bridge.last_message_seconds_ago;
-  setTextById('bridgeMeta', linked
-    ? `${bridge.messages_received || 0} messages · last ${last === null || last === undefined ? '—' : `${last}s ago`}`
-    : 'Chrome must be running with the AutoGlow Bridge extension.');
+  setTextById('bridgeMeta', linked ? '' : 'Chrome must be running with the AutoGlow Bridge extension.');
 
   loadBridgeSetupInfo();
 }

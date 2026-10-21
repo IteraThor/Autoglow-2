@@ -1,32 +1,11 @@
 // AutoGlow 2 - System Settings, Backups & Auto-Updates Module
 
-// --- Reset All Settings ---
-async function confirmResetAllSettings() {
-  if (!confirm('Are you sure you want to reset all AutoGlow settings to factory defaults?')) return;
-  try {
-    const res = await fetch('/api/config/reset', { method: 'POST' });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      showToast('Settings reset to factory defaults.', 'success');
-      logTerminal('SYSTEM', 'RESET', 'Configuration wiped to zero-state.');
-      await loadConfig();
-    }
-  } catch (err) {
-    showToast(`Reset error: ${err}`, 'error');
-  }
-}
-
 
 
 // =============================================================================
 
 async function renderSettingsTab() {
   fetchBackupsList();
-  checkForUpdates(true); // silent initial query
-}
-
-async function renderUpdatesTab() {
-  renderSettingsTab();
 }
 
 async function fetchBackupsList() {
@@ -89,7 +68,6 @@ async function promptCreateBackup() {
     })).json());
     if (data.status === 'ok') {
       showToast(`✓ Backup created: ${data.filename} (${data.size_kb} KB)`, 'success');
-      logTerminal('SYSTEM', 'BACKUP', `Snapshot created: ${data.filename}`);
       fetchBackupsList();
     } else {
       showToast(`Backup failed: ${data.message}`, 'error');
@@ -112,7 +90,6 @@ async function restoreBackup(filename) {
     })).json());
     if (data.status === 'ok') {
       showToast(`✓ Restored ${data.restored_files} files! Reloading system...`, 'success');
-      logTerminal('SYSTEM', 'RESTORE', `Snapshot restored: ${filename}`);
       waitForServerAndReload();
     } else {
       showToast(`Restore error: ${data.message}`, 'error');
@@ -277,7 +254,6 @@ async function applyZipUpdate() {
 
     if (data.status === 'ok') {
       showToast(`✓ ${data.message || 'Update applied successfully!'}`, 'success');
-      logTerminal('SYSTEM', 'UPDATE', `Applied ZIP update (${data.files_updated || 0} files).`);
       
       if (statusBox) {
         statusBox.style.background = 'rgba(16, 185, 129, 0.1)';
@@ -317,18 +293,8 @@ async function applyZipUpdate() {
   }
 }
 
-// Fallback compatibility stubs
-async function checkForUpdates(silent = false) {
-  // Retained for backwards compatibility
-}
-
-async function applySystemUpdate() {
-  // Retained for backwards compatibility
-}
-
 if (typeof window !== "undefined") {
   window.renderSettingsTab = renderSettingsTab;
-  window.renderUpdatesTab = renderUpdatesTab;
   window.fetchBackupsList = fetchBackupsList;
   window.promptCreateBackup = promptCreateBackup;
   window.restoreBackup = restoreBackup;
@@ -340,9 +306,6 @@ if (typeof window !== "undefined") {
   window.handleZipDrop = handleZipDrop;
   window.clearSelectedZip = clearSelectedZip;
   window.applyZipUpdate = applyZipUpdate;
-  window.checkForUpdates = checkForUpdates;
-  window.applySystemUpdate = applySystemUpdate;
-  window.confirmResetAllSettings = confirmResetAllSettings;
 }
 
 

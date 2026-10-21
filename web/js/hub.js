@@ -78,7 +78,7 @@ function renderHubSnapshot(data) {
   const eng = data.engine || {};
   const ad = data.autodarts || {};
 
-  setText('hubMeta', `v${data.version} · up ${formatDuration(data.uptime_seconds || 0)} · updated ${new Date().toLocaleTimeString('en-GB', { hour12: false })}`);
+  setText('hubMeta', `v${data.version}`);
 
   if (!eng.running) {
     setHubTile('hubEngine', 'dot-red', 'Stopped', 'Engine not running');
@@ -117,7 +117,6 @@ function renderHubSnapshot(data) {
     activeIdx: ad.active_player_idx || 0,
     last: eng.last_event,
     previous: eng.previous_event,
-    count: eng.event_count,
     phase: eng.flow_phase
   });
 
@@ -156,7 +155,6 @@ function renderHubMatch(m) {
   }
   setText('hubMatchLast', m.last || 'Standby');
   setText('hubMatchPrev', m.previous || '—');
-  if (m.count != null) setText('hubMatchCount', String(m.count));
   if (m.phase) setText('hubMatchPhase', m.phase);
 }
 
@@ -282,7 +280,6 @@ function onHubTelemetry(msg) {
   if (msg.type === 'game_event' || msg.type === 'event') {
     setText('hubMatchLast', msg.display_event || msg.event || 'Event');
     if (msg.previous_event) setText('hubMatchPrev', msg.previous_event);
-    if (msg.total_events != null) setText('hubMatchCount', String(msg.total_events));
   }
   if (['game_event', 'event', 'protocol_state', 'power_state', 'lighting_mode_changed', 'game_flow_state'].includes(msg.type)) {
     scheduleHubRefresh();

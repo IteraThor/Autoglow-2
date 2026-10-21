@@ -24,8 +24,6 @@ SECRET_KEYS = (
     "autodarts_password",
     "autodarts_access_token",
     "autodarts_refresh_token",
-    "ai_key",
-    "gemini_api_key",
     "access_pin_hash",
     "autodarts_bridge_key",
 )
@@ -72,8 +70,6 @@ def restore_redacted_secrets(new_cfg: AppConfig, old_cfg: Optional[AppConfig]) -
         return
     if not new_cfg.autodarts_password and old_cfg.autodarts_password:
         new_cfg.autodarts_password = old_cfg.autodarts_password
-    if not new_cfg.ai_key and old_cfg.ai_key:
-        new_cfg.ai_key = old_cfg.ai_key
     for key in SECRET_KEYS:
         if old_cfg.extra.get(key) and not new_cfg.extra.get(key):
             new_cfg.extra[key] = old_cfg.extra[key]

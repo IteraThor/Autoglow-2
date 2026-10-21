@@ -5,7 +5,7 @@ Clean, typed dataclasses for game events, device configuration, effects, and pro
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Any
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -401,7 +401,6 @@ class DartEvent:
     player_name: Optional[str] = None
     player_index: Optional[int] = None
     round_score: Optional[int] = None
-    stats: Dict[str, Union[str, int, float]] = field(default_factory=dict)
     board_id: Optional[str] = None
 
 
@@ -762,7 +761,6 @@ class AppConfig:
     autodarts_user: str = ""
     autodarts_password: str = ""
     autodarts_board_id: str = ""
-    ai_key: str = ""
     game_mode_spotlight_brightness: int = 255
     lighting_mode: LightingMode = LightingMode.MATRIX
     auto_connect_udp_on_game_start: bool = True
@@ -861,7 +859,6 @@ class AppConfig:
             "autodarts_user": self.autodarts_user,
             "autodarts_password": self.autodarts_password,
             "autodarts_board_id": self.autodarts_board_id,
-            "ai_key": self.ai_key,
             "game_mode_spotlight_brightness": self.game_mode_spotlight_brightness,
             "lighting_mode": self.lighting_mode.value if isinstance(self.lighting_mode, LightingMode) else str(self.lighting_mode or "matrix"),
             "auto_connect_udp_on_game_start": self.auto_connect_udp_on_game_start,
@@ -936,7 +933,6 @@ class AppConfig:
             autodarts_user=str(data.get("autodarts_user", "")),
             autodarts_password=str(data.get("autodarts_password", "")),
             autodarts_board_id=str(data.get("autodarts_board_id", "")),
-            ai_key=str(data.get("ai_key", "")),
             game_mode_spotlight_brightness=_safe_int(data.get("game_mode_spotlight_brightness"), 255),
             lighting_mode=LightingMode.FLOW if str(data.get("lighting_mode", "")).lower() == "flow" else LightingMode.MATRIX,
             auto_connect_udp_on_game_start=bool(data.get("auto_connect_udp_on_game_start", True)),
@@ -952,7 +948,7 @@ class AppConfig:
             extra={k: v for k, v in data.items() if k not in [
                 "devices", "profiles", "active_profile", "profile", "global_brightness", "wifi_ip",
                 "autodarts_user", "autodarts_password", "autodarts_board_id",
-                "ai_key", "game_mode_spotlight_brightness", "lighting_mode", "auto_connect_udp_on_game_start",
+                "ai_key", "gemini_api_key", "game_mode_spotlight_brightness", "lighting_mode", "auto_connect_udp_on_game_start",
                 "disconnect_udp_on_match_end",
                 "inactivity_timeout_enabled", "inactivity_timeout_minutes",
                 "idle_power_off_enabled", "idle_power_off_minutes", "idle_dimming_brightness",

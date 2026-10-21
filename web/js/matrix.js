@@ -1322,9 +1322,7 @@ async function triggerPlayerSlotTest(slotId) {
       })
     });
     const data = await res.json();
-    if (data.status === 'ok') {
-      logTerminal('DISPATCH', 'EVENT', `Executed Player ${slotId} (${displayLabel}) on ${selectedMatrixDeviceIp} [Seg #${selectedMatrixSegmentId ?? 0}]`);
-    } else {
+    if (data.status !== 'ok') {
       showToast(`Test error: ${data.message}`, 'error');
     }
   } catch (err) {
@@ -1786,7 +1784,6 @@ async function handlePresetFileImport(event) {
       renderEffectsTable();
       await renderPresetDropdown();
       showToast(`Preset '${result.active_profile}' imported and activated.`, 'success');
-      logTerminal('SYSTEM', 'PRESET', `Imported preset '${result.active_profile}' from file`);
     } else {
       showToast(`Import failed: ${result.message}`, 'error');
     }
@@ -1820,7 +1817,6 @@ async function saveEffectsProfile() {
       setMatrixDirty(false);
       await renderPresetDropdown();
       showToast(`Event Lighting Matrix saved to preset '${currentPresetName}'.`, 'success');
-      logTerminal('SYSTEM', 'PRESET', `Event Matrix preset '${currentPresetName}' written to disk`);
       return true;
     } else {
       showToast(`Save failed: ${data.message}`, 'error');
@@ -1920,9 +1916,7 @@ async function triggerEffectTest(eventKey) {
       })
     });
     const data = await res.json();
-    if (data.status === 'ok') {
-      logTerminal('DISPATCH', 'EVENT', `Executed ${eventKey.toUpperCase()} (${displayLabel}) on ${selectedMatrixDeviceIp} [Seg #${selectedMatrixSegmentId ?? 0}]`);
-    } else {
+    if (data.status !== 'ok') {
       showToast(`Test error: ${data.message}`, 'error');
     }
   } catch (err) {

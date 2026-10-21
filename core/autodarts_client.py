@@ -69,14 +69,6 @@ class AutodartsClient:
         self._last_match_won_time: float = 0.0
         self._in_leg_break: bool = False
 
-        # Live X01 & Player performance stats
-        self.stats: Dict[str, Any] = {
-            "avg": 0.0,
-            "darts": 0,
-            "best_turn": 0,
-            "count_180": 0,
-            "turns": 0
-        }
         self.current_players: List[str] = []
         self.active_player_idx: int = 0
         self.board_states: Dict[str, dict] = {}
@@ -175,95 +167,6 @@ class AutodartsClient:
                         return True
 
         return True
-
-    async def fetch_user_stats(self) -> Dict[str, Any]:
-        """Fetch real X01 career/history stats from Autodarts Cloud API."""
-        token = await self._get_valid_token()
-        if not token:
-            return self.stats
-        return await self._async_get_user_stats(token)
-
-    async def _async_get_user_stats(self, token: str) -> Dict[str, Any]:
-        headers = {"Authorization": f"Bearer {token}", "User-Agent": USER_AGENT}
-        try:
-            async with aiohttp.ClientSession() as session:
-                # 1. Get user info
-                async with session.get(f"{AUTODARTS_AUTH_URL}/userinfo", headers=headers, timeout=aiohttp.ClientTimeout(total=4)) as resp:
-                    if resp.status != 200:
-                        return self.stats
-                    u_info = await resp.json()
-                    user_id = u_info.get("sub")
-                    self.user_id = user_id
-                    self.username = u_info.get("preferred_username") or u_info.get("username") or u_info.get("nickname") or u_info.get("name") or (self.email.split("@")[0] if self.email else "")
-                    self.user_name = self.username
-                
-                if not user_id:
-                    return self.stats
-
-                # 2. Get recent matches (last 10)
-                async with session.get(f"{AUTODARTS_AS_URL}/matches?userId={user_id}", headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status != 200:
-                        return self.stats
-                    matches_data = await resp.json()
-                    items = matches_data.get("items", [])[:10]
-
-                total_score = 0.0
-                total_darts = 0
-                total_f9_score = 0.0
-                total_f9_darts = 0
-                total_checkouts_hit = 0
-                total_checkouts_attempts = 0
-                total_180s = 0
-                best_avg = 0.0
-
-                for m in items:
-                    m_id = m.get("id")
-                    if not m_id:
-                        continue
-                    try:
-                        async with session.get(f"{AUTODARTS_AS_URL}/matches/{m_id}/stats", headers=headers, timeout=aiohttp.ClientTimeout(total=3)) as s_res:
-                            if s_res.status == 200:
-                                s_data = await s_res.json()
-                                player_ids = [p.get("id") for p in s_data.get("players", []) if p.get("userId") == user_id]
-                                for ms in s_data.get("matchStats", []):
-                                    if ms.get("playerId") in player_ids:
-                                        avg = float(ms.get("average", 0) or 0)
-                                        darts = int(ms.get("dartsThrown", 0) or 0)
-                                        f9_avg = float(ms.get("first9Average", 0) or 0)
-                                        co_hit = int(ms.get("checkoutsHit", 0) or 0)
-                                        co_att = int(ms.get("checkouts", 0) or 0)
-                                        s_180 = int(ms.get("total180", 0) or 0)
-
-                                        score = ms.get("score", 0) or (avg * darts / 3.0)
-                                        f9_score = ms.get("first9Score", 0) or (f9_avg * min(9, darts) / 3.0)
-
-                                        total_score += score
-                                        total_darts += darts
-                                        total_f9_score += f9_score
-                                        total_f9_darts += min(9, darts)
-                                        total_checkouts_hit += co_hit
-                                        total_checkouts_attempts += co_att
-                                        total_180s += s_180
-                                        if avg > best_avg:
-                                            best_avg = avg
-                    except Exception:
-                        pass
-
-                overall_ppr = round((total_score / total_darts) * 3.0, 2) if total_darts > 0 else 0.0
-                first9_ppr = round((total_f9_score / total_f9_darts) * 3.0, 2) if total_f9_darts > 0 else 0.0
-                co_pct = round((total_checkouts_hit / total_checkouts_attempts) * 100.0, 1) if total_checkouts_attempts > 0 else 0.0
-
-                self.stats["avg"] = overall_ppr
-                self.stats["first9"] = first9_ppr
-                self.stats["checkout_pct"] = co_pct
-                self.stats["count_180"] = total_180s
-                self.stats["best_avg"] = round(best_avg, 2)
-                self.stats["games_analyzed"] = len(items)
-
-                return self.stats
-        except Exception as e:
-            logger.warning(f"Failed to fetch user stats from Autodarts: {e}")
-            return self.stats
 
     async def fetch_match_details(self, match_id: str) -> Dict[str, Any]:
         """Fetch real-time match details including player names from Autodarts API."""
@@ -777,30 +680,7 @@ class AutodartsClient:
         # Extract player names (including local players and guests)
         self._extract_and_set_players(state)
 
-        # Update live X01 stats
         turns = state.get("turns", [])
-        if isinstance(turns, list) and len(turns) > 0:
-            total_points = 0
-            total_darts = 0
-            best_turn = 0
-            count_180 = 0
-            for t in turns:
-                if isinstance(t, dict):
-                    pts = t.get("points", 0)
-                    if isinstance(pts, (int, float)):
-                        total_points += pts
-                        if pts > best_turn:
-                            best_turn = int(pts)
-                        if pts == 180:
-                            count_180 += 1
-                    throws_list = t.get("throws", [])
-                    total_darts += len(throws_list)
-            
-            self.stats["avg"] = round((total_points / total_darts) * 3, 1) if total_darts > 0 else 0.0
-            self.stats["darts"] = total_darts
-            self.stats["best_turn"] = best_turn
-            self.stats["count_180"] = max(self.stats.get("count_180", 0), count_180)
-            self.stats["turns"] = len(turns)
 
         # Check Turns & Throws
         if not isinstance(turns, list):

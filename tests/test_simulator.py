@@ -54,9 +54,7 @@ class TestVirtualWLEDServer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(first_frame), 9)
         self.assertEqual(list(first_frame), [255, 0, 0, 0, 255, 0, 0, 0, 255])
 
-        stats = server.get_stats()
-        self.assertEqual(stats["packets_received"], 1)
-        self.assertEqual(stats["led_count"], 3)
+        self.assertEqual(server.get_status()["led_count"], 3)
 
     async def test_direct_frame_tap(self):
         server = VirtualWLEDServer(host="127.0.0.1", port=21331)
@@ -69,7 +67,7 @@ class TestVirtualWLEDServer(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(tapped), 1)
         self.assertEqual(list(tapped[0]), [128, 64, 32, 200, 200, 200])
-        stats = server.get_stats()
+        stats = server.get_status()
         self.assertEqual(stats["led_count"], 2)
 
     def test_mock_wled_api_data(self):
@@ -94,7 +92,7 @@ class TestVirtualWLEDServer(unittest.IsolatedAsyncioTestCase):
         raw_46_leds[45 * 3 : 45 * 3 + 3] = bytes([255, 255, 255])
         server.tap_frame(bytes(raw_46_leds))
 
-        stats = server.get_stats()
+        stats = server.get_status()
         # Telemetry and ring led_count must report 45 WS281x LEDs, NOT 46
         self.assertEqual(stats["led_count"], 45)
         # PWM spotlight brightness should be captured in pwm_value
@@ -115,7 +113,7 @@ class TestVirtualWLEDServer(unittest.IsolatedAsyncioTestCase):
             # Set pixel 45 to white
             raw_bytes[45 * 3 : 45 * 3 + 3] = bytes([255, 255, 255])
 
-            await broadcast_simulator_frame(bytes(raw_bytes), {"fps": 50.0, "pwm_value": 255})
+            await broadcast_simulator_frame(bytes(raw_bytes), {"pwm_value": 255})
 
             self.assertTrue(mock_ws.send_str.called)
             sent_msg = json.loads(mock_ws.send_str.call_args[0][0])
@@ -134,7 +132,7 @@ class TestVirtualWLEDServer(unittest.IsolatedAsyncioTestCase):
         server.set_led_rotation(180)
         self.assertEqual(server.led_rotation, 180)
         self.assertEqual(server.led0_offset, 22)
-        self.assertEqual(server.get_stats()["led_rotation"], 180)
+        self.assertEqual(server.get_status()["led_rotation"], 180)
 
         # Test 360 degree modulo wrap
         server.set_led_rotation(360)

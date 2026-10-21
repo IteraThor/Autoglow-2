@@ -41,6 +41,18 @@ class TestStorageAndAppConfig(unittest.TestCase):
         self.assertIsNotNone(cfg.profile)
         self.assertIn("180", cfg.profile.events)
 
+    def test_legacy_ai_keys_load_and_are_dropped(self):
+        # The AI Copilot was removed; configs written before that must still load and shed its keys on save
+        with open(self.config_path, "w") as f:
+            json.dump({"devices": [{"ip": "192.168.1.50"}], "ai_key": "AIzaOLD", "gemini_api_key": "AIzaOLD"}, f)
+        cfg = load_app_config(self.config_path)
+        self.assertEqual(cfg.devices[0].ip, "192.168.1.50")
+        self.assertTrue(save_app_config(cfg, self.config_path))
+        with open(self.config_path) as f:
+            saved = json.load(f)
+        self.assertNotIn("ai_key", saved)
+        self.assertNotIn("gemini_api_key", saved)
+
     def test_save_and_load_roundtrip_multi_device(self):
         dev1 = DeviceConfig(
             id="dev_1",

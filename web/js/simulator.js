@@ -13,8 +13,6 @@
   var simDest = 'both';     // 'simulator', 'hardware', 'both'
   var simPixels = [];       // Array of [r, g, b]
   var simLedCount = 45;
-  var simFps = 0.0;
-  var simPackets = 0;
   var simHoverLed = -1;
   var simCanvasAnimId = null;
   var simZoomLevel = 0.86;
@@ -124,8 +122,6 @@
               simPixels = data.pixels.slice(0, targetCount);
               simLedCount = simPixels.length;
             }
-            if (data.fps !== undefined) simFps = data.fps;
-            if (data.packets !== undefined) simPackets = data.packets;
             if (data.dest) simDest = data.dest;
             if (data.type === 'init' && data.simulator) {
               if (typeof data.simulator.led_rotation === 'number' && localStorage.getItem('autoglow_sim_led_rotation') === null) {
@@ -171,7 +167,7 @@
     var badge = document.getElementById('simWsStatusBadge');
     if (!badge) return;
     if (connected) {
-      badge.innerHTML = '<span class="dot dot-green"></span><span>Connected (50 FPS)</span>';
+      badge.innerHTML = '<span class="dot dot-green"></span><span>Connected</span>';
       badge.style.color = 'var(--status-success)';
     } else {
       badge.innerHTML = '<span class="dot dot-gray"></span><span>Connecting...</span>';
@@ -180,12 +176,6 @@
   }
 
   function updateInspectorUI() {
-    var fpsEl = document.getElementById('simFpsVal');
-    if (fpsEl) fpsEl.textContent = (simFps > 0 ? simFps.toFixed(1) : '50.0') + ' FPS';
-
-    var pktEl = document.getElementById('simPacketsVal');
-    if (pktEl) pktEl.textContent = simPackets.toLocaleString() + ' packets';
-
     var liveCount = simPixels.length || simLedCount || 45;
     var ledCountEl = document.getElementById('simLedCountVal');
     if (ledCountEl) ledCountEl.textContent = liveCount + ' WS281x LEDs';

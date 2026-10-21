@@ -51,6 +51,25 @@ class TestServerRoutes(AioHTTPTestCase):
         self.assertIn("account", data)
 
     @unittest_run_loop
+    async def test_ai_routes_removed(self):
+        for method, path in [("GET", "/api/ai/status"), ("POST", "/api/ai/key"), ("POST", "/api/ai/chat")]:
+            resp = await self.client.request(method, path)
+            # POSTs fall through to the GET-only static route, which answers 405 instead of 404
+            self.assertIn(resp.status, (404, 405), path)
+
+    @unittest_run_loop
+    async def test_status_payloads_carry_no_stats(self):
+        resp = await self.client.request("GET", "/api/autodarts/status")
+        data = await resp.json()
+        self.assertNotIn("stats", data)
+        self.assertNotIn("event_count", data.get("match", {}))
+
+        resp = await self.client.request("GET", "/api/hub/status")
+        data = await resp.json()
+        self.assertNotIn("uptime_seconds", data)
+        self.assertNotIn("event_count", data["engine"])
+
+    @unittest_run_loop
     async def test_autodarts_cloud_login_routes_on_hold(self):
         # Direct Autodarts login is on hold until Autodarts approves it; game data comes from the Chrome extension
         for path, body in [
@@ -177,7 +196,7 @@ class TestServerRoutes(AioHTTPTestCase):
         data = await resp.json()
         self.assertEqual(data["status"], "ok")
         self.assertIn("simulator", data)
-        self.assertIn("fps", data["simulator"])
+        self.assertIn("led_count", data["simulator"])
 
     @unittest_run_loop
     async def test_wled_preset_validation_routes(self):

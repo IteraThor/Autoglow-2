@@ -45,7 +45,7 @@ class TestPinAndSessions(unittest.TestCase):
 class TestSecretRedaction(unittest.TestCase):
 
     def test_redact_blanks_every_secret(self):
-        cfg = AppConfig(autodarts_password="pw", ai_key="key")
+        cfg = AppConfig(autodarts_password="pw")
         cfg.extra["autodarts_refresh_token"] = "refresh"
         cfg.extra[security.PIN_HASH_KEY] = "hash"
         data = security.redact_config_dict(cfg.to_dict())
@@ -54,12 +54,11 @@ class TestSecretRedaction(unittest.TestCase):
                 self.assertEqual(data[key], "", key)
 
     def test_restore_keeps_stored_secrets_when_client_sends_blanks(self):
-        old = AppConfig(autodarts_password="pw", ai_key="key")
+        old = AppConfig(autodarts_password="pw")
         old.extra["autodarts_access_token"] = "access"
         new = AppConfig.from_dict(security.redact_config_dict(old.to_dict()))
         security.restore_redacted_secrets(new, old)
         self.assertEqual(new.autodarts_password, "pw")
-        self.assertEqual(new.ai_key, "key")
         self.assertEqual(new.extra["autodarts_access_token"], "access")
 
 
@@ -80,7 +79,7 @@ class TestSecurityMiddlewareAndRoutes(AioHTTPTestCase):
         register_routes(app, "web")
         app["config_path"] = self.config_path
         app["engine"] = AutoGlowEngine(DeviceConfig(ip=""))
-        app["current_app_config"] = AppConfig(autodarts_password="hunter2", ai_key="AIzaKEY")
+        app["current_app_config"] = AppConfig(autodarts_password="hunter2")
         return app
 
     @unittest_run_loop
@@ -89,7 +88,6 @@ class TestSecurityMiddlewareAndRoutes(AioHTTPTestCase):
         text = await resp.text()
         self.assertEqual(resp.status, 200)
         self.assertNotIn("hunter2", text)
-        self.assertNotIn("AIzaKEY", text)
 
     @unittest_run_loop
     async def test_cross_origin_post_rejected(self):

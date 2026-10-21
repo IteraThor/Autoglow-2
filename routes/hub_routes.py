@@ -17,9 +17,6 @@ from core.storage import load_app_config
 
 logger = logging.getLogger("autoglow.routes.hub")
 
-_STARTED_AT = time.time()
-
-
 def _seconds_until(limit_minutes: int, enabled: bool, idle_seconds: float) -> Optional[int]:
     if not enabled:
         return None
@@ -48,7 +45,6 @@ def _engine_snapshot(engine, cfg) -> Dict[str, Any]:
         "off_in_seconds": None if engine.is_board_off else _seconds_until(cfg.idle_power_off_minutes, cfg.idle_power_off_enabled, idle_seconds),
         "last_event": engine.last_event_name,
         "previous_event": engine.previous_event_name,
-        "event_count": engine.event_count,
         "flow_phase": engine.flow_active_phase,
     }
 
@@ -104,7 +100,6 @@ async def handle_hub_status(request: web.Request) -> web.Response:
     return web.json_response({
         "status": "ok",
         "version": __version__,
-        "uptime_seconds": int(time.time() - _STARTED_AT),
         "engine": _engine_snapshot(engine, cfg),
         "autodarts": _autodarts_snapshot(engine),
         "devices": list(devices),

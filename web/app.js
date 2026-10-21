@@ -62,7 +62,7 @@ function switchToTab(targetId) {
     if (window.renderSimulatorTab) renderSimulatorTab();
     if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
   }
-  if (targetId === 'tab-settings' || targetId === 'tab-updates') {
+  if (targetId === 'tab-settings') {
     renderSettingsTab();
     if (typeof refreshPinSettings === 'function') refreshPinSettings();
   }
@@ -98,7 +98,6 @@ async function loadConfig() {
       renderPowerTab();
       if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
       updateLightingModeUI(appState.lighting_mode || 'matrix');
-      logTerminal('SYSTEM', 'ENGINE', 'Active configuration loaded from disk.');
 
       // Background fetch Autodarts status to resolve account details for player slot prefilling
       fetch('/api/autodarts/status')
@@ -121,7 +120,7 @@ async function loadConfig() {
         });
     }
   } catch (err) {
-    logTerminal('SYSTEM', 'ERROR', `Failed to load config: ${err.message || err}`);
+    showToast(`Could not load configuration: ${err.message || err}`, 'error');
   }
 }
 
@@ -135,7 +134,6 @@ async function saveAllConfig() {
     const data = await res.json();
     if (data.status === 'ok') {
       showToast('Configuration saved successfully.', 'success');
-      logTerminal('SYSTEM', 'CONFIG', 'Configuration written to config.json');
       return true;
     } else {
       showToast(`Save failed: ${data.message}`, 'error');
@@ -162,34 +160,17 @@ function initTelemetryWebSocket() {
   try {
     const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      const dot = document.getElementById('systemDot');
-      const text = document.getElementById('systemStatusText');
-      if (dot) dot.style.backgroundColor = 'var(--status-success)';
-      if (text) text.innerText = 'Engine Live: 50 FPS';
-      logTerminal('SYSTEM', 'WS', `Connected to backend telemetry stream`);
-    };
-
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
         handleTelemetryMessage(msg);
       } catch (e) {
-        logTerminal('STREAM', 'RAW', event.data);
+        console.warn('[AutoGlow] Unparseable telemetry message:', event.data);
       }
     };
 
     ws.onclose = () => {
-      const dot = document.getElementById('systemDot');
-      const text = document.getElementById('systemStatusText');
-      if (dot) dot.style.backgroundColor = 'var(--status-danger)';
-      if (text) text.innerText = 'Reconnecting...';
       setTimeout(initTelemetryWebSocket, 3000);
-    };
-
-    ws.onerror = () => {
-      const dot = document.getElementById('systemDot');
-      if (dot) dot.style.backgroundColor = 'var(--status-danger)';
     };
   } catch (err) {
     console.error('WebSocket connection error:', err);
@@ -228,7 +209,6 @@ function handleTelemetryMessage(msg) {
     const matchPrevEvent = document.getElementById('liveMatchPrevEvent');
     const matchBadge = document.getElementById('liveMatchBadge');
     const matchName = document.getElementById('liveMatchName');
-    const matchState = document.getElementById('liveMatchState');
     const matchPlayers = document.getElementById('liveMatchPlayers');
 
     if (msg.event === 'idle' || msg.event === 'game_idle') {
@@ -250,10 +230,6 @@ function handleTelemetryMessage(msg) {
       if (matchPlayers) {
         matchPlayers.innerHTML = `<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">None</span>`;
       }
-      if (matchState) {
-        matchState.innerText = 'Standby';
-        matchState.style.color = 'var(--text-primary)';
-      }
       const matchLinkContainer = document.getElementById('liveMatchLinkContainer');
       if (matchLinkContainer) matchLinkContainer.style.display = 'none';
     } else if (msg.event === 'takeout') {
@@ -264,10 +240,6 @@ function handleTelemetryMessage(msg) {
       if (matchLastEvent) {
         matchLastEvent.innerText = 'TAKEOUT (Fired)';
         matchLastEvent.style.color = 'var(--accent-primary)';
-      }
-      if (matchState) {
-        matchState.innerText = 'Takeout in Progress';
-        matchState.style.color = 'var(--status-warning)';
       }
     } else {
       const displayEv = msg.display_event || (msg.segment_name ? `${msg.event} ; ${msg.segment_name}` : msg.event);
@@ -291,22 +263,6 @@ function handleTelemetryMessage(msg) {
         const activeIdx = msg.active_player_idx ?? 0;
         matchPlayers.innerHTML = formatPlayerNamePlates(msg.players, activeIdx);
       }
-      if (matchState) {
-        matchState.innerText = 'Match In Progress';
-        matchState.style.color = 'var(--status-success)';
-      }
-    }
-    const logEv = msg.display_event || msg.event;
-    logTerminal('AUTODARTS', 'EVENT', `Game Event: ${logEv} triggered`);
-  } else if (msg.type === 'state') {
-    const ipEl = document.getElementById('dashMetricIp');
-    if (ipEl && msg.wled_ip) {
-      ipEl.innerHTML = `${escapeHtml(msg.wled_ip)} <span class="metric-sub">:21324</span>`;
-    }
-  } else if (msg.type === 'fps') {
-    const fpsEl = document.getElementById('dashMetricFps');
-    if (fpsEl) {
-      fpsEl.innerText = `${msg.fps || 50} FPS`;
     }
   }
 }
@@ -325,11 +281,6 @@ function formatPlayerNamePlates(players, activeIdx = 0) {
   }).join('<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin: 0 6px;">vs</span>');
 }
 
-function clearTelemetryLogs() {
-  const terminal = document.getElementById('telemetryTerminal');
-  if (terminal) terminal.innerHTML = '';
-}
-
 // --- Lighting Configuration Mode (Event Matrix vs Flow Matrix) ---
 function updateLightingModeUI(mode) {
   const isFlow = (mode === 'flow');
@@ -341,20 +292,10 @@ function updateLightingModeUI(mode) {
     b.classList.toggle('active', isFlow);
   });
 
-  const labelText = isFlow ? 'Flow Matrix (Visual Pipeline)' : 'Classic Event Matrix';
-  document.querySelectorAll('.lighting-mode-text').forEach(el => {
-    el.textContent = labelText;
-  });
-
   const badgeMatrix = document.getElementById('sidebarModeBadgeMatrix');
   const badgeFlow = document.getElementById('sidebarModeBadgeFlow');
   if (badgeMatrix) badgeMatrix.style.display = isFlow ? 'none' : 'inline-block';
   if (badgeFlow) badgeFlow.style.display = isFlow ? 'inline-block' : 'none';
-
-  const modeTextEl = document.getElementById('sidebarActiveModeText');
-  if (modeTextEl) {
-    modeTextEl.textContent = isFlow ? 'FLOW' : 'MATRIX';
-  }
 
   // Grey out the inactive engine's nav item
   const navEffects = document.getElementById('navEffects');

@@ -126,11 +126,11 @@ const ANIMATION_OPTIONS = [
   { value: "flash", label: "Flash" },
   { value: "curtain", label: "Split Curtain" },
   { value: "heartbeat", label: "Heartbeat" },
-  { value: "dual_comet", label: "Dual Comet (Test)" },
-  { value: "sparkle", label: "Sparkle (Test)" },
-  { value: "fire", label: "Fire (Test)" },
-  { value: "radar", label: "Radar (Test)" },
-  { value: "breathe", label: "Breathe (Test)" }
+  { value: "dual_comet", label: "Dual Comet" },
+  { value: "sparkle", label: "Sparkle" },
+  { value: "fire", label: "Fire" },
+  { value: "radar", label: "Radar" },
+  { value: "breathe", label: "Breathe" }
 ];
 
 

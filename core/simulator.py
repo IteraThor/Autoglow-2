@@ -7,7 +7,7 @@ high-frequency frame streaming to browser simulators with 0-latency.
 import asyncio
 import logging
 import time
-from typing import Optional, Callable, Set, Dict, Any, List
+from typing import Optional, Callable, Set, Dict, Any
 
 logger = logging.getLogger("autoglow.simulator")
 
@@ -54,14 +54,9 @@ class VirtualWLEDServer:
         self.led_rotation: int = 0  # Rotation in degrees (0..360) for LED 0 / cable entry
         self.led0_offset: int = 0   # Physical sector offset (0..ws_led_count-1)
         self.last_packet_time: float = 0.0
-        self.total_packets: int = 0
         self.timeout_sec: int = 2
 
-        # FPS calculation
-        self._frame_times: List[float] = []
-        self.current_fps: float = 0.0
-
-        # In-memory subscribers: cb(pixels: bytes, stats: dict)
+        # In-memory subscribers: cb(pixels: bytes, status: dict)
         self._subscribers: Set[Callable[[bytes, Dict[str, Any]], None]] = set()
 
     def set_led_rotation(self, degrees: int) -> None:
@@ -145,28 +140,17 @@ class VirtualWLEDServer:
         self.latest_pixels = bytearray(pixel_bytes)
         self.timeout_sec = timeout_sec
         self.last_packet_time = now
-        self.total_packets += 1
 
-        # Track FPS
-        self._frame_times.append(now)
-        if len(self._frame_times) > 25:
-            self._frame_times.pop(0)
-
-        if len(self._frame_times) >= 2:
-            time_delta = self._frame_times[-1] - self._frame_times[0]
-            if time_delta > 0.001:
-                self.current_fps = (len(self._frame_times) - 1) / time_delta
-
-        stats = self.get_stats()
+        status = self.get_status()
         # Dispatch to subscribers
         for sub in list(self._subscribers):
             try:
-                sub(bytes(self.latest_pixels), stats)
+                sub(bytes(self.latest_pixels), status)
             except Exception as ex:
                 logger.debug(f"Error in simulator frame subscriber: {ex}")
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Return live telemetry metrics for the simulator status and inspector."""
+    def get_status(self) -> Dict[str, Any]:
+        """Return the simulator's current state for the status route and preview."""
         total_leds = len(self.latest_pixels) // 3
         ws_count = self.ws_led_count if (self.ws_led_count and self.ws_led_count > 0) else 45
         num_ws_leds = min(total_leds, ws_count) if total_leds > 0 else ws_count
@@ -183,15 +167,12 @@ class VirtualWLEDServer:
             "listening": self.is_running,
             "host": self.host,
             "port": self.actual_port,
-            "packets_received": self.total_packets,
-            "fps": round(self.current_fps, 1),
             "led_count": num_ws_leds,
             "led_rotation": self.led_rotation,
             "led0_offset": self.led0_offset,
             "pwm_value": pwm_val,
             "last_packet_age_ms": age_ms,
-            "timeout_sec": self.timeout_sec,
-            "sample_rgb": list(self.latest_pixels[:12]) if total_leds > 0 else []
+            "timeout_sec": self.timeout_sec
         }
 
     # -------------------------------------------------------------------------

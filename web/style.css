@@ -1,9 +1,0 @@
-/**
- * AutoGlow 2 - Antigravity IDE Master Stylesheet
- * Modular CSS Architecture Bundle
- */
-
-@import url('/css/theme.css');
-@import url('/css/layout.css');
-@import url('/css/components.css');
-@import url('/css/tabs.css');

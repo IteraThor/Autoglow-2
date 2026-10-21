@@ -15,7 +15,7 @@ from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
 from core.backup_manager import _is_excluded_archive_path
 from core.engine import AutoGlowEngine
-from core.models import AppConfig, DartEvent, DartEventType, DeviceConfig, ProtocolMode, SegmentConfig
+from core.models import AppConfig, DeviceConfig, ProtocolMode, SegmentConfig
 from core.wled_driver import WLEDDriver, is_host_online
 from routes import register_routes
 
@@ -105,12 +105,6 @@ class TestBackupExclusions(unittest.TestCase):
 
 
 class TestEngineBookkeeping(unittest.IsolatedAsyncioTestCase):
-
-    async def test_event_count_increments(self):
-        engine = AutoGlowEngine(DeviceConfig(ip=""), app_config=AppConfig())
-        await engine.process_event(DartEvent(event_type=DartEventType.CALIBRATING))
-        await engine.process_event(DartEvent(event_type=DartEventType.CALIBRATING))
-        self.assertEqual(engine.event_count, 2)
 
     async def test_stop_cancels_pending_intro_and_flow_tasks(self):
         engine = AutoGlowEngine(DeviceConfig(ip=""), app_config=AppConfig())

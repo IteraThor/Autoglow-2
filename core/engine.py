@@ -77,7 +77,6 @@ class AutoGlowEngine:
         self.current_illumination = self.device_config.default_pwm_brightness if self.device_config else 200
         self.last_event_name: str = "Standby"
         self.previous_event_name: str = "—"
-        self.event_count: int = 0
 
         # Background tasks
         self._running = False
@@ -458,9 +457,6 @@ class AutoGlowEngine:
             })
             return
 
-        # Counted here (not on entry) so a throw queued behind the intro is counted once, when it replays
-        self.event_count += 1
-
         # Check if this event is match ending or abort teardown
         is_match_end = event.event_type in [DartEventType.MATCH_WON, DartEventType.GAME_FINISH]
         is_game_idle = event.event_type == DartEventType.GAME_IDLE
@@ -611,7 +607,6 @@ class AutoGlowEngine:
             "score": event.score,
             "multiplier": event.multiplier,
             "timestamp": time.time(),
-            "total_events": self.event_count,
             "players": getattr(self.autodarts, "current_players", []) if self.autodarts else [],
             "active_player_idx": getattr(self.autodarts, "active_player_idx", 0) if self.autodarts else 0,
             "lighting_mode": self.app_config.lighting_mode.value,

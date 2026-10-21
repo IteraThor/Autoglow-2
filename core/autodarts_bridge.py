@@ -61,9 +61,6 @@ class AutodartsBridgeClient(AutodartsClient):
         self.extension_version: str = ""
         self.tab_url: str = ""
         self.tab_attached: bool = False
-        self.connected_since: float = 0.0
-        self.last_message_at: float = 0.0
-        self.messages_received: int = 0
         self._match_cache: Dict[str, dict] = {}
         self._source_lost_task: Optional[asyncio.Task] = None
 
@@ -81,8 +78,6 @@ class AutodartsBridgeClient(AutodartsClient):
     def attach(self, source: Any) -> None:
         """Register an extension connection. Only the oldest one is used, so two browsers never double-fire events."""
         self._sources.append(source)
-        if len(self._sources) == 1:
-            self.connected_since = time.time()
         self.is_connected = True
         logger.info(f"AutoGlow Chrome extension connected ({len(self._sources)} active connection(s))")
 
@@ -94,7 +89,6 @@ class AutodartsBridgeClient(AutodartsClient):
             self.tab_attached = False
             self.tab_url = ""
             self.extension_version = ""
-            self.connected_since = time.time() if self._sources else 0.0
         self.is_connected = bool(self._sources)
         logger.info(f"AutoGlow Chrome extension disconnected ({len(self._sources)} active connection(s))")
         self._check_source_lost()
@@ -110,9 +104,6 @@ class AutodartsBridgeClient(AutodartsClient):
 
     async def fetch_boards(self) -> List[Dict[str, Any]]:
         return self._boards_cache
-
-    async def fetch_user_stats(self) -> Dict[str, Any]:
-        return self.stats
 
     async def fetch_match_details(self, match_id: str) -> Dict[str, Any]:
         data = self._match_cache.get(match_id) or {}
@@ -137,9 +128,6 @@ class AutodartsBridgeClient(AutodartsClient):
 
         if not self.is_primary(source):
             return None
-
-        self.last_message_at = time.time()
-        self.messages_received += 1
 
         if msg_type == "hello":
             self.extension_version = str(message.get("version", ""))[:32]
@@ -194,13 +182,9 @@ class AutodartsBridgeClient(AutodartsClient):
                 self._extract_and_set_players(body)
 
     def snapshot(self) -> Dict[str, Any]:
-        now = time.time()
         return {
             "extension_connected": self.is_connected,
             "extension_version": self.extension_version,
             "tab_attached": self.tab_attached,
             "tab_url": self.tab_url,
-            "connected_for_seconds": int(now - self.connected_since) if self.connected_since else 0,
-            "last_message_seconds_ago": int(now - self.last_message_at) if self.last_message_at else None,
-            "messages_received": self.messages_received,
         }

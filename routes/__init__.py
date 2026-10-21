@@ -35,9 +35,6 @@ from routes.system_routes import (
     handle_delete_backup, handle_download_backup, handle_update_check,
     handle_update_apply, handle_update_zip
 )
-from routes.ai_routes import (
-    handle_ai_status, handle_ai_key_save, handle_ai_chat
-)
 from routes.telemetry_routes import handle_ws_telemetry
 from routes.simulator_routes import (
     handle_ws_simulator, handle_simulator_status, handle_simulator_dest,
@@ -137,11 +134,6 @@ def register_routes(app: web.Application, web_dir: str):
     app.router.add_get("/api/system/update_check", handle_update_check)
     app.router.add_post("/api/system/update_apply", handle_update_apply)
     app.router.add_post("/api/system/update_zip", handle_update_zip)
-
-    # AI Copilot Routes
-    app.router.add_get("/api/ai/status", handle_ai_status)
-    app.router.add_post("/api/ai/key", handle_ai_key_save)
-    app.router.add_post("/api/ai/chat", handle_ai_chat)
 
     # Live WebSocket Telemetry
     app.router.add_get("/ws/telemetry", handle_ws_telemetry)

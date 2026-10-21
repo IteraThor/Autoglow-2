@@ -1202,9 +1202,8 @@ async function saveInlineEdit(ip) {
 
 async function addManualDevice() {
   const ipInput = document.getElementById('deviceIpInput');
-  const portInput = document.getElementById('deviceUdpPort');
   const ip = ipInput ? ipInput.value.trim() : '';
-  const port = portInput ? (parseInt(portInput.value, 10) || 21324) : 21324;
+  const port = 21324;
 
   if (!ip) {
     showToast('Please enter an IP address or hostname.', 'error');
@@ -1299,74 +1298,19 @@ async function removeConfiguredDevice(ip, btn = null) {
   });
 }
 
-async function testWledLight(bri, ip = null) {
-  try {
-    showToast(bri > 0 ? `Setting light to ${bri}...` : 'Turning off...', 'info');
-    const data = await (window.api ? window.api.testLight(bri, ip) : (await fetch('/api/test/light', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brightness: bri, ip: ip })
-    })).json());
-    if (data.status === 'ok') {
-      showToast(bri > 0 ? `Light set to ${bri}` : 'Light turned off', 'success');
-    } else {
-      showToast(`Light test error: ${data.message}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Network error testing light: ${err.message || err}`, 'error');
-  }
-}
-
-async function testWledEffect(anim, col, ip = null) {
-  try {
-    showToast(`Testing effect: ${anim}...`, 'info');
-    const effectConfig = {
-      animation: anim,
-      color_primary: col,
-      duration: 2.5,
-      speed: 1.5,
-      fps: 50
-    };
-    const data = await (window.api ? window.api.testEffect(effectConfig, ip) : (await fetch('/api/test/effect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ effect: effectConfig, ip: ip })
-    })).json());
-    if (data.status === 'ok') {
-      showToast(`Effect '${anim}' triggered!`, 'success');
-    } else {
-      showToast(`Effect test error: ${data.message}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Network error testing effect: ${err.message || err}`, 'error');
-  }
-}
-
 async function pingSpecificController(ip) {
   showToast(`Pinging ${ip}...`, 'info');
   try {
     const data = await (window.api ? window.api.pingDevice(ip) : (await fetch(`/api/ping?ip=${encodeURIComponent(ip)}`)).json());
     if (data.status === 'ok' && data.online) {
       showToast(`Controller online! ${data.name || 'WLED'} (v${data.version || '1.0'})`, 'success');
-      logTerminal('WLED', 'ONLINE', `Ping success to ${ip} - State readback OK`);
       renderDevicesTab();
     } else {
       showToast(`Ping failed: Controller at ${ip} unreachable.`, 'error');
-      logTerminal('WLED', 'ERROR', `Ping failed to ${ip}`);
     }
   } catch (err) {
     showToast(`Ping network error: ${err.message || err}`, 'error');
   }
-}
-
-async function pingWledController() {
-  const ipInput = document.getElementById('deviceIpInput');
-  const ip = ipInput ? ipInput.value.trim() : (appState.devices?.[0]?.ip || appState.device?.ip || '');
-  if (!ip) {
-    showToast('Please enter an IP address to ping.', 'error');
-    return;
-  }
-  pingSpecificController(ip);
 }
 
 async function scanNetworkDevices() {
@@ -1440,17 +1384,6 @@ async function scanSerialPorts() {
   }
 }
 
-function selectDiscoveredIp(ip) {
-  const ipInput = document.getElementById('deviceIpInput');
-  if (ipInput) ipInput.value = ip;
-  showToast(`Selected ${ip}. Click 'Save Device' to connect.`, 'info');
-}
-
-function startUnifiedScan() {
-  switchToTab('tab-devices');
-  scanNetworkDevices();
-}
-
 async function toggleDeviceEnabled(ip, enabled) {
   const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
   const dev = devicesList.find(d => d.ip === ip);
@@ -1504,13 +1437,9 @@ if (typeof window !== "undefined") {
   window.addManualDevice = addManualDevice;
   window.addDiscoveredDevice = addDiscoveredDevice;
   window.removeConfiguredDevice = removeConfiguredDevice;
-  window.testWledLight = testWledLight;
-  window.testWledEffect = testWledEffect;
   window.pingSpecificController = pingSpecificController;
   window.scanNetworkDevices = scanNetworkDevices;
   window.scanSerialPorts = scanSerialPorts;
-  window.selectDiscoveredIp = selectDiscoveredIp;
-  window.startUnifiedScan = startUnifiedScan;
 }
 
 

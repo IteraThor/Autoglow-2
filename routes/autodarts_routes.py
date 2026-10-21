@@ -259,20 +259,12 @@ async def handle_get_autodarts_status(request: web.Request) -> web.Response:
         return web.json_response(_bridge_status_payload(engine, client, cfg))
 
     is_auth = bool(client and client.access_token)
-    user_stats = {
-        "avg": 0.0,
-        "darts": 0,
-        "best_turn": 0,
-        "count_180": 0,
-        "turns": 0
-    }
     boards = []
 
     if client and is_auth:
         if not getattr(client, "username", ""):
             await client.fetch_user_profile()
         boards = await client.fetch_boards()
-        user_stats = await client.fetch_user_stats()
 
     # Discover active match
     active_m_id = None
@@ -328,10 +320,8 @@ async def handle_get_autodarts_status(request: web.Request) -> web.Response:
             "active_player_idx": getattr(client, "active_player_idx", 0) if client else 0,
             "last_throw_id": getattr(client, "_last_throw_id", None) if client else None,
             "last_event": getattr(engine, "last_event_name", "Standby") if engine else "Standby",
-            "previous_event": getattr(engine, "previous_event_name", "—") if engine else "—",
-            "event_count": getattr(engine, "event_count", 0) if engine else 0
-        },
-        "stats": user_stats
+            "previous_event": getattr(engine, "previous_event_name", "—") if engine else "—"
+        }
     })
 
 
@@ -397,10 +387,8 @@ def _bridge_status_payload(engine, client: AutodartsBridgeClient, cfg) -> dict:
             "active_player_idx": client.active_player_idx,
             "last_throw_id": client._last_throw_id,
             "last_event": getattr(engine, "last_event_name", "Standby") if engine else "Standby",
-            "previous_event": getattr(engine, "previous_event_name", "—") if engine else "—",
-            "event_count": getattr(engine, "event_count", 0) if engine else 0
-        },
-        "stats": client.stats
+            "previous_event": getattr(engine, "previous_event_name", "—") if engine else "—"
+        }
     }
 
 

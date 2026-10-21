@@ -154,7 +154,6 @@
                   <dt>Players</dt><dd id="hubMatchPlayers">None</dd>
                   <dt>Last event</dt><dd id="hubMatchLast">Standby</dd>
                   <dt>Previous</dt><dd id="hubMatchPrev">&mdash;</dd>
-                  <dt>Events</dt><dd id="hubMatchCount">0</dd>
                   <dt>Flow phase</dt><dd id="hubMatchPhase">idle</dd>
                 </dl>
               </div>
@@ -1168,80 +1167,6 @@
 
 
 
-  <!-- Floating AI Trigger Button (Hidden) -->
-  <button id="btnToggleAiDrawer" class="ai-fab-btn" onclick="toggleAiDrawer()" title="AutoGlow AI Copilot" style="display: none !important;">
-    <span class="ai-fab-sparkle">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-    </span>
-    <span>Ask AutoGlow AI</span>
-    <span class="ai-fab-tag">Gemini 2.0</span>
-  </button>
-
-  <!-- AI Drawer Backdrop -->
-  <div id="aiDrawerBackdrop" class="ai-drawer-backdrop" onclick="closeAiDrawer()"></div>
-
-  <!-- AI Slide-Over Chat Drawer -->
-  <aside id="aiChatDrawer" class="ai-drawer">
-    
-    <!-- Header -->
-    <div class="ai-drawer-header">
-      <div class="ai-drawer-title">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" style="flex-shrink: 0;"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
-        <span>AutoGlow Copilot</span>
-        <span class="version-tag" style="font-size: 9.5px; margin-left: 4px;">Gemini 2.0 Flash</span>
-      </div>
-      <div class="ai-drawer-actions">
-        <button class="btn-ide" onclick="toggleAiKeySettings()" title="API Key Settings" style="padding: 4px 8px; display: inline-flex; align-items: center; justify-content: center;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-        <button class="btn-ide" onclick="closeAiDrawer()" title="Close Drawer" style="padding: 2px 7px; font-size: 12px;">✕</button>
-      </div>
-    </div>
-
-    <!-- API Key Settings Panel (Collapsible) -->
-    <div id="aiKeySettingsPanel" class="ai-key-panel" style="display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <strong style="color: var(--text-primary);">Google Gemini API Key (Free)</strong>
-        <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--accent-primary); text-decoration: none; font-size: 11px;">Get Key ↗</a>
-      </div>
-      <div style="color: var(--text-secondary); font-size: 11px; line-height: 1.4;">
-        Keys from Google AI Studio are 100% free with 15 requests/min. Your key is stored securely on your local machine only.
-      </div>
-      <div style="display: flex; gap: 6px; margin-top: 4px;">
-        <input type="password" id="geminiApiKeyInput" class="input-text" placeholder="Paste AIzaSy... key here" style="flex: 1; font-size: 11.5px; height: 30px;">
-        <button class="btn-ide btn-ide-primary" onclick="saveGeminiApiKey()" style="font-size: 11px; padding: 0 12px; height: 30px;">Save</button>
-      </div>
-    </div>
-
-    <!-- Message Thread Container -->
-    <div id="aiChatMessages" class="ai-messages-container">
-      <!-- Welcome Message -->
-      <div class="ai-msg assistant">
-        <div class="ai-msg-bubble">
-          <p><strong>Welcome to AutoGlow Copilot!</strong></p>
-          <p>I have live visibility into your connected WLED controllers, GPIO pins, and Autodarts status. How can I help you today?</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Suggestion Chips -->
-    <div class="ai-chips-container">
-      <button class="ai-chip" onclick="sendSuggestionChip('Why is my WLED device not responding?')">Troubleshoot WLED</button>
-      <button class="ai-chip" onclick="sendSuggestionChip('How do I wire and configure a PWM white strip?')">PWM White Strip</button>
-      <button class="ai-chip" onclick="sendSuggestionChip('What 180 animations are available?')">180 Effects</button>
-      <button class="ai-chip" onclick="sendSuggestionChip('What is UDP DDP protocol?')">UDP DDP Protocol</button>
-    </div>
-
-    <!-- Input Bar -->
-    <div class="ai-input-bar">
-      <textarea id="aiChatInput" placeholder="Ask about lighting, wiring, or features..." rows="1" onkeydown="handleAiInputKeydown(event)"></textarea>
-      <button id="btnSendAiMessage" class="ai-send-btn" onclick="sendAiChatMessage()" title="Send Message">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-
-  </aside>
-
   <!-- Event Matrix Preset Modals Backdrop -->
   <div id="matrixPresetModalBackdrop" class="modal-backdrop" style="display: none;" onclick="if(event.target===this)closePresetModal()">
     <div class="ide-panel modal-card" style="width: 100%; max-width: 420px; box-shadow: 0 12px 36px rgba(0,0,0,0.6); border: 1px solid var(--border-subtle); margin: 0 16px;">
@@ -1380,7 +1305,6 @@
   <script src="/js/simulator.js?v=189.0"></script>
   <script src="/js/flow_planner.js?v=6.6"></script>
   <script src="/js/system.js?v=155.0"></script>
-  <script src="/js/ai.js?v=155.0"></script>
   <script src="/js/hub.js?v=1.1"></script>
   <script src="/app.js?v=159.0"></script>
 

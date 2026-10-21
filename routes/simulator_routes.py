@@ -27,7 +27,7 @@ def set_stream_dest(dest: str) -> None:
         _simulator_stream_dest = dest
 
 
-async def broadcast_simulator_frame(pixel_bytes: bytes, stats: dict):
+async def broadcast_simulator_frame(pixel_bytes: bytes, status: dict):
     """Broadcast a new pixel frame to all connected browser simulator WebSockets."""
     if not active_simulator_ws_clients:
         return
@@ -47,11 +47,9 @@ async def broadcast_simulator_frame(pixel_bytes: bytes, stats: dict):
 
     msg = json.dumps({
         "type": "frame",
-        "fps": stats.get("fps", 0.0),
-        "packets": stats.get("packets_received", 0),
         "led_count": num_ws_leds,
-        "pwm": stats.get("pwm_value", 0),
-        "age_ms": stats.get("last_packet_age_ms"),
+        "pwm": status.get("pwm_value", 0),
+        "age_ms": status.get("last_packet_age_ms"),
         "pixels": pixels_nested
     })
 
@@ -83,7 +81,7 @@ async def handle_ws_simulator(request: web.Request) -> web.WebSocketResponse:
     try:
         await ws.send_str(json.dumps({
             "type": "init",
-            "simulator": sim.get_stats(),
+            "simulator": sim.get_status(),
             "dest": _simulator_stream_dest,
             "pixels": init_pixels
         }))
@@ -111,10 +109,9 @@ async def handle_ws_simulator(request: web.Request) -> web.WebSocketResponse:
 async def handle_simulator_status(request: web.Request) -> web.Response:
     """Get current simulator state, port, and metrics."""
     sim = get_simulator_server()
-    stats = sim.get_stats()
     return web.json_response({
         "status": "ok",
-        "simulator": stats,
+        "simulator": sim.get_status(),
         "active_clients": len(active_simulator_ws_clients),
         "dest": _simulator_stream_dest
     })

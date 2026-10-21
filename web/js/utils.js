@@ -82,19 +82,6 @@ function showToast(msg, type = 'info') {
   }, 3500);
 }
 
-function logTerminal(message, type = 'info') {
-  const terminal = document.getElementById('telemetryLog');
-  if (!terminal) return;
-
-  const timeStr = new Date().toLocaleTimeString('en-GB', { hour12: false });
-  const entry = document.createElement('div');
-  entry.className = `log-entry log-${type}`;
-  entry.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="log-msg">${escapeHtml(message)}</span>`;
-
-  terminal.appendChild(entry);
-  terminal.scrollTop = terminal.scrollHeight;
-}
-
 var _activePingPromises = {};
 
 async function pingDeviceCached(ip, force = false) {
@@ -141,7 +128,6 @@ if (typeof window !== "undefined") {
   window.hexToRgb = hexToRgb;
   window.rgbToHex = rgbToHex;
   window.showToast = showToast;
-  window.logTerminal = logTerminal;
   window.pingDeviceCached = pingDeviceCached;
 }
 
