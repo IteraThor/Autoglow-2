@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "AutoGlow Bridge for Autodarts",
+  "short_name": "AutoGlow Bridge",
+  "version": "1.0.0",
+  "description": "Sends your live Autodarts game events from play.autodarts.com to AutoGlow 2 so your WLED board lighting follows the game.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://play.autodarts.com/*"],
+      "js": ["page_hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://play.autodarts.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "AutoGlow Bridge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

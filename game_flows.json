@@ -1,0 +1,590 @@
+{
+  "id": "default_flow",
+  "name": "Simple Game Flow",
+  "phases": [
+    {
+      "id": "idle",
+      "name": "IDLE",
+      "trigger_key": "standby",
+      "effect": {
+        "animation": "comet",
+        "color_primary": [
+          0,
+          238,
+          255
+        ],
+        "color_secondary": [
+          255,
+          0,
+          162
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 0.0,
+        "speed": 0.2,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0,
+        "wled_effect_id": 16,
+        "wled_effect_name": "Aurora"
+      },
+      "order_index": 0,
+      "is_baseline": true
+    },
+    {
+      "id": "game_start",
+      "name": "Game Start",
+      "trigger_key": "game_start",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          0,
+          157,
+          255
+        ],
+        "color_secondary": [
+          0,
+          40,
+          80
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 2.5,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 1,
+      "is_baseline": false
+    },
+    {
+      "id": "turn_p1",
+      "name": "Turn Player 1",
+      "trigger_key": "throw",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          0,
+          255,
+          4
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 0.0,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 2,
+      "is_baseline": true
+    },
+    {
+      "id": "takeout",
+      "name": "Takeout",
+      "trigger_key": "takeout",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          255,
+          255,
+          255
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 3.0,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 3,
+      "is_baseline": false
+    },
+    {
+      "id": "turn_p2",
+      "name": "Turn Player 2",
+      "trigger_key": "turn_change",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          255,
+          160,
+          0
+        ],
+        "color_secondary": [
+          30,
+          15,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 0.0,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 4,
+      "is_baseline": true
+    },
+    {
+      "id": "leg_won",
+      "name": "Leg Won",
+      "trigger_key": "leg_won",
+      "effect": {
+        "animation": "rainbow",
+        "color_primary": [
+          0,
+          255,
+          0
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 4.0,
+        "speed": 1.8,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 5,
+      "is_baseline": false
+    },
+    {
+      "id": "match_won",
+      "name": "Match Won",
+      "trigger_key": "match_won",
+      "effect": {
+        "animation": "comet",
+        "color_primary": [
+          245,
+          158,
+          11
+        ],
+        "color_secondary": [
+          255,
+          215,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 6.0,
+        "speed": 1.5,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 6,
+      "is_baseline": false
+    }
+  ],
+  "transitions": {
+    "idle->game_start": {
+      "from_phase_id": "idle",
+      "to_phase_id": "game_start",
+      "style": "curtain",
+      "duration": 0.8,
+      "accent_color": [
+        0,
+        240,
+        255
+      ]
+    },
+    "game_start->turn_p1": {
+      "from_phase_id": "game_start",
+      "to_phase_id": "turn_p1",
+      "style": "crossfade",
+      "duration": 0.6,
+      "accent_color": [
+        0,
+        240,
+        255
+      ]
+    },
+    "turn_p1->takeout": {
+      "from_phase_id": "turn_p1",
+      "to_phase_id": "takeout",
+      "style": "wipe",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "takeout->turn_p2": {
+      "from_phase_id": "takeout",
+      "to_phase_id": "turn_p2",
+      "style": "wipe",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "turn_p2->takeout": {
+      "from_phase_id": "turn_p2",
+      "to_phase_id": "takeout",
+      "style": "wipe",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "takeout->turn_p1": {
+      "from_phase_id": "takeout",
+      "to_phase_id": "turn_p1",
+      "style": "wipe",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "turn_p1->turn_p2": {
+      "from_phase_id": "turn_p1",
+      "to_phase_id": "turn_p2",
+      "style": "wipe",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "turn_p2->turn_p1": {
+      "from_phase_id": "turn_p2",
+      "to_phase_id": "turn_p1",
+      "style": "crossfade",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "turn_p2->leg_won": {
+      "from_phase_id": "turn_p2",
+      "to_phase_id": "leg_won",
+      "style": "flash",
+      "duration": 0.5,
+      "accent_color": [
+        0,
+        255,
+        120
+      ]
+    },
+    "turn_p1->leg_won": {
+      "from_phase_id": "turn_p1",
+      "to_phase_id": "leg_won",
+      "style": "flash",
+      "duration": 0.5,
+      "accent_color": [
+        0,
+        255,
+        120
+      ]
+    },
+    "turn_p2->match_won": {
+      "from_phase_id": "turn_p2",
+      "to_phase_id": "match_won",
+      "style": "flash",
+      "duration": 0.6,
+      "accent_color": [
+        245,
+        158,
+        11
+      ]
+    },
+    "turn_p1->match_won": {
+      "from_phase_id": "turn_p1",
+      "to_phase_id": "match_won",
+      "style": "flash",
+      "duration": 0.6,
+      "accent_color": [
+        245,
+        158,
+        11
+      ]
+    },
+    "leg_won->turn_p1": {
+      "from_phase_id": "leg_won",
+      "to_phase_id": "turn_p1",
+      "style": "curtain",
+      "duration": 0.6,
+      "accent_color": null
+    },
+    "leg_won->idle": {
+      "from_phase_id": "leg_won",
+      "to_phase_id": "idle",
+      "style": "crossfade",
+      "duration": 1.0,
+      "accent_color": null
+    },
+    "match_won->idle": {
+      "from_phase_id": "match_won",
+      "to_phase_id": "idle",
+      "style": "crossfade",
+      "duration": 1.0,
+      "accent_color": null
+    }
+  },
+  "events": {
+    "single": {
+      "id": "single",
+      "name": "Single Hit (1x)",
+      "trigger_key": "single",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          0,
+          200,
+          255
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 0.8,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "double": {
+      "id": "double",
+      "name": "Double Hit (2x)",
+      "trigger_key": "double",
+      "effect": {
+        "animation": "pulse",
+        "color_primary": [
+          0,
+          255,
+          180
+        ],
+        "color_secondary": [
+          0,
+          40,
+          20
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 1.2,
+        "speed": 1.4,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "triple": {
+      "id": "triple",
+      "name": "Triple Hit (3x)",
+      "trigger_key": "triple",
+      "effect": {
+        "animation": "flash",
+        "color_primary": [
+          255,
+          120,
+          0
+        ],
+        "color_secondary": [
+          50,
+          20,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 1.8,
+        "speed": 1.6,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "180": {
+      "id": "180",
+      "name": "180 (Maximum!)",
+      "trigger_key": "180",
+      "effect": {
+        "animation": "rainbow",
+        "color_primary": [
+          255,
+          200,
+          0
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 3.2,
+        "speed": 2.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "bullseye": {
+      "id": "bullseye",
+      "name": "Bullseye (Bull)",
+      "trigger_key": "bullseye",
+      "effect": {
+        "animation": "comet",
+        "color_primary": [
+          255,
+          20,
+          40
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 2.2,
+        "speed": 1.8,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "bust": {
+      "id": "bust",
+      "name": "Bust / Miss (Bust)",
+      "trigger_key": "bust",
+      "effect": {
+        "animation": "solid",
+        "color_primary": [
+          110,
+          118,
+          129
+        ],
+        "color_secondary": [
+          0,
+          0,
+          0
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 1.0,
+        "speed": 1.0,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    },
+    "calibrating": {
+      "id": "calibrating",
+      "name": "Board Calibration (Calib)",
+      "trigger_key": "calibrating",
+      "effect": {
+        "animation": "scan",
+        "color_primary": [
+          168,
+          85,
+          247
+        ],
+        "color_secondary": [
+          80,
+          20,
+          140
+        ],
+        "color_tertiary": [
+          0,
+          0,
+          0
+        ],
+        "duration": 2.5,
+        "speed": 1.2,
+        "fps": 50,
+        "reverse": false,
+        "enabled": true,
+        "transition": "instant",
+        "transition_duration": 0.0
+      },
+      "order_index": 0,
+      "is_baseline": false
+    }
+  },
+  "device_flows": {}
+}

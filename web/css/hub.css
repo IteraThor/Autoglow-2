@@ -1,0 +1,221 @@
+/**
+ * AutoGlow 2 - Operational Hub
+ * Live status tiles, match panel, quick actions and controller health cards.
+ */
+
+.hub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hub-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hub-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+#tab-dashboard .metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.metric-box .metric-val .dot {
+  width: 8px;
+  height: 8px;
+  align-self: center;
+}
+
+.metric-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  min-height: 15px;
+}
+
+.hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.hub-kv {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.hub-kv dt {
+  color: var(--text-muted);
+}
+
+.hub-kv dd {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hub-actions .btn-ide {
+  height: 32px;
+  justify-content: center;
+}
+
+.hub-actions-note {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.hub-devices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hub-device {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hub-device-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hub-device-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.hub-device-name .dot {
+  width: 7px;
+  height: 7px;
+}
+
+.hub-device-ip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.hub-device-ip:hover {
+  text-decoration: underline;
+}
+
+.hub-device-stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.hub-device-stats b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.hub-seg-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hub-seg {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.hub-seg.is-off {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.hub-warnings {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--status-warning);
+}
+
+.hub-warnings li::before {
+  content: "! ";
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.hub-empty {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 6px 0;
+}
+
+.hub-empty a {
+  color: var(--accent-primary);
+}
+
+.hub-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.hub-pill.is-udp {
+  color: var(--status-info);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.hub-pill.is-warn {
+  color: var(--status-warning);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+@media (max-width: 720px) {
+  .hub-actions {
+    grid-template-columns: 1fr;
+  }
+}

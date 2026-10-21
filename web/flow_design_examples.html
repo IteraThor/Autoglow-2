@@ -1,0 +1,2874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoGlow 2 - Flow Simulator Design Exploration (5 Styles)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================================================
+       GLOBAL RESET & PAGE LAYOUT
+       ========================================================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #080a0f;
+      color: #e2e8f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 32px 24px 80px 24px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-header {
+      max-width: 1400px;
+      margin: 0 auto 36px auto;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .page-tag {
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2.5px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-weight: 600;
+    }
+
+    .page-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 6px;
+      max-width: 680px;
+    }
+
+    .nav-pills {
+      display: flex;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .nav-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      color: #94a3b8;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .nav-pill:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .examples-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+
+    .example-section {
+      background: #0d1117;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-margin-top: 24px;
+    }
+
+    .example-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .example-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .example-number {
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #38bdf8;
+    }
+
+    .example-name {
+      font-size: 16.5px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.2px;
+    }
+
+    .example-desc {
+      font-size: 12.5px;
+      color: #94a3b8;
+      max-width: 760px;
+    }
+
+    .principle-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .principle-tag {
+      font-size: 11px;
+      font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Common track container for horizontal scroll */
+    .flow-canvas-scroll {
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    /* =========================================================================
+       STYLE 1: VERCEL / LINEAR MINIMALIST (Dark Zinc, Zero Glow, Monospace Meta)
+       ========================================================================= */
+    .s1-panel {
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .s1-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #121215;
+      border-bottom: 1px solid #27272a;
+      gap: 12px;
+    }
+
+    .s1-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #fafafa;
+    }
+
+    .s1-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .s1-btn {
+      background: #18181b;
+      border: 1px solid #27272a;
+      color: #e4e4e7;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .s1-btn:hover {
+      background: #27272a;
+      border-color: #3f3f46;
+      color: #ffffff;
+    }
+
+    .s1-btn-primary {
+      background: #27272a;
+      border-color: #3f3f46;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .s1-track {
+      display: flex;
+      align-items: center;
+      padding: 22px 18px 115px 18px;
+      background: #09090b;
+      min-width: max-content;
+    }
+
+    /* Cards */
+    .s1-card {
+      min-width: 138px;
+      max-width: 152px;
+      background: #121215;
+      border: 1px solid #27272a;
+      border-radius: 7px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color 0.12s;
+    }
+
+    .s1-card:hover {
+      border-color: #52525b;
+    }
+
+    .s1-card.selected {
+      border-color: #a1a1aa;
+      background: #18181b;
+    }
+
+    .s1-card.is-http {
+      border-color: #78350f;
+      background: #14120f;
+    }
+
+    .s1-card.is-http:hover {
+      border-color: #b45309;
+    }
+
+    .s1-card.is-http.selected {
+      border-color: #d97706;
+      background: #1c160e;
+    }
+
+    .s1-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .s1-card-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f4f4f5;
+    }
+
+    .s1-proto-pill {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #b45309;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .s1-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      text-transform: uppercase;
+    }
+
+    .s1-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Sleep Branch under IDLE */
+    .s1-idle-col {
+      position: relative;
+      width: 150px;
+      flex-shrink: 0;
+    }
+
+    .s1-sleep-branch {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .s1-v-conn {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .s1-v-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #27272a;
+      z-index: 1;
+    }
+
+    .s1-v-tag {
+      position: relative;
+      z-index: 2;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      white-space: nowrap;
+    }
+
+    .s1-slim-card {
+      width: 100%;
+      background: #121215;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      cursor: pointer;
+      transition: border-color 0.12s;
+    }
+
+    .s1-slim-card:hover {
+      border-color: #52525b;
+    }
+
+    .s1-slim-card.is-timeout {
+      border-color: #5c2b09;
+      background: #13100c;
+    }
+
+    .s1-slim-card.is-timeout:hover {
+      border-color: #b45309;
+    }
+
+    .s1-slim-card.is-off {
+      border-color: #27272a;
+      background: #0d0d0f;
+      opacity: 0.65;
+    }
+
+    .s1-slim-card.is-off:hover {
+      opacity: 1;
+      border-color: #3f3f46;
+    }
+
+    .s1-slim-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #f4f4f5;
+    }
+
+    .s1-slim-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      text-transform: uppercase;
+    }
+
+    /* Connectors */
+    .s1-conn {
+      display: flex;
+      align-items: center;
+      position: relative;
+      width: 68px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s1-conn-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #27272a;
+      z-index: 1;
+    }
+
+    .s1-conn.is-bridge .s1-conn-line {
+      background: linear-gradient(90deg, #78350f 0%, #27272a 100%);
+    }
+
+    .s1-conn-pill {
+      position: relative;
+      z-index: 2;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .s1-conn-pill:hover {
+      border-color: #52525b;
+      color: #ffffff;
+      background: #27272a;
+    }
+
+    .s1-conn.is-bridge .s1-conn-pill {
+      border-color: #78350f;
+      color: #d97706;
+      background: #14120f;
+    }
+
+    /* Turn Loop Container */
+    .s1-loop-box {
+      border: 1px solid #27272a;
+      border-radius: 9px;
+      background: #0e0e11;
+      padding: 10px 14px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin: 0 4px;
+    }
+
+    .s1-loop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .s1-loop-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: #71717a;
+    }
+
+    .s1-chips {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .s1-chip {
+      background: #18181b;
+      border: 1px solid #27272a;
+      color: #a1a1aa;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .s1-chip:hover {
+      border-color: #52525b;
+      color: #ffffff;
+    }
+
+    .s1-chip-gold { border-color: #78350f; color: #f59e0b; }
+    .s1-chip-red { border-color: #7f1d1d; color: #ef4444; }
+
+    .s1-loop-cards {
+      display: flex;
+      align-items: center;
+    }
+
+    /* Clean Continuous Return Wire */
+    .s1-return-wire {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      height: 28px;
+      margin-top: 2px;
+    }
+
+    .s1-return-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .s1-return-btn {
+      position: relative;
+      z-index: 2;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 5px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .s1-return-btn:hover {
+      border-color: #52525b;
+      color: #ffffff;
+      background: #27272a;
+    }
+
+    /* =========================================================================
+       STYLE 2: DIETER RAMS / BRAUN INDUSTRIAL (Matte Slate, Technical Typography)
+       ========================================================================= */
+    .s2-panel {
+      background: #14171f;
+      border: 1px solid #2a3142;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .s2-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 18px;
+      background: #1b202c;
+      border-bottom: 1px solid #2a3142;
+    }
+
+    .s2-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    .s2-btn-group {
+      display: flex;
+      gap: 5px;
+    }
+
+    .s2-btn {
+      background: #232938;
+      border: 1px solid #333d52;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 4px 11px;
+      border-radius: 3px;
+      cursor: pointer;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .s2-btn:hover {
+      background: #2d3548;
+      color: #ffffff;
+    }
+
+    .s2-btn-accent {
+      border-color: #38bdf8;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .s2-track {
+      display: flex;
+      align-items: center;
+      padding: 20px 18px 115px 18px;
+      background: #14171f;
+      min-width: max-content;
+    }
+
+    .s2-card {
+      min-width: 138px;
+      max-width: 152px;
+      background: #1c2230;
+      border: 1px solid #2e384d;
+      border-radius: 4px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .s2-card:hover {
+      border-color: #475569;
+    }
+
+    .s2-card.selected {
+      border-color: #38bdf8;
+      background: #222b3d;
+    }
+
+    .s2-card.is-http {
+      border-color: #854d0e;
+      background: #1f1d18;
+    }
+
+    .s2-card.is-http.selected {
+      border-color: #eab308;
+      background: #262114;
+    }
+
+    .s2-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s2-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #f1f5f9;
+    }
+
+    .s2-card-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: rgba(234, 179, 8, 0.15);
+      border: 1px solid #ca8a04;
+      color: #facc15;
+    }
+
+    .s2-card-body {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+
+    .s2-color-bar {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* Sleep Branch under IDLE */
+    .s2-idle-col {
+      position: relative;
+      width: 150px;
+      flex-shrink: 0;
+    }
+
+    .s2-sleep-branch {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .s2-v-conn {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .s2-v-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #2e384d;
+      z-index: 1;
+    }
+
+    .s2-v-tag {
+      position: relative;
+      z-index: 2;
+      background: #14171f;
+      border: 1px solid #2e384d;
+      border-radius: 3px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .s2-slim-card {
+      width: 100%;
+      background: #1c2230;
+      border: 1px solid #2e384d;
+      border-radius: 4px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .s2-slim-card:hover {
+      border-color: #475569;
+    }
+
+    .s2-slim-card.is-timeout {
+      border-color: #854d0e;
+      background: #1f1d18;
+    }
+
+    .s2-slim-card.is-off {
+      border-color: #262d3d;
+      background: #12151c;
+      opacity: 0.65;
+    }
+
+    .s2-slim-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #f1f5f9;
+    }
+
+    .s2-slim-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+
+    /* Technical Pin Connector */
+    .s2-conn {
+      display: flex;
+      align-items: center;
+      position: relative;
+      width: 68px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s2-conn-track {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #333d52;
+      z-index: 1;
+    }
+
+    .s2-conn.is-bridge .s2-conn-track {
+      background: linear-gradient(90deg, #854d0e 0%, #333d52 100%);
+    }
+
+    .s2-conn-tag {
+      position: relative;
+      z-index: 2;
+      background: #14171f;
+      border: 1px solid #333d52;
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .s2-conn.is-bridge .s2-conn-tag {
+      border-color: #854d0e;
+      color: #eab308;
+    }
+
+    /* Turn Loop Enclosure */
+    .s2-loop-wrap {
+      border: 1px solid #2e384d;
+      border-radius: 5px;
+      background: #171c26;
+      padding: 10px 14px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .s2-loop-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #252e3f;
+      padding-bottom: 6px;
+    }
+
+    .s2-loop-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #94a3b8;
+    }
+
+    .s2-hit-pads {
+      display: flex;
+      gap: 4px;
+    }
+
+    .s2-hit-pad {
+      background: #202736;
+      border: 1px solid #333d52;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .s2-hit-pad-gold { color: #facc15; border-color: #854d0e; }
+    .s2-hit-pad-red { color: #f87171; border-color: #991b1b; }
+
+    /* Precision Orthogonal Loop Return */
+    .s2-return-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      height: 28px;
+    }
+
+    .s2-return-line-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .s2-return-btn {
+      position: relative;
+      z-index: 2;
+      background: #14171f;
+      border: 1px solid #333d52;
+      border-radius: 3px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+
+    /* =========================================================================
+       STYLE 3: MODERN STUDIO DAW / HARDWARE PATCHBAY
+       ========================================================================= */
+    .s3-panel {
+      background: #0e1015;
+      border: 1px solid #1f232d;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .s3-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 18px;
+      background: #151821;
+      border-bottom: 1px solid #232734;
+    }
+
+    .s3-title {
+      font-size: 12.5px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #e2e8f0;
+    }
+
+    .s3-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .s3-btn {
+      background: #1a1e29;
+      border: 1px solid #2b3244;
+      color: #94a3b8;
+      font-size: 11.5px;
+      padding: 4px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .s3-btn-accent {
+      background: #0ea5e9;
+      border-color: #0284c7;
+      color: #080c14;
+      font-weight: 600;
+    }
+
+    .s3-track {
+      display: flex;
+      align-items: center;
+      padding: 20px 18px 115px 18px;
+      background: #0a0c10;
+      min-width: max-content;
+    }
+
+    .s3-card {
+      min-width: 138px;
+      max-width: 152px;
+      background: #141720;
+      border: 1px solid #232836;
+      border-radius: 7px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .s3-card:hover {
+      border-color: #3b455d;
+    }
+
+    .s3-card.selected {
+      border-color: #38bdf8;
+      background: #1a202d;
+    }
+
+    .s3-card.is-http {
+      border-color: #92400e;
+      background: #181512;
+    }
+
+    .s3-card.is-http.selected {
+      border-color: #f59e0b;
+      background: #201a14;
+    }
+
+    .s3-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s3-card-name {
+      font-size: 13px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .s3-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid #b45309;
+      color: #f59e0b;
+    }
+
+    .s3-card-details {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    .s3-color-led {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Sleep Branch under IDLE */
+    .s3-idle-col {
+      position: relative;
+      width: 150px;
+      flex-shrink: 0;
+    }
+
+    .s3-sleep-branch {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .s3-v-conn {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .s3-v-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #232836;
+      z-index: 1;
+    }
+
+    .s3-v-tag {
+      position: relative;
+      z-index: 2;
+      background: #0a0c10;
+      border: 1px solid #232836;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    .s3-slim-card {
+      width: 100%;
+      background: #141720;
+      border: 1px solid #232836;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .s3-slim-card:hover {
+      border-color: #3b455d;
+    }
+
+    .s3-slim-card.is-timeout {
+      border-color: #92400e;
+      background: #181512;
+    }
+
+    .s3-slim-card.is-off {
+      border-color: #1a1e28;
+      background: #0d0f14;
+      opacity: 0.65;
+    }
+
+    .s3-slim-title {
+      font-size: 11.5px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .s3-slim-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    /* Cable Link */
+    .s3-link {
+      display: flex;
+      align-items: center;
+      position: relative;
+      width: 68px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s3-link-wire {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #232836;
+      z-index: 1;
+    }
+
+    .s3-link.is-bridge .s3-link-wire {
+      background: linear-gradient(90deg, #92400e 0%, #232836 100%);
+    }
+
+    .s3-link-pill {
+      position: relative;
+      z-index: 2;
+      background: #141720;
+      border: 1px solid #2d3446;
+      border-radius: 12px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    /* DAW Track Loop */
+    .s3-loop-strip {
+      border: 1px solid #232836;
+      border-radius: 9px;
+      background: #10131a;
+      padding: 10px 14px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .s3-loop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .s3-loop-title {
+      font-size: 10.5px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    .s3-chips {
+      display: flex;
+      gap: 4px;
+    }
+
+    .s3-chip {
+      background: #161a24;
+      border: 1px solid #2b3244;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .s3-return-track {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      height: 28px;
+    }
+
+    .s3-return-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .s3-return-pill {
+      position: relative;
+      z-index: 2;
+      background: #141720;
+      border: 1px solid #2d3446;
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+
+    /* =========================================================================
+       STYLE 4: ARCHITECTURAL BLUEPRINT / CAD SCHEMATIC
+       ========================================================================= */
+    .s4-panel {
+      background: #0b0f19;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      overflow: hidden;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+
+    .s4-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 18px;
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    .s4-title {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    .s4-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .s4-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 4px 10px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .s4-track {
+      display: flex;
+      align-items: center;
+      padding: 20px 18px 115px 18px;
+      min-width: max-content;
+    }
+
+    .s4-card {
+      min-width: 138px;
+      max-width: 152px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .s4-card:hover {
+      border-color: #64748b;
+    }
+
+    .s4-card.selected {
+      border-color: #38bdf8;
+      background: #13213c;
+    }
+
+    .s4-card.is-http {
+      border-color: #92400e;
+      background: #19140f;
+    }
+
+    .s4-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s4-card-title {
+      font-size: 12.5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .s4-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 5px;
+      border: 1px solid #b45309;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .s4-card-body {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+
+    .s4-node-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 1px;
+    }
+
+    /* Sleep Branch under IDLE */
+    .s4-idle-col {
+      position: relative;
+      width: 150px;
+      flex-shrink: 0;
+    }
+
+    .s4-sleep-branch {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .s4-v-conn {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .s4-v-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #334155;
+      z-index: 1;
+    }
+
+    .s4-v-tag {
+      position: relative;
+      z-index: 2;
+      background: #090d16;
+      border: 1px solid #334155;
+      border-radius: 2px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+
+    .s4-slim-card {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .s4-slim-card:hover {
+      border-color: #64748b;
+    }
+
+    .s4-slim-card.is-timeout {
+      border-color: #92400e;
+      background: #19140f;
+    }
+
+    .s4-slim-card.is-off {
+      border-color: #1e293b;
+      background: #0a0f1d;
+      opacity: 0.65;
+    }
+
+    .s4-slim-title {
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .s4-slim-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+
+    /* Bus Line Connector */
+    .s4-bus {
+      display: flex;
+      align-items: center;
+      position: relative;
+      width: 68px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s4-bus-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #334155;
+      z-index: 1;
+    }
+
+    .s4-bus.is-bridge .s4-bus-line {
+      background: linear-gradient(90deg, #92400e 0%, #334155 100%);
+    }
+
+    .s4-bus-chip {
+      position: relative;
+      z-index: 2;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    /* Loop Subroutine Frame */
+    .s4-frame {
+      border: 1px dashed #334155;
+      border-radius: 5px;
+      padding: 10px 14px 14px 14px;
+      background: rgba(15, 23, 42, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .s4-frame-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s4-frame-title {
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .s4-chips {
+      display: flex;
+      gap: 4px;
+    }
+
+    .s4-chip {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 2px;
+    }
+
+    .s4-return-track {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      height: 28px;
+    }
+
+    .s4-return-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .s4-return-chip {
+      position: relative;
+      z-index: 2;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    /* =========================================================================
+       STYLE 5: MODERN CLEAN DASHBOARD (GitHub / Stripe Flat Style)
+       ========================================================================= */
+    .s5-panel {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .s5-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 18px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .s5-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .s5-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .s5-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 4px 11px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .s5-btn-primary {
+      background: #238636;
+      border-color: rgba(240, 246, 252, 0.1);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .s5-track {
+      display: flex;
+      align-items: center;
+      padding: 20px 18px 115px 18px;
+      background: #0d1117;
+      min-width: max-content;
+    }
+
+    .s5-card {
+      min-width: 138px;
+      max-width: 152px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 7px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .s5-card:hover {
+      border-color: #8b949e;
+    }
+
+    .s5-card.selected {
+      border-color: #58a6ff;
+      box-shadow: 0 0 0 1px #58a6ff;
+    }
+
+    .s5-card.is-http {
+      border-color: #b08800;
+      background: #1f1b13;
+    }
+
+    .s5-card.is-http.selected {
+      border-color: #d29922;
+      box-shadow: 0 0 0 1px #d29922;
+    }
+
+    .s5-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s5-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+
+    .s5-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: rgba(187, 128, 9, 0.15);
+      border: 1px solid #9e6a03;
+      color: #d29922;
+    }
+
+    .s5-card-body {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #8b949e;
+      text-transform: uppercase;
+    }
+
+    .s5-color-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Sleep Branch under IDLE */
+    .s5-idle-col {
+      position: relative;
+      width: 150px;
+      flex-shrink: 0;
+    }
+
+    .s5-sleep-branch {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .s5-v-conn {
+      position: relative;
+      width: 100%;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .s5-v-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #30363d;
+      z-index: 1;
+    }
+
+    .s5-v-tag {
+      position: relative;
+      z-index: 2;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 9.5px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+
+    .s5-slim-card {
+      width: 100%;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .s5-slim-card:hover {
+      border-color: #8b949e;
+    }
+
+    .s5-slim-card.is-timeout {
+      border-color: #b08800;
+      background: #1f1b13;
+    }
+
+    .s5-slim-card.is-off {
+      border-color: #21262d;
+      background: #090d12;
+      opacity: 0.65;
+    }
+
+    .s5-slim-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+
+    .s5-slim-meta {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #8b949e;
+      text-transform: uppercase;
+    }
+
+    /* GitHub Pipeline Connector */
+    .s5-conn {
+      display: flex;
+      align-items: center;
+      position: relative;
+      width: 68px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s5-conn-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #30363d;
+      z-index: 1;
+    }
+
+    .s5-conn-pill {
+      position: relative;
+      z-index: 2;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #8b949e;
+      cursor: pointer;
+    }
+
+    .s5-conn.is-bridge .s5-conn-pill {
+      border-color: #9e6a03;
+      color: #d29922;
+    }
+
+    /* Loop Box */
+    .s5-loop-box {
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #12161e;
+      padding: 10px 14px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .s5-loop-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .s5-loop-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .s5-chips {
+      display: flex;
+      gap: 4px;
+    }
+
+    .s5-chip {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #8b949e;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .s5-chip-gold { color: #d29922; border-color: #9e6a03; }
+    .s5-chip-red { color: #f85149; border-color: #da3633; }
+
+    .s5-return-track {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      height: 28px;
+    }
+
+    .s5-return-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .s5-return-pill {
+      position: relative;
+      z-index: 2;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #8b949e;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">
+        <span>Flow Simulator Design Comparison</span>
+        <span class="page-tag">5 Styles</span>
+      </div>
+      <p class="page-subtitle">
+        Same pipeline layout, 5 distinct design philosophies. Clean lines, zero neon glow, zero blurs, no unneeded decorative logos, and solid continuous return wires.
+      </p>
+    </div>
+    <div class="nav-pills">
+      <a href="#style1" class="nav-pill">1. Linear Minimalist</a>
+      <a href="#style2" class="nav-pill">2. Dieter Rams</a>
+      <a href="#style3" class="nav-pill">3. Studio DAW</a>
+      <a href="#style4" class="nav-pill">4. CAD Blueprint</a>
+      <a href="#style5" class="nav-pill">5. Clean Flat</a>
+    </div>
+  </div>
+
+  <div class="examples-container">
+
+    <!-- =====================================================================
+         STYLE 1: VERCEL / LINEAR MINIMALIST
+         ===================================================================== -->
+    <div class="example-section" id="style1">
+      <div class="example-meta">
+        <div class="example-title-wrap">
+          <span class="example-number">Style 01</span>
+          <span class="example-name">Linear / Vercel Developer Minimalist</span>
+          <p class="example-desc">
+            Ultra-clean dark zinc palette (#09090b). Zero glowing shadows or diffuse halos. High contrast 1px hairline borders (#27272a). Clean text tags with simple arrow indicators instead of lightning bolts. Continuous circuit return wire with 6px corner radius.
+          </p>
+        </div>
+        <div class="principle-tags">
+          <span class="principle-tag">Zero Glow</span>
+          <span class="principle-tag">Dark Zinc</span>
+          <span class="principle-tag">Continuous Circuit</span>
+          <span class="principle-tag">Hairline 1px</span>
+        </div>
+      </div>
+
+      <div class="s1-panel">
+        <div class="s1-header">
+          <span class="s1-title">Game Flow Simulator</span>
+          <div class="s1-btn-group">
+            <button class="s1-btn s1-btn-primary">Auto Play</button>
+            <button class="s1-btn">Play Next</button>
+            <button class="s1-btn">Next Step</button>
+            <button class="s1-btn" style="margin-left: 8px;">Reset</button>
+            <button class="s1-btn s1-btn-primary">Save Flow</button>
+          </div>
+        </div>
+
+        <div class="flow-canvas-scroll">
+          <div class="s1-track">
+            <!-- IDLE Card & Sleep Branch -->
+            <div class="s1-idle-col">
+              <div class="s1-card is-http">
+                <div class="s1-card-top">
+                  <span class="s1-card-name">IDLE</span>
+                  <span class="s1-proto-pill">HTTP</span>
+                </div>
+                <div class="s1-card-meta">
+                  <span class="s1-dot" style="background: #00f0ff;"></span>
+                  <span>Breathe &bull; Native</span>
+                </div>
+              </div>
+
+              <!-- Sleep Branch -->
+              <div class="s1-sleep-branch">
+                <div class="s1-v-conn">
+                  <div class="s1-v-line"></div>
+                  <span class="s1-v-tag">5m Inactivity &darr;</span>
+                </div>
+                <div class="s1-slim-card is-timeout">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s1-slim-title">TIMEOUT</span>
+                    <span class="s1-proto-pill" style="font-size: 10px; padding: 1px 5px;">HTTP</span>
+                  </div>
+                  <div class="s1-slim-meta">
+                    <span class="s1-dot" style="background: #f59e0b; width: 8px; height: 8px;"></span>
+                    <span>Dim 40%</span>
+                  </div>
+                </div>
+                <div class="s1-v-conn">
+                  <div class="s1-v-line"></div>
+                  <span class="s1-v-tag">30m Standby &darr;</span>
+                </div>
+                <div class="s1-slim-card is-off">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s1-slim-title">OFF</span>
+                  </div>
+                  <div class="s1-slim-meta">
+                    <span class="s1-dot" style="background: #52525b; width: 8px; height: 8px;"></span>
+                    <span>Power 0%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s1-conn is-bridge">
+              <div class="s1-conn-line"></div>
+              <button class="s1-conn-pill">Pulse 0.8s</button>
+            </div>
+
+            <!-- Game Start -->
+            <div class="s1-card">
+              <div class="s1-card-top">
+                <span class="s1-card-name">Game Start</span>
+              </div>
+              <div class="s1-card-meta">
+                <span class="s1-dot" style="background: #00f0ff;"></span>
+                <span>Breathe &bull; 2.5s</span>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s1-conn">
+              <div class="s1-conn-line"></div>
+              <button class="s1-conn-pill">Curtain 0.6s</button>
+            </div>
+
+            <!-- Turn Loop -->
+            <div class="s1-loop-box">
+              <div class="s1-loop-header">
+                <span class="s1-loop-label">Turn Loop</span>
+                <div class="s1-chips">
+                  <span style="font-size: 10px; font-weight: 700; color: #71717a; font-family: monospace; margin-right: 4px;">HITS:</span>
+                  <button class="s1-chip">1x</button>
+                  <button class="s1-chip">2x</button>
+                  <button class="s1-chip">3x</button>
+                  <button class="s1-chip s1-chip-gold">180</button>
+                  <button class="s1-chip s1-chip-red">Bull</button>
+                  <button class="s1-chip">Bust</button>
+                </div>
+              </div>
+
+              <div class="s1-loop-cards">
+                <!-- Turn P1 -->
+                <div class="s1-card selected">
+                  <div class="s1-card-top">
+                    <span class="s1-card-name">Turn Player 1</span>
+                  </div>
+                  <div class="s1-card-meta">
+                    <span class="s1-dot" style="background: #00f0ff;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+
+                <!-- Forward Transition -->
+                <div class="s1-conn">
+                  <div class="s1-conn-line"></div>
+                  <button class="s1-conn-pill">Wipe 0.6s</button>
+                </div>
+
+                <!-- Turn P2 -->
+                <div class="s1-card">
+                  <div class="s1-card-top">
+                    <span class="s1-card-name">Turn Player 2</span>
+                  </div>
+                  <div class="s1-card-meta">
+                    <span class="s1-dot" style="background: #f59e0b;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Continuous Circuit Loop Return Wire -->
+              <div class="s1-return-wire">
+                <svg class="s1-return-svg" viewBox="0 0 340 28" preserveAspectRatio="none">
+                  <defs>
+                    <marker id="s1Arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                      <path d="M 0 0 L 6 3 L 0 6 z" fill="#71717a"/>
+                    </marker>
+                  </defs>
+                  <!-- Clean continuous path from P2 bottom right, drops 14px, runs left, turns up to P1 -->
+                  <path d="M 268 0 V 14 Q 268 20 260 20 H 80 Q 72 20 72 14 V 2" fill="none" stroke="#3f3f46" stroke-width="1.2" marker-end="url(#s1Arrow)"/>
+                </svg>
+                <button class="s1-return-btn">
+                  <span>Crossfade 0.6s</span>
+                  <span style="opacity: 0.7; font-size: 11px;">&hookleftarrow;</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s1-conn">
+              <div class="s1-conn-line"></div>
+              <button class="s1-conn-pill">Flash 0.4s</button>
+            </div>
+
+            <!-- Leg Won -->
+            <div class="s1-card">
+              <div class="s1-card-top">
+                <span class="s1-card-name">Leg Won</span>
+              </div>
+              <div class="s1-card-meta">
+                <span class="s1-dot" style="background: #10b981;"></span>
+                <span>Rainbow &bull; 4.0s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STYLE 2: DIETER RAMS / BRAUN INDUSTRIAL
+         ===================================================================== -->
+    <div class="example-section" id="style2">
+      <div class="example-meta">
+        <div class="example-title-wrap">
+          <span class="example-number">Style 02</span>
+          <span class="example-name">Dieter Rams / Braun Industrial</span>
+          <p class="example-desc">
+            "Less, but better." Precision matte slate (#14171f). Strict typographic hierarchy with uppercase tracked labels. Color is reserved exclusively for functional LED state chips (Amber = HTTP, Cyan = UDP). Mechanical orthogonal bus return wire with precision corner radius.
+          </p>
+        </div>
+        <div class="principle-tags">
+          <span class="principle-tag">Functional Minimalism</span>
+          <span class="principle-tag">Tracked Type</span>
+          <span class="principle-tag">Matte Surface</span>
+          <span class="principle-tag">Mechanical Wire</span>
+        </div>
+      </div>
+
+      <div class="s2-panel">
+        <div class="s2-header">
+          <span class="s2-title">Game Flow Simulator</span>
+          <div class="s2-btn-group">
+            <button class="s2-btn s2-btn-accent">Auto Play</button>
+            <button class="s2-btn">Play Next</button>
+            <button class="s2-btn">Next Step</button>
+            <button class="s2-btn" style="margin-left: 8px;">Reset</button>
+            <button class="s2-btn s2-btn-accent">Save</button>
+          </div>
+        </div>
+
+        <div class="flow-canvas-scroll">
+          <div class="s2-track">
+            <!-- IDLE Card & Sleep Branch -->
+            <div class="s2-idle-col">
+              <div class="s2-card is-http">
+                <div class="s2-card-header">
+                  <span class="s2-card-title">IDLE</span>
+                  <span class="s2-card-badge">HTTP</span>
+                </div>
+                <div class="s2-card-body">
+                  <span class="s2-color-bar" style="background: #00f0ff;"></span>
+                  <span>Breathe &bull; Native</span>
+                </div>
+              </div>
+
+              <!-- Sleep Branch -->
+              <div class="s2-sleep-branch">
+                <div class="s2-v-conn">
+                  <div class="s2-v-line"></div>
+                  <span class="s2-v-tag">5M INACT &darr;</span>
+                </div>
+                <div class="s2-slim-card is-timeout">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s2-slim-title">TIMEOUT</span>
+                    <span class="s2-card-badge" style="font-size: 10px; padding: 1px 5px;">HTTP</span>
+                  </div>
+                  <div class="s2-slim-meta">
+                    <span class="s2-color-bar" style="background: #eab308; width: 8px; height: 8px;"></span>
+                    <span>DIM 40%</span>
+                  </div>
+                </div>
+                <div class="s2-v-conn">
+                  <div class="s2-v-line"></div>
+                  <span class="s2-v-tag">30M AUTO-OFF &darr;</span>
+                </div>
+                <div class="s2-slim-card is-off">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s2-slim-title">OFF</span>
+                  </div>
+                  <div class="s2-slim-meta">
+                    <span class="s2-color-bar" style="background: #475569; width: 8px; height: 8px;"></span>
+                    <span>STANDBY</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s2-conn is-bridge">
+              <div class="s2-conn-track"></div>
+              <span class="s2-conn-tag">Pulse &bull; 0.8s</span>
+            </div>
+
+            <!-- Game Start -->
+            <div class="s2-card">
+              <div class="s2-card-header">
+                <span class="s2-card-title">Game Start</span>
+              </div>
+              <div class="s2-card-body">
+                <span class="s2-color-bar" style="background: #00f0ff;"></span>
+                <span>Breathe &bull; 2.5s</span>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s2-conn">
+              <div class="s2-conn-track"></div>
+              <span class="s2-conn-tag">Curtain &bull; 0.6s</span>
+            </div>
+
+            <!-- Turn Loop -->
+            <div class="s2-loop-wrap">
+              <div class="s2-loop-bar">
+                <span class="s2-loop-title">Player Loop</span>
+                <div class="s2-hit-pads">
+                  <button class="s2-hit-pad">1x</button>
+                  <button class="s2-hit-pad">2x</button>
+                  <button class="s2-hit-pad">3x</button>
+                  <button class="s2-hit-pad s2-hit-pad-gold">180</button>
+                  <button class="s2-hit-pad s2-hit-pad-red">Bull</button>
+                  <button class="s2-hit-pad">Bust</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center;">
+                <!-- Turn P1 -->
+                <div class="s2-card selected">
+                  <div class="s2-card-header">
+                    <span class="s2-card-title">Turn Player 1</span>
+                  </div>
+                  <div class="s2-card-body">
+                    <span class="s2-color-bar" style="background: #00f0ff;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+
+                <!-- Connector -->
+                <div class="s2-conn">
+                  <div class="s2-conn-track"></div>
+                  <span class="s2-conn-tag">Wipe &bull; 0.6s</span>
+                </div>
+
+                <!-- Turn P2 -->
+                <div class="s2-card">
+                  <div class="s2-card-header">
+                    <span class="s2-card-title">Turn Player 2</span>
+                  </div>
+                  <div class="s2-card-body">
+                    <span class="s2-color-bar" style="background: #f59e0b;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loop Return -->
+              <div class="s2-return-row">
+                <svg class="s2-return-line-svg" viewBox="0 0 340 28" preserveAspectRatio="none">
+                  <defs>
+                    <marker id="s2Arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                      <polygon points="0,0 6,3 0,6" fill="#38bdf8"/>
+                    </marker>
+                  </defs>
+                  <path d="M 268 0 V 14 Q 268 20 260 20 H 80 Q 72 20 72 14 V 2" fill="none" stroke="#333d52" stroke-width="1.2" marker-end="url(#s2Arrow)"/>
+                </svg>
+                <button class="s2-return-btn">Crossfade &bull; 0.6s &larr;</button>
+              </div>
+            </div>
+
+            <!-- Transition -->
+            <div class="s2-conn">
+              <div class="s2-conn-track"></div>
+              <span class="s2-conn-tag">Flash &bull; 0.4s</span>
+            </div>
+
+            <!-- Leg Won -->
+            <div class="s2-card">
+              <div class="s2-card-header">
+                <span class="s2-card-title">Leg Won</span>
+              </div>
+              <div class="s2-card-body">
+                <span class="s2-color-bar" style="background: #10b981;"></span>
+                <span>Rainbow &bull; 4.0s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STYLE 3: MODERN STUDIO DAW / HARDWARE PATCHBAY
+         ===================================================================== -->
+    <div class="example-section" id="style3">
+      <div class="example-meta">
+        <div class="example-title-wrap">
+          <span class="example-number">Style 03</span>
+          <span class="example-name">Studio DAW / Hardware Synth Patchbay</span>
+          <p class="example-desc">
+            Tactile audio hardware aesthetic (Ableton / Teenage Engineering). Recessed modular channel strips, circular LED indicators, and physical patch-cable couplings. Loop return routes like an audio send/return bus.
+          </p>
+        </div>
+        <div class="principle-tags">
+          <span class="principle-tag">Modular Rack</span>
+          <span class="principle-tag">Tactile Bevels</span>
+          <span class="principle-tag">Circular LEDs</span>
+          <span class="principle-tag">Patch Cable</span>
+        </div>
+      </div>
+
+      <div class="s3-panel">
+        <div class="s3-header">
+          <span class="s3-title">GAME FLOW SEQUENCER</span>
+          <div class="s3-btn-group">
+            <button class="s3-btn s3-btn-accent">Auto Play</button>
+            <button class="s3-btn">Play Next</button>
+            <button class="s3-btn">Next Step</button>
+            <button class="s3-btn" style="margin-left: 8px;">Reset</button>
+            <button class="s3-btn s3-btn-accent">Save Flow</button>
+          </div>
+        </div>
+
+        <div class="flow-canvas-scroll">
+          <div class="s3-track">
+            <!-- IDLE Card & Sleep Branch -->
+            <div class="s3-idle-col">
+              <div class="s3-card is-http">
+                <div class="s3-card-header">
+                  <span class="s3-card-name">IDLE</span>
+                  <span class="s3-badge">HTTP</span>
+                </div>
+                <div class="s3-card-details">
+                  <span class="s3-color-led" style="background: #00f0ff;"></span>
+                  <span>Breathe &bull; Native</span>
+                </div>
+              </div>
+
+              <!-- Sleep Branch -->
+              <div class="s3-sleep-branch">
+                <div class="s3-v-conn">
+                  <div class="s3-v-line"></div>
+                  <span class="s3-v-tag">5m Sleep &darr;</span>
+                </div>
+                <div class="s3-slim-card is-timeout">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s3-slim-title">TIMEOUT</span>
+                    <span class="s3-badge" style="font-size: 10px; padding: 1px 5px;">HTTP</span>
+                  </div>
+                  <div class="s3-slim-meta">
+                    <span class="s3-color-led" style="background: #f59e0b; width: 8px; height: 8px;"></span>
+                    <span>Dim 40%</span>
+                  </div>
+                </div>
+                <div class="s3-v-conn">
+                  <div class="s3-v-line"></div>
+                  <span class="s3-v-tag">30m Standby &darr;</span>
+                </div>
+                <div class="s3-slim-card is-off">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s3-slim-title">OFF</span>
+                  </div>
+                  <div class="s3-slim-meta">
+                    <span class="s3-color-led" style="background: #334155; width: 8px; height: 8px;"></span>
+                    <span>Mute 0%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Link -->
+            <div class="s3-link is-bridge">
+              <div class="s3-link-wire"></div>
+              <span class="s3-link-pill">Pulse</span>
+            </div>
+
+            <!-- Game Start -->
+            <div class="s3-card">
+              <div class="s3-card-header">
+                <span class="s3-card-name">Game Start</span>
+              </div>
+              <div class="s3-card-details">
+                <span class="s3-color-led" style="background: #00f0ff;"></span>
+                <span>Breathe &bull; 2.5s</span>
+              </div>
+            </div>
+
+            <!-- Link -->
+            <div class="s3-link">
+              <div class="s3-link-wire"></div>
+              <span class="s3-link-pill">Curtain</span>
+            </div>
+
+            <!-- Turn Loop -->
+            <div class="s3-loop-strip">
+              <div class="s3-loop-header">
+                <span class="s3-loop-title">Loop Bank</span>
+                <div class="s3-chips">
+                  <button class="s3-chip">1x</button>
+                  <button class="s3-chip">2x</button>
+                  <button class="s3-chip">3x</button>
+                  <button class="s3-chip" style="color: #f59e0b; border-color: #92400e;">180</button>
+                  <button class="s3-chip" style="color: #ef4444; border-color: #991b1b;">Bull</button>
+                  <button class="s3-chip">Bust</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center;">
+                <!-- Turn P1 -->
+                <div class="s3-card selected">
+                  <div class="s3-card-header">
+                    <span class="s3-card-name">Turn Player 1</span>
+                  </div>
+                  <div class="s3-card-details">
+                    <span class="s3-color-led" style="background: #00f0ff;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+
+                <!-- Link -->
+                <div class="s3-link">
+                  <div class="s3-link-wire"></div>
+                  <span class="s3-link-pill">Wipe</span>
+                </div>
+
+                <!-- Turn P2 -->
+                <div class="s3-card">
+                  <div class="s3-card-header">
+                    <span class="s3-card-name">Turn Player 2</span>
+                  </div>
+                  <div class="s3-card-details">
+                    <span class="s3-color-led" style="background: #f59e0b;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loop Return -->
+              <div class="s3-return-track">
+                <svg class="s3-return-svg" viewBox="0 0 340 28" preserveAspectRatio="none">
+                  <defs>
+                    <marker id="s3Arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                      <polygon points="0,0 6,3 0,6" fill="#38bdf8"/>
+                    </marker>
+                  </defs>
+                  <!-- Smooth U-turn patch cable line -->
+                  <path d="M 268 0 C 268 24, 72 24, 72 2" fill="none" stroke="#2d3446" stroke-width="1.5" marker-end="url(#s3Arrow)"/>
+                </svg>
+                <button class="s3-return-pill">Crossfade &bull; 0.6s</button>
+              </div>
+            </div>
+
+            <!-- Link -->
+            <div class="s3-link">
+              <div class="s3-link-wire"></div>
+              <span class="s3-link-pill">Flash</span>
+            </div>
+
+            <!-- Leg Won -->
+            <div class="s3-card">
+              <div class="s3-card-header">
+                <span class="s3-card-name">Leg Won</span>
+              </div>
+              <div class="s3-card-details">
+                <span class="s3-color-led" style="background: #10b981;"></span>
+                <span>Rainbow &bull; 4.0s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STYLE 4: ARCHITECTURAL BLUEPRINT / CAD SCHEMATIC
+         ===================================================================== -->
+    <div class="example-section" id="style4">
+      <div class="example-meta">
+        <div class="example-title-wrap">
+          <span class="example-number">Style 04</span>
+          <span class="example-name">CAD Schematic / Blueprint State Machine</span>
+          <p class="example-desc">
+            Technical drafting aesthetic with subtle 16px dot-grid background. Monospaced type throughout. Transitions modeled as circuit logic junctions. Return wire drawn as an exact bus-line schematic with clean corner radius.
+          </p>
+        </div>
+        <div class="principle-tags">
+          <span class="principle-tag">Dot Grid</span>
+          <span class="principle-tag">Schematic Bus</span>
+          <span class="principle-tag">Mono Precision</span>
+          <span class="principle-tag">Square Geometry</span>
+        </div>
+      </div>
+
+      <div class="s4-panel">
+        <div class="s4-header">
+          <span class="s4-title">[FSM_PIPELINE // STATE_MACHINE]</span>
+          <div class="s4-btn-group">
+            <button class="s4-btn">[&gt; AUTO]</button>
+            <button class="s4-btn">[STEP &gt;]</button>
+            <button class="s4-btn">[NEXT &gt;&gt;]</button>
+            <button class="s4-btn" style="margin-left: 8px;">[RESET]</button>
+            <button class="s4-btn" style="border-color: #38bdf8; color: #38bdf8;">[COMMIT]</button>
+          </div>
+        </div>
+
+        <div class="flow-canvas-scroll">
+          <div class="s4-track">
+            <!-- IDLE Card & Sleep Branch -->
+            <div class="s4-idle-col">
+              <div class="s4-card is-http">
+                <div class="s4-card-header">
+                  <span class="s4-card-title">00_IDLE</span>
+                  <span class="s4-badge">HTTP</span>
+                </div>
+                <div class="s4-card-body">
+                  <span class="s4-node-dot" style="background: #00f0ff;"></span>
+                  <span>BREATHE &bull; REST</span>
+                </div>
+              </div>
+
+              <!-- Sleep Branch -->
+              <div class="s4-sleep-branch">
+                <div class="s4-v-conn">
+                  <div class="s4-v-line"></div>
+                  <span class="s4-v-tag">[INACT_5M] &darr;</span>
+                </div>
+                <div class="s4-slim-card is-timeout">
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span class="s4-slim-title">TIMEOUT</span>
+                    <span class="s4-badge" style="font-size: 9.5px; padding: 1px 4px;">HTTP</span>
+                  </div>
+                  <div class="s4-slim-meta">
+                    <span class="s4-node-dot" style="background: #f59e0b; width: 7px; height: 7px;"></span>
+                    <span>DIM_40</span>
+                  </div>
+                </div>
+                <div class="s4-v-conn">
+                  <div class="s4-v-line"></div>
+                  <span class="s4-v-tag">[OFF_30M] &darr;</span>
+                </div>
+                <div class="s4-slim-card is-off">
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <span class="s4-slim-title">OFF</span>
+                  </div>
+                  <div class="s4-slim-meta">
+                    <span class="s4-node-dot" style="background: #334155; width: 7px; height: 7px;"></span>
+                    <span>PWR_DOWN</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bus -->
+            <div class="s4-bus is-bridge">
+              <div class="s4-bus-line"></div>
+              <span class="s4-bus-chip">PULSE</span>
+            </div>
+
+            <!-- Game Start -->
+            <div class="s4-card">
+              <div class="s4-card-header">
+                <span class="s4-card-title">01_START</span>
+              </div>
+              <div class="s4-card-body">
+                <span class="s4-node-dot" style="background: #00f0ff;"></span>
+                <span>BREATHE &bull; 2.5S</span>
+              </div>
+            </div>
+
+            <!-- Bus -->
+            <div class="s4-bus">
+              <div class="s4-bus-line"></div>
+              <span class="s4-bus-chip">CURTAIN</span>
+            </div>
+
+            <!-- Turn Loop -->
+            <div class="s4-frame">
+              <div class="s4-frame-top">
+                <span class="s4-frame-title">SUB_LOOP // TURN_CYCLES</span>
+                <div class="s4-chips">
+                  <button class="s4-chip">1X</button>
+                  <button class="s4-chip">2X</button>
+                  <button class="s4-chip">3X</button>
+                  <button class="s4-chip" style="color: #f59e0b; border-color: #92400e;">180</button>
+                  <button class="s4-chip" style="color: #ef4444; border-color: #991b1b;">BULL</button>
+                  <button class="s4-chip">BUST</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center;">
+                <!-- Turn P1 -->
+                <div class="s4-card selected">
+                  <div class="s4-card-header">
+                    <span class="s4-card-title">02_TURN_P1</span>
+                  </div>
+                  <div class="s4-card-body">
+                    <span class="s4-node-dot" style="background: #00f0ff;"></span>
+                    <span>SOLID &bull; CONT</span>
+                  </div>
+                </div>
+
+                <!-- Bus -->
+                <div class="s4-bus">
+                  <div class="s4-bus-line"></div>
+                  <span class="s4-bus-chip">WIPE</span>
+                </div>
+
+                <!-- Turn P2 -->
+                <div class="s4-card">
+                  <div class="s4-card-header">
+                    <span class="s4-card-title">03_TURN_P2</span>
+                  </div>
+                  <div class="s4-card-body">
+                    <span class="s4-node-dot" style="background: #f59e0b;"></span>
+                    <span>SOLID &bull; CONT</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Schematic Bus Return -->
+              <div class="s4-return-track">
+                <svg class="s4-return-svg" viewBox="0 0 340 28" preserveAspectRatio="none">
+                  <defs>
+                    <marker id="s4Arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                      <polygon points="0,0 6,3 0,6" fill="#38bdf8"/>
+                    </marker>
+                  </defs>
+                  <path d="M 268 0 V 14 H 72 V 2" fill="none" stroke="#334155" stroke-width="1.2" marker-end="url(#s4Arrow)"/>
+                </svg>
+                <span class="s4-return-chip">CROSSFADE [0.6S] &larr;</span>
+              </div>
+            </div>
+
+            <!-- Bus -->
+            <div class="s4-bus">
+              <div class="s4-bus-line"></div>
+              <span class="s4-bus-chip">FLASH</span>
+            </div>
+
+            <!-- Leg Won -->
+            <div class="s4-card">
+              <div class="s4-card-header">
+                <span class="s4-card-title">04_LEG_WON</span>
+              </div>
+              <div class="s4-card-body">
+                <span class="s4-node-dot" style="background: #10b981;"></span>
+                <span>RAINBOW &bull; 4.0S</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         STYLE 5: MODERN CLEAN DASHBOARD (GitHub / Stripe Flat Style)
+         ===================================================================== -->
+    <div class="example-section" id="style5">
+      <div class="example-meta">
+        <div class="example-title-wrap">
+          <span class="example-number">Style 05</span>
+          <span class="example-name">Modern Clean Flat (GitHub / Stripe Dashboard)</span>
+          <p class="example-desc">
+            Polished flat surface architecture. 1px borders (#30363d), subtle background separation (#161b22 cards over #0d1117 canvas). Neutral pill connectors with clean text. Smooth rounded U-loop return wire.
+          </p>
+        </div>
+        <div class="principle-tags">
+          <span class="principle-tag">Flat Hierarchy</span>
+          <span class="principle-tag">Neutral Surface</span>
+          <span class="principle-tag">No Decorative Icons</span>
+          <span class="principle-tag">Subtle Accents</span>
+        </div>
+      </div>
+
+      <div class="s5-panel">
+        <div class="s5-header">
+          <span class="s5-title">Game Flow Simulator</span>
+          <div class="s5-btn-group">
+            <button class="s5-btn s5-btn-primary">Auto Play</button>
+            <button class="s5-btn">Play Next</button>
+            <button class="s5-btn">Next Step</button>
+            <button class="s5-btn" style="margin-left: 8px;">Reset</button>
+            <button class="s5-btn s5-btn-primary">Save Flow</button>
+          </div>
+        </div>
+
+        <div class="flow-canvas-scroll">
+          <div class="s5-track">
+            <!-- IDLE Card & Sleep Branch -->
+            <div class="s5-idle-col">
+              <div class="s5-card is-http">
+                <div class="s5-card-top">
+                  <span class="s5-card-title">IDLE</span>
+                  <span class="s5-badge">HTTP</span>
+                </div>
+                <div class="s5-card-body">
+                  <span class="s5-color-dot" style="background: #00f0ff;"></span>
+                  <span>Breathe &bull; Native</span>
+                </div>
+              </div>
+
+              <!-- Sleep Branch -->
+              <div class="s5-sleep-branch">
+                <div class="s5-v-conn">
+                  <div class="s5-v-line"></div>
+                  <span class="s5-v-tag">5m inactivity &darr;</span>
+                </div>
+                <div class="s5-slim-card is-timeout">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s5-slim-title">Timeout</span>
+                    <span class="s5-badge" style="font-size: 10px; padding: 1px 5px;">HTTP</span>
+                  </div>
+                  <div class="s5-slim-meta">
+                    <span class="s5-color-dot" style="background: #f59e0b; width: 8px; height: 8px;"></span>
+                    <span>Dim 40%</span>
+                  </div>
+                </div>
+                <div class="s5-v-conn">
+                  <div class="s5-v-line"></div>
+                  <span class="s5-v-tag">30m standby &darr;</span>
+                </div>
+                <div class="s5-slim-card is-off">
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <span class="s5-slim-title">Off</span>
+                  </div>
+                  <div class="s5-slim-meta">
+                    <span class="s5-color-dot" style="background: #484f58; width: 8px; height: 8px;"></span>
+                    <span>0% bri</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Conn -->
+            <div class="s5-conn is-bridge">
+              <div class="s5-conn-line"></div>
+              <button class="s5-conn-pill">Pulse</button>
+            </div>
+
+            <!-- Game Start -->
+            <div class="s5-card">
+              <div class="s5-card-top">
+                <span class="s5-card-title">Game Start</span>
+              </div>
+              <div class="s5-card-body">
+                <span class="s5-color-dot" style="background: #00f0ff;"></span>
+                <span>Breathe &bull; 2.5s</span>
+              </div>
+            </div>
+
+            <!-- Conn -->
+            <div class="s5-conn">
+              <div class="s5-conn-line"></div>
+              <button class="s5-conn-pill">Curtain</button>
+            </div>
+
+            <!-- Turn Loop -->
+            <div class="s5-loop-box">
+              <div class="s5-loop-header">
+                <span class="s5-loop-title">Turn Loop</span>
+                <div class="s5-chips">
+                  <button class="s5-chip">1x</button>
+                  <button class="s5-chip">2x</button>
+                  <button class="s5-chip">3x</button>
+                  <button class="s5-chip s5-chip-gold">180</button>
+                  <button class="s5-chip s5-chip-red">Bull</button>
+                  <button class="s5-chip">Bust</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center;">
+                <!-- Turn P1 -->
+                <div class="s5-card selected">
+                  <div class="s5-card-top">
+                    <span class="s5-card-title">Turn Player 1</span>
+                  </div>
+                  <div class="s5-card-body">
+                    <span class="s5-color-dot" style="background: #00f0ff;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+
+                <!-- Conn -->
+                <div class="s5-conn">
+                  <div class="s5-conn-line"></div>
+                  <button class="s5-conn-pill">Wipe</button>
+                </div>
+
+                <!-- Turn P2 -->
+                <div class="s5-card">
+                  <div class="s5-card-top">
+                    <span class="s5-card-title">Turn Player 2</span>
+                  </div>
+                  <div class="s5-card-body">
+                    <span class="s5-color-dot" style="background: #f59e0b;"></span>
+                    <span>Solid &bull; Cont</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loop Return Wire -->
+              <div class="s5-return-track">
+                <svg class="s5-return-svg" viewBox="0 0 340 28" preserveAspectRatio="none">
+                  <defs>
+                    <marker id="s5Arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto">
+                      <polygon points="0,0 6,3 0,6" fill="#8b949e"/>
+                    </marker>
+                  </defs>
+                  <path d="M 268 0 V 14 Q 268 20 260 20 H 80 Q 72 20 72 14 V 2" fill="none" stroke="#30363d" stroke-width="1.2" marker-end="url(#s5Arrow)"/>
+                </svg>
+                <button class="s5-return-pill">Crossfade &bull; 0.6s &larr;</button>
+              </div>
+            </div>
+
+            <!-- Conn -->
+            <div class="s5-conn">
+              <div class="s5-conn-line"></div>
+              <button class="s5-conn-pill">Flash</button>
+            </div>
+
+            <!-- Leg Won -->
+            <div class="s5-card">
+              <div class="s5-card-top">
+                <span class="s5-card-title">Leg Won</span>
+              </div>
+              <div class="s5-card-body">
+                <span class="s5-color-dot" style="background: #10b981;"></span>
+                <span>Rainbow &bull; 4.0s</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

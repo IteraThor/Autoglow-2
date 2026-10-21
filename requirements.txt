@@ -1,0 +1,5 @@
+# Runtime dependencies (bounded to avoid surprise breaking major releases)
+aiohttp>=3.9,<4
+websockets>=13,<18
+pyserial>=3.5,<4
+zeroconf>=0.130,<1

@@ -1,0 +1,1273 @@
+/* AutoGlow 2 - Game Flow Planner: Style 05 (Modern Clean Flat / GitHub-Stripe) */
+
+/* =========================================================================
+   PANEL AND HEADER
+   ========================================================================= */
+.game-flow-panel {
+  margin-top: 0;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 18px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flow-header-left, .flow-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flow-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.flow-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6edf3;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.flow-badge {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  padding: 1.5px 6px;
+  border-radius: 3px;
+  background: rgba(88, 166, 255, 0.1);
+  color: #58a6ff;
+  border: 1px solid #1f6feb;
+}
+
+/* Header playback buttons -- override btn-ide with flat GitHub-style */
+.flow-header .btn-ide {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 11px;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.flow-header .btn-ide:hover {
+  background: #30363d;
+  border-color: #8b949e;
+  color: #f0f6fc;
+  box-shadow: none;
+  transform: none;
+}
+
+.flow-header .btn-ide.btn-ide-primary {
+  background: #238636;
+  border-color: rgba(240, 246, 252, 0.1);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.flow-header .btn-ide.btn-ide-primary:hover {
+  background: #2ea043;
+  border-color: rgba(240, 246, 252, 0.1);
+  box-shadow: none;
+  transform: none;
+}
+
+/* =========================================================================
+   PIPELINE CONTAINER AND TRACK
+   ========================================================================= */
+.flow-pipeline-container {
+  padding: 16px 14px 60px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #0d1117;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+
+.flow-pipeline-container::-webkit-scrollbar {
+  height: 5px;
+}
+
+.flow-pipeline-container::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+.flow-pipeline-container::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+.flow-pipeline-container::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+.flow-pipeline-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: max-content;
+  box-sizing: border-box;
+  padding: 55px 2px 55px 2px;
+  position: relative;
+  gap: 0;
+}
+
+/* =========================================================================
+   PHASE CARDS
+   ========================================================================= */
+.flow-phase-card {
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+  height: 60px;
+  box-sizing: border-box;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 7px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.12s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.flow-phase-card:hover {
+  border-color: #8b949e;
+}
+
+.flow-phase-card.selected {
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 1px #58a6ff;
+}
+
+.flow-phase-card.is-playing {
+  border-color: #3fb950 !important;
+  box-shadow: 0 0 0 1px #3fb950 !important;
+}
+
+/* HTTP / IDLE Card */
+.flow-phase-card.phase-card-http {
+  border-color: #b08800;
+  background: #1f1b13;
+}
+
+.flow-phase-card.phase-card-http:hover {
+  border-color: #d29922;
+}
+
+.flow-phase-card.phase-card-http.selected {
+  border-color: #d29922;
+  box-shadow: 0 0 0 1px #d29922;
+}
+
+/* =========================================================================
+   CARD INTERNALS
+   ========================================================================= */
+.phase-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  width: 100%;
+}
+
+.phase-card-header:not(.has-badge) {
+  justify-content: flex-start;
+}
+
+.phase-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f6fc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.phase-proto-badge {
+  font-size: 9px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  line-height: 1.2;
+  flex-shrink: 0;
+  background: rgba(187, 128, 9, 0.15);
+  border: 1px solid #9e6a03;
+  color: #d29922;
+}
+
+.phase-proto-badge.proto-http {
+  background: rgba(187, 128, 9, 0.15);
+  border: 1px solid #9e6a03;
+  color: #d29922;
+}
+
+.phase-effect-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: #8b949e;
+  font-family: var(--font-mono, monospace);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.phase-color-chip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: none;
+  flex-shrink: 0;
+}
+
+/* =========================================================================
+   CONNECTOR WIRES
+   ========================================================================= */
+.flow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-width: 44px;
+  width: 44px;
+  height: 60px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.flow-pipeline-track > .flow-connector {
+  flex: 1;
+  min-width: 48px;
+  max-width: 140px;
+}
+
+.flow-branch-row .flow-connector {
+  width: 56px;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.flow-connector-line {
+  position: absolute;
+  top: 50%;
+  left: -1px;
+  right: -1px;
+  height: 1px;
+  background: #484f58;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.flow-connector-line.is-bridge-line {
+  background: linear-gradient(90deg, #b08800 0%, #30363d 100%);
+}
+
+.flow-connector-btn {
+  position: relative;
+  z-index: 2;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 9px;
+  padding: 2px 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #8b949e;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.flow-connector-btn:hover {
+  border-color: #8b949e;
+  color: #c9d1d9;
+}
+
+.flow-connector-btn.selected {
+  border-color: #58a6ff;
+  color: #58a6ff;
+  background: #0d1b30;
+  font-weight: 700;
+}
+
+.flow-connector-btn.is-bridge-btn {
+  border-color: #9e6a03;
+  color: #d29922;
+}
+
+.flow-connector-btn.is-bridge-btn:hover {
+  border-color: #d29922;
+  color: #f0b429;
+}
+
+.flow-connector-btn.is-bridge-btn.selected {
+  border-color: #d29922;
+  color: #f0b429;
+  background: #271e0a;
+}
+
+/* =========================================================================
+   PLAYER TURN LOOP GROUP
+   ========================================================================= */
+.flow-loop-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+  background: #12161e;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 7px 8px 9px 8px;
+  margin: 0;
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.flow-loop-group:hover {
+  border-color: #8b949e;
+}
+
+.flow-loop-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 7px;
+}
+
+.flow-loop-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8b949e;
+}
+
+.flow-loop-events {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.flow-loop-events-label {
+  font-size: 9.5px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #6e7681;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+}
+
+.flow-event-chip {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 3px;
+  padding: 1.5px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: #8b949e;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  line-height: 1.3;
+}
+
+.flow-event-chip:hover {
+  border-color: #8b949e;
+  color: #c9d1d9;
+}
+
+.flow-event-chip.chip-gold {
+  border-color: #9e6a03;
+  color: #d29922;
+}
+
+.flow-event-chip.chip-gold:hover {
+  border-color: #d29922;
+  color: #f0b429;
+  background: #271e0a;
+}
+
+.flow-event-chip.chip-red {
+  border-color: #da3633;
+  color: #f85149;
+}
+
+.flow-event-chip.chip-red:hover {
+  border-color: #f85149;
+  color: #ff7b72;
+  background: #1f0f0e;
+}
+
+.flow-event-chip.chip-muted {
+  border-color: #30363d;
+  color: #6e7681;
+}
+
+.flow-event-chip.chip-muted:hover {
+  border-color: #8b949e;
+  color: #8b949e;
+}
+
+.flow-event-chip.chip-purple,
+.flow-event-chip.chip-calib {
+  border-color: #8957e5;
+  color: #d2a8ff;
+}
+
+.flow-event-chip.chip-purple:hover,
+.flow-event-chip.chip-calib:hover {
+  border-color: #a371f7;
+  color: #e2c5ff;
+  background: #1e1335;
+}
+
+.flow-event-chip.is-firing,
+.flow-connector-btn.is-firing,
+.flow-dual-lane-btn.is-firing,
+.flow-loop-return-btn.is-firing,
+.flow-match-overhead-badge.is-firing,
+.flow-leg-bottom-badge.is-firing {
+  border-color: #58a6ff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px #58a6ff, 0 0 10px rgba(88, 166, 255, 0.65) !important;
+}
+
+.flow-event-chip.selected {
+  border-color: #58a6ff !important;
+  box-shadow: 0 0 0 1px #58a6ff, 0 0 8px rgba(88, 166, 255, 0.45) !important;
+  color: #ffffff !important;
+  background: #1c2d42 !important;
+}
+
+.flow-loop-cards {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* =========================================================================
+   RETURN WIRE (P2 to P1 loop-back) -- smooth Q-curve like the example
+   ========================================================================= */
+.flow-loop-return {
+  width: 100%;
+  height: 30px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+}
+
+.flow-loop-return-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.flow-loop-return-btn {
+  position: relative;
+  z-index: 5;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #8b949e;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.flow-loop-return-btn:hover {
+  border-color: #8b949e;
+  color: #c9d1d9;
+}
+
+.flow-loop-return-btn.selected {
+  border-color: #3fb950;
+  color: #3fb950;
+  background: #0d1f17;
+}
+
+/* =========================================================================
+   TRANSITION MODAL
+   ========================================================================= */
+.flow-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.flow-modal-content {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.flow-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  background: #1c2128;
+  border-bottom: 1px solid #30363d;
+}
+
+.flow-modal-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f6fc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flow-modal-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.flow-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #1c2128;
+  border-top: 1px solid #30363d;
+}
+
+/* =========================================================================
+   SPEED CONTROL GROUP
+   ========================================================================= */
+.flow-speed-group {
+  display: flex;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.flow-speed-btn {
+  background: transparent;
+  border: none;
+  color: #6e7681;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.flow-speed-btn:hover {
+  color: #c9d1d9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.flow-speed-btn.active {
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.1);
+  font-weight: 700;
+}
+
+/* =========================================================================
+   IDLE SLEEP BRANCH (Timeout → Off vertical column below IDLE card)
+   ========================================================================= */
+
+/* Wrapper that contains the IDLE card + its downward sleep branch */
+.flow-idle-col {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: center;
+}
+
+/* Vertical branch container anchored below the IDLE card */
+.flow-sleep-branch {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  padding-top: 0;
+}
+
+/* Vertical wire + centered tag */
+.flow-v-conn {
+  position: relative;
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-v-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: #484f58;
+  z-index: 1;
+  transform: translateX(-50%);
+}
+
+.flow-v-tag {
+  position: relative;
+  z-index: 2;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: #8b949e;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+/* Slim state card (Timeout / Auto Off) */
+.flow-slim-card {
+  width: 100%;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.flow-slim-card:hover {
+  border-color: #8b949e;
+}
+
+.flow-slim-card.is-playing {
+  border-color: #388bfd !important;
+  box-shadow: 0 0 10px rgba(56, 139, 253, 0.4);
+}
+
+/* Timeout variant — amber accent */
+.flow-slim-card.is-timeout {
+  border-color: #b08800;
+  background: #1f1b13;
+}
+
+.flow-slim-card.is-timeout:hover {
+  border-color: #d29922;
+}
+
+/* Off variant — dark/muted */
+.flow-slim-card.is-off {
+  border-color: #21262d;
+  background: #090d12;
+  opacity: 0.7;
+}
+
+.flow-slim-card.is-off:hover {
+  border-color: #30363d;
+  opacity: 1;
+}
+
+.flow-slim-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #c9d1d9;
+  white-space: nowrap;
+}
+
+.flow-slim-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: #8b949e;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.flow-slim-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* =========================================================================
+   Y-FORK SPLIT (Leg Won vs Match Won Parallel Branches)
+   ========================================================================= */
+.flow-fork-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.flow-fork-junction {
+  width: 40px;
+  height: 136px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible;
+}
+
+.flow-fork-junction path {
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+}
+
+.flow-fork-junction path.selected {
+  stroke: #58a6ff !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 0 6px rgba(88, 166, 255, 0.6)) !important;
+}
+
+.flow-fork-branches-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.flow-branch-row {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  box-sizing: border-box;
+  position: relative;
+  gap: 0;
+}
+
+/* Leg Won Bottom Return Wire (Leg Won -> Turn Player 1) */
+.flow-leg-bottom-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 14;
+}
+
+.flow-leg-wire {
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+}
+
+.flow-leg-wire.selected {
+  stroke: #3fb950 !important;
+  stroke-width: 1.8px !important;
+  filter: drop-shadow(0 0 6px rgba(63, 185, 80, 0.6));
+}
+
+.flow-leg-wire.is-active-wire {
+  stroke: #3fb950 !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 0 8px rgba(63, 185, 80, 0.8));
+}
+
+.flow-leg-bottom-badge {
+  position: absolute;
+  top: 218px;
+  left: 713px;
+  z-index: 20;
+  background: #161b22;
+  border: 1px solid rgba(63, 185, 80, 0.4);
+  color: #3fb950;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  border-radius: 12px;
+  padding: 2px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.flow-leg-bottom-badge:hover {
+  background: #1c2128;
+  border-color: #3fb950;
+  box-shadow: 0 0 8px rgba(63, 185, 80, 0.3);
+}
+
+.flow-leg-bottom-badge.selected {
+  border-color: #3fb950;
+  box-shadow: 0 0 0 1px #3fb950, 0 0 8px rgba(63, 185, 80, 0.4);
+}
+
+.flow-leg-bottom-badge.is-active-loop {
+  border-color: #3fb950 !important;
+  color: #ffffff !important;
+  background: #0d1f17 !important;
+  box-shadow: 0 0 12px rgba(63, 185, 80, 0.8) !important;
+}
+
+/* Match Won Overhead Return Wire (Match Won -> IDLE) */
+.flow-match-overhead-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 14;
+}
+
+.flow-match-wire {
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+}
+
+.flow-match-wire.selected {
+  stroke: #f0b429 !important;
+  stroke-width: 1.8px !important;
+  filter: drop-shadow(0 0 6px rgba(240, 180, 41, 0.6));
+}
+
+.flow-match-wire.is-active-wire {
+  stroke: #f0b429 !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 0 8px rgba(240, 180, 41, 0.8));
+}
+
+.flow-match-overhead-badge {
+  position: absolute;
+  top: 4px;
+  left: 233px;
+  z-index: 20;
+  background: #161b22;
+  border: 1px solid rgba(210, 153, 34, 0.4);
+  color: #d29922;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  border-radius: 12px;
+  padding: 2px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.flow-match-overhead-badge:hover {
+  background: #1c2128;
+  border-color: #d29922;
+  color: #f0b429;
+  box-shadow: 0 0 8px rgba(210, 153, 34, 0.3);
+}
+
+.flow-match-overhead-badge.selected {
+  border-color: #f0b429;
+  color: #f0b429;
+  background: #271e0a;
+  box-shadow: 0 0 0 1px #f0b429, 0 0 8px rgba(210, 153, 34, 0.4);
+}
+
+.flow-match-overhead-badge.is-active-loop {
+  border-color: #f0b429 !important;
+  color: #ffffff !important;
+  background: #744210 !important;
+  box-shadow: 0 0 12px rgba(240, 180, 41, 0.8) !important;
+}
+
+/* Gold theme for Match Won card */
+.flow-phase-card.phase-card-match {
+  border-color: rgba(210, 153, 34, 0.4);
+  background: #161410;
+}
+
+.flow-phase-card.phase-card-match:hover {
+  border-color: #d29922;
+}
+
+.flow-phase-card.phase-card-match.selected {
+  border-color: #f0b429;
+  box-shadow: 0 0 0 1px #f0b429;
+}
+
+/* Green theme for Leg Won card */
+.flow-phase-card.phase-card-leg {
+  border-color: rgba(63, 185, 80, 0.4);
+}
+
+.flow-phase-card.phase-card-leg:hover {
+  border-color: #3fb950;
+}
+
+.flow-phase-card.phase-card-leg.selected {
+  border-color: #3fb950;
+  box-shadow: 0 0 0 1px #3fb950;
+}
+
+/* =========================================================================
+   DUAL-LANE HIGHWAY CONNECTOR (P1 <=> Takeout <=> P2)
+   ========================================================================= */
+.flow-dual-connector {
+  width: 70px;
+  min-width: 70px;
+  height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.flow-dual-lane {
+  width: 70px;
+  height: 21px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-dual-lane-svg {
+  position: absolute;
+  inset: 0;
+  width: 70px;
+  height: 21px;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.flow-dual-lane-line {
+  stroke: #484f58;
+  stroke-width: 1.3px;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease;
+}
+
+.flow-dual-lane-line.selected {
+  stroke: #58a6ff;
+  stroke-width: 1.6px;
+  filter: drop-shadow(0 0 4px rgba(88, 166, 255, 0.4));
+}
+
+.flow-dual-lane-line.is-active-lane {
+  stroke: #58a6ff !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.8)) !important;
+}
+
+.flow-dual-lane-btn {
+  position: relative;
+  z-index: 5;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.5px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: #8b949e;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  line-height: 1.3;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.flow-dual-lane-btn:hover {
+  border-color: #8b949e;
+  color: #c9d1d9;
+}
+
+.flow-dual-lane-btn.selected {
+  border-color: #58a6ff;
+  color: #58a6ff;
+  background: #0c1b2c;
+  box-shadow: 0 0 0 1px #58a6ff, 0 0 6px rgba(88, 166, 255, 0.35);
+}
+
+.flow-dual-lane-btn.is-active-lane {
+  border-color: #58a6ff !important;
+  color: #ffffff !important;
+  background: #1f6feb !important;
+  box-shadow: 0 0 10px rgba(88, 166, 255, 0.8) !important;
+}
+
+/* Pure White / Slate theme for Takeout card */
+.flow-phase-card.phase-card-takeout {
+  border-color: rgba(240, 246, 252, 0.35);
+  background: #16191f;
+}
+
+.flow-phase-card.phase-card-takeout:hover {
+  border-color: #f0f6fc;
+}
+
+.flow-phase-card.phase-card-takeout.selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff, 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+/* =========================================================================
+   LIGHTING CONFIGURATION MODE SWITCHER (Event Matrix vs Flow Matrix)
+   ========================================================================= */
+.lighting-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid var(--border-color, #30363d);
+  border-radius: var(--radius-md, 6px);
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.lighting-mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 27, 34, 0.9);
+  padding: 3px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border-subtle, #21262d);
+}
+
+.mode-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  color: var(--text-muted, #8b949e);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+}
+
+.mode-tab-btn:hover {
+  color: var(--text-primary, #f0f6fc);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-tab-btn.active {
+  color: var(--accent-primary, #00f0ff);
+  background: rgba(0, 240, 255, 0.08);
+  border-color: rgba(0, 240, 255, 0.35);
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+}
+
+.mode-tab-btn svg {
+  flex-shrink: 0;
+}
+
+.lighting-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  color: var(--text-secondary, #c9d1d9);
+  background: rgba(22, 27, 34, 0.6);
+  border: 1px solid var(--border-subtle, #21262d);
+  padding: 5px 12px;
+  border-radius: 4px;
+}
+
+.lighting-mode-indicator strong {
+  color: var(--accent-primary, #00f0ff);
+  font-weight: 600;
+}
+
+.lighting-mode-badge {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 240, 255, 0.15);
+  color: var(--accent-primary, #00f0ff);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  margin-left: auto;
+  text-transform: uppercase;
+}
+
+/* =========================================================================
+   FLOW MATRIX HARDWARE TOOLBAR (Device & WS281x Segment Selector)
+   ========================================================================= */
+.flow-hw-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(13, 17, 23, 0.65);
+  border: 1px solid var(--border-subtle, #30363d);
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  backdrop-filter: blur(10px);
+}
+
+.flow-hw-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.flow-hw-device-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flow-hw-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #f0f6fc);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+}
+
+.flow-device-select {
+  font-weight: 600;
+  min-width: 180px;
+  max-width: 260px;
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+
+.flow-segment-strip {
+  display: flex;
+  align-items: center;
+}
+
+.flow-segment-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.flow-seg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  color: var(--text-muted, #8b949e);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle, #30363d);
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  user-select: none;
+}
+
+.flow-seg-pill:hover {
+  color: var(--text-primary, #f0f6fc);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.flow-seg-pill.active {
+  color: var(--accent-primary, #00f0ff);
+  background: rgba(0, 240, 255, 0.1);
+  border-color: rgba(0, 240, 255, 0.35);
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+}
+
+.flow-segment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #c9d1d9);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle, #30363d);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+

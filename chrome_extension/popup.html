@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AutoGlow Bridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" width="20" height="20" alt="">
+    <h1>AutoGlow Bridge</h1>
+    <span id="version" class="muted"></span>
+  </header>
+
+  <section class="status">
+    <div class="row"><span id="dotServer" class="dot"></span><span>AutoGlow</span><span id="serverStatus" class="value">…</span></div>
+    <div class="row"><span id="dotTab" class="dot"></span><span>Autodarts tab</span><span id="tabStatus" class="value">…</span></div>
+    <p id="error" class="error" hidden></p>
+    <p id="hint" class="muted" hidden>Open <a href="https://play.autodarts.com" target="_blank">play.autodarts.com</a> and play as usual. AutoGlow receives the game events from this tab.</p>
+  </section>
+
+  <form id="settings">
+    <label for="serverUrl">AutoGlow address</label>
+    <input id="serverUrl" type="url" placeholder="http://localhost:8080" required>
+    <label for="pairingKey">Pairing key <span class="muted">(only if AutoGlow runs on another computer)</span></label>
+    <input id="pairingKey" type="text" autocomplete="off" spellcheck="false" placeholder="from AutoGlow → Autodarts tab">
+    <div class="actions">
+      <button type="submit">Save &amp; connect</button>
+      <a id="openAutoglow" href="#" target="_blank">Open AutoGlow ↗</a>
+    </div>
+  </form>
+
+  <script src="popup.js"></script>
+</body>
+</html>
