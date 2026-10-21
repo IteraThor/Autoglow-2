@@ -41,13 +41,24 @@ from routes.simulator_routes import (
     handle_simulator_test_effect, handle_simulator_cable_offset
 )
 from routes.flow_routes import register_flow_routes
-from routes.hub_routes import handle_hub_status
+from routes.hub_routes import handle_hub_status, handle_status
 from routes.extension_routes import (
     UPDATE_XML_PATH, CRX_PATH, handle_extension_update_xml, handle_extension_crx
 )
 from routes.auth_routes import (
     handle_auth_status, handle_auth_login, handle_auth_logout, handle_set_pin
 )
+
+
+# Every page of the single-page app. The first group is canonical; the rest are older links
+# that web/js/core/router.js redirects to their canonical page.
+SPA_PATHS = [
+    "/", "/hub", "/setup", "/setup/controllers", "/setup/connection",
+    "/lighting", "/lighting/matrix", "/lighting/flow", "/power", "/settings",
+    "/index.html", "/home", "/dashboard", "/devices", "/wled-devices", "/autodarts", "/autodarts-account",
+    "/matrix", "/event-matrix", "/simulator", "/led-simulator", "/power-timers", "/idle", "/idle-mode",
+    "/updates", "/updates-backups", "/backups",
+]
 
 
 def register_routes(app: web.Application, web_dir: str):
@@ -59,13 +70,7 @@ def register_routes(app: web.Application, web_dir: str):
         )
 
     # SPA Navigation Routes & Aliases
-    for path in [
-        "/", "/index.html", "/home", "/hub", "/dashboard",
-        "/devices", "/wled-devices", "/autodarts", "/autodarts-account",
-        "/matrix", "/event-matrix", "/power", "/power-timers",
-        "/idle", "/idle-mode", "/simulator", "/led-simulator",
-        "/settings", "/updates", "/updates-backups", "/backups"
-    ]:
+    for path in SPA_PATHS:
         app.router.add_get(path, handle_index)
 
     # Access PIN Routes
@@ -76,6 +81,7 @@ def register_routes(app: web.Application, web_dir: str):
 
     # Operational Hub
     app.router.add_get("/api/hub/status", handle_hub_status)
+    app.router.add_get("/api/status", handle_status)
 
     # Config Routes
     app.router.add_get("/api/config", handle_get_config)

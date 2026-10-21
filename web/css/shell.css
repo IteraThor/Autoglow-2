@@ -1,0 +1,357 @@
+/**
+ * AutoGlow 2 - App Shell
+ * Header (brand, mode switch, status lights), navigation rail, sub-tabs and the "Not playing" banner.
+ * Drawn at true size; the page content below still uses the legacy zoom (see tokens.css).
+ */
+
+.app-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* -----------------------------------------------------------------------------
+ * Header
+ * ----------------------------------------------------------------------------- */
+.app-header {
+  flex-shrink: 0;
+  height: 56px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.brand {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font: 600 var(--fs-lg) var(--font-ui);
+  text-decoration: none;
+}
+
+.brand svg {
+  color: var(--accent-primary);
+}
+
+/* Mode switch: the one place that decides what plays */
+.mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+}
+
+.mode-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  font: 500 var(--fs-md) var(--font-ui);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-option:hover {
+  color: var(--text-primary);
+}
+
+.mode-option[aria-pressed="true"] {
+  background: var(--accent-primary);
+  color: #0b1416;
+  font-weight: 600;
+}
+
+.mode-option:disabled {
+  cursor: progress;
+}
+
+.mode-option[aria-busy]::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Status lights */
+.status-pills {
+  justify-self: end;
+  display: flex;
+  gap: 6px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: 500 var(--fs-sm) var(--font-ui);
+  cursor: pointer;
+}
+
+.status-pill:hover,
+.status-pill[aria-expanded="true"] {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status-pill[data-tone="ok"] .status-dot {
+  background: var(--status-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.status-pill[data-tone="warn"] .status-dot {
+  background: var(--status-warning);
+}
+
+.pill-popover {
+  position: fixed;
+  z-index: var(--z-dialog);
+  min-width: 220px;
+  max-width: 300px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-modal);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  font: var(--fs-md) var(--font-ui);
+  color: var(--text-primary);
+}
+
+.pill-popover-title {
+  font-weight: 600;
+}
+
+.pill-popover-detail {
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.pill-popover-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ui-btn-sm {
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+/* -----------------------------------------------------------------------------
+ * Body: navigation rail + page
+ * ----------------------------------------------------------------------------- */
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.app-rail {
+  flex-shrink: 0;
+  width: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.rail-item {
+  width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 10px 0;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font: 500 var(--fs-xs) var(--font-ui);
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.rail-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+.rail-item[aria-current="page"] {
+  color: var(--accent-primary);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
+.rail-item:focus-visible,
+.mode-option:focus-visible,
+.status-pill:focus-visible,
+.view-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+ * Sub-tabs and "Not playing" banner
+ * ----------------------------------------------------------------------------- */
+.view-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: var(--space-3) 38px 0;
+  background: var(--bg-workspace);
+}
+
+.view-bar[hidden] {
+  display: none;
+}
+
+.view-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: -1px;
+  padding: 10px var(--space-4);
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font: 500 var(--fs-md) var(--font-ui);
+  text-decoration: none;
+}
+
+.view-tab:hover {
+  color: var(--text-primary);
+}
+
+.view-tab[aria-current="page"] {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.playing-badge {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--status-success);
+  font: 600 11px var(--font-ui);
+}
+
+.not-playing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: 1px solid rgba(var(--warning-rgb), 0.45);
+  border-radius: var(--radius-md);
+  background: rgba(var(--warning-rgb), 0.1);
+  color: var(--status-warning);
+  font: 500 var(--fs-md) var(--font-ui);
+}
+
+/* The workspace that is not playing stays editable but visibly set back */
+.main-content[data-not-playing] .tab-container {
+  opacity: 0.8;
+}
+
+/* -----------------------------------------------------------------------------
+ * Narrow screens
+ * ----------------------------------------------------------------------------- */
+@media (max-width: 960px) {
+  .status-label {
+    display: none;
+  }
+
+  .status-pill {
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-header {
+    grid-template-columns: auto 1fr;
+    height: auto;
+    row-gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .mode-switch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .mode-option {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .app-body {
+    flex-direction: column-reverse;
+  }
+
+  .app-rail {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: var(--space-1);
+    border-right: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .rail-item {
+    flex: 1;
+    width: auto;
+    padding: 6px 0;
+  }
+
+  .view-bar {
+    padding: var(--space-2) var(--space-4) 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-option[aria-busy]::after {
+    animation: none;
+  }
+}

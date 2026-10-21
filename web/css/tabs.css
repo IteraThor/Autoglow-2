@@ -263,150 +263,16 @@
   pointer-events: none;
 }
 
-/* -----------------------------------------------------------------------------
- * Sidebar Lighting Engine Mode Switcher Card (Bottom-Left)
- * ----------------------------------------------------------------------------- */
-.sidebar-mode-card {
-  margin-top: auto;
-  margin-left: 8px;
-  margin-right: 8px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 6px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  box-sizing: border-box;
-}
-
-.sidebar-mode-toggle-group {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  background: rgba(13, 17, 23, 0.6);
-  padding: 3px;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-subtle);
-}
-
-.sidebar-mode-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 6px 4px;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--font-sans);
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease-in-out;
-  user-select: none;
-  white-space: nowrap;
-}
-
-.sidebar-mode-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.sidebar-mode-btn.active {
-  color: var(--accent-primary);
-  background: rgba(var(--accent-rgb), 0.1);
-  border-color: rgba(var(--accent-rgb), 0.35);
+.matrix-device-select {
+  min-width: 150px;
+  max-width: 220px;
+  height: 26px;
+  padding: 2px 8px;
   font-weight: 600;
-  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.15);
 }
 
-.sidebar-mode-btn svg {
-  flex-shrink: 0;
-}
-
-/* -----------------------------------------------------------------------------
- * Sidebar Protocol Exclusivity Toggle Card (Bottom-Left)
- * ----------------------------------------------------------------------------- */
-.sidebar-protocol-card {
-  margin-top: 0;
-  margin-left: 8px;
-  margin-right: 8px;
-  margin-bottom: 8px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 6px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-sizing: border-box;
-}
-
-.sidebar-protocol-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.protocol-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.protocol-status-badge.udp {
-  color: var(--status-success);
-}
-
-.protocol-status-badge.http {
-  color: var(--text-muted);
-}
-
-.protocol-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: all 0.2s ease;
-}
-
-.protocol-status-badge.udp .protocol-dot {
-  background: var(--status-success);
-  box-shadow: 0 0 8px var(--status-success);
-}
-
-.protocol-channel-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.protocol-toggle-btn {
-  width: 100%;
-  height: 30px;
-  font-size: 11px;
-  font-weight: 600;
-  justify-content: center;
-  gap: 6px;
-  border-radius: var(--radius-sm, 6px);
-}
-
-.protocol-toggle-btn.active {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #f87171;
-}
-
-.protocol-toggle-btn.active:hover {
-  background: rgba(239, 68, 68, 0.22);
+.matrix-device-select[hidden] {
+  display: none;
 }
 
 /* -----------------------------------------------------------------------------

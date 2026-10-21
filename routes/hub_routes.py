@@ -1,6 +1,7 @@
 """
 AutoGlow 2 - Operational Hub Routes Module
-Handler for /api/hub/status: one aggregated snapshot of engine, Autodarts and controller health.
+Handlers for /api/hub/status (engine, Autodarts and controller health) and /api/status
+(the cheap header snapshot polled by every page; it never contacts the controllers).
 """
 
 import asyncio
@@ -103,4 +104,18 @@ async def handle_hub_status(request: web.Request) -> web.Response:
         "engine": _engine_snapshot(engine, cfg),
         "autodarts": _autodarts_snapshot(engine),
         "devices": list(devices),
+    })
+
+
+async def handle_status(request: web.Request) -> web.Response:
+    engine = request.app.get("engine")
+    cfg = request.app.get("current_app_config") or load_app_config(request.app.get("config_path", "config.json"))
+    eng = _engine_snapshot(engine, cfg)
+    return web.json_response({
+        "status": "ok",
+        "lighting_mode": eng.get("lighting_mode", cfg.lighting_mode.value),
+        "protocol_mode": eng.get("protocol_mode", "http"),
+        "power_state": eng.get("power_state", "on"),
+        "flow_phase": eng.get("flow_phase"),
+        "autodarts": _autodarts_snapshot(engine),
     })

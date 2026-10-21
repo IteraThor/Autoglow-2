@@ -1180,8 +1180,6 @@ async function saveInlineEdit(ip) {
         renderDevicesTab();
       }
 
-      if (typeof renderMatrixSubmenu === 'function') renderMatrixSubmenu();
-      if (typeof renderPowerSubmenu === 'function') renderPowerSubmenu();
       if (typeof renderEffectsTable === 'function') renderEffectsTable();
       if (typeof renderPowerTab === 'function') renderPowerTab();
 

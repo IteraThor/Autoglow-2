@@ -164,7 +164,7 @@ function renderHubDevices(devices) {
   container.innerHTML = '';
 
   if (!devices.length) {
-    container.innerHTML = '<div class="hub-empty">No WLED controllers configured yet. <a href="/devices" onclick="event.preventDefault(); window.history.pushState({tab:\'tab-devices\'}, \'\', \'/devices\'); switchToTab(\'tab-devices\');">Add one on the Devices page.</a></div>';
+    container.innerHTML = '<div class="hub-empty">No WLED controllers configured yet. <a href="/setup/controllers" data-link>Add one in Setup.</a></div>';
     return;
   }
 

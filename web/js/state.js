@@ -32,39 +32,6 @@ var idlePresetState = {
   cachedWledEffects: null
 };
 
-var ROUTE_MAP = {
-  '/': 'tab-dashboard',
-  '/hub': 'tab-dashboard',
-  '/dashboard': 'tab-dashboard',
-  '/devices': 'tab-devices',
-  '/wled-devices': 'tab-devices',
-  '/autodarts': 'tab-autodarts',
-  '/autodarts-account': 'tab-autodarts',
-  '/matrix': 'tab-effects',
-  '/event-matrix': 'tab-effects',
-  '/power': 'tab-power',
-  '/power-timers': 'tab-power',
-  '/idle': 'tab-power',
-  '/idle-mode': 'tab-power',
-  '/simulator': 'tab-simulator',
-  '/led-simulator': 'tab-simulator',
-  '/settings': 'tab-settings',
-  '/updates': 'tab-settings',
-  '/updates-backups': 'tab-settings',
-  '/backups': 'tab-settings'
-};
-
-const TAB_TO_ROUTE = {
-  'tab-dashboard': '/hub',
-  'tab-devices': '/devices',
-  'tab-autodarts': '/autodarts',
-  'tab-effects': '/matrix',
-  'tab-power': '/power',
-  'tab-simulator': '/simulator',
-  'tab-settings': '/settings'
-};
-
-
 const EVENT_CATEGORIES = [
   {
     id: "victories",
@@ -142,8 +109,6 @@ if (typeof window !== "undefined") {
   window.selectedMatrixDeviceIp = selectedMatrixDeviceIp;
   window.selectedMatrixSegmentId = selectedMatrixSegmentId;
   window.idlePresetState = idlePresetState;
-  window.ROUTE_MAP = ROUTE_MAP;
-  window.TAB_TO_ROUTE = TAB_TO_ROUTE;
   window.EVENT_CATEGORIES = EVENT_CATEGORIES;
   window.EVENT_DEFS = EVENT_DEFS;
   window.DEFAULT_PLAYER_SLOTS = DEFAULT_PLAYER_SLOTS;

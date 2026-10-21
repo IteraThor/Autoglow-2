@@ -2,81 +2,21 @@
 
 // --- Event Matrix Tab ---
 
-// Toggle the Event Matrix submenu open/closed in the sidebar nav
-function toggleMatrixSubmenu(e) {
-  e.preventDefault();
-  const group = document.getElementById('navMatrixGroup');
-  if (!group) return;
-  
-  // Clicking the parent button sets selectedMatrixDeviceIp to null to show device selection landing
-  selectedMatrixDeviceIp = null;
-  selectedMatrixSegmentId = null;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('autoglow_selected_matrix_device');
-  }
-
-  group.classList.add('open');
-  const powerGroup = document.getElementById('navPowerGroup');
-  if (powerGroup) powerGroup.classList.remove('open');
-
-  renderMatrixSubmenu();
-  switchToTab('tab-effects');
-  
-  // Ensure the parent nav-item is highlighted
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  const navEffects = document.getElementById('navEffects');
-  if (navEffects) navEffects.classList.add('active');
-
-  if (window.location.pathname !== '/matrix') {
-    window.history.pushState({ tab: 'tab-effects' }, '', '/matrix');
-  }
-}
-
-// Populate device sub-items under the Event Matrix nav item
-function renderMatrixSubmenu() {
-  const submenu = document.getElementById('matrixDeviceSubmenu');
-  if (!submenu) return;
-
+// Controller picker in the matrix header (shown once a controller is chosen)
+function renderMatrixDevicePicker() {
+  const select = document.getElementById('matrixDeviceSelect');
+  if (!select) return;
   const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  if (devicesList.length === 0) {
-    submenu.innerHTML = `
-      <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; padding: 6px 20px;">
-        No devices configured
-      </div>
-    `;
-    return;
-  }
-
-  submenu.innerHTML = devicesList.map(dev => {
-    const ip = dev.ip || '';
-    const name = dev.name || 'WLED Controller';
-    const isActive = selectedMatrixDeviceIp === ip;
-    const safeIp = (ip || '').replace(/[^a-zA-Z0-9]/g, '_');
-    const cached = lastFetchedLiveDeviceData[ip];
-    const isOnline = cached ? (cached.status === 'ok' && cached.online) : null;
-    const dotClass = isOnline === true ? 'sub-dot online' : (isOnline === false ? 'sub-dot offline' : 'sub-dot');
-
-    return `
-      <div class="nav-submenu-item ${isActive ? 'active' : ''}" onclick="selectMatrixDevice('${escapeJsString(ip)}')">
-        <span id="matrix-sub-dot-${safeIp}" class="${dotClass}" title="${isOnline === true ? 'Online' : (isOnline === false ? 'Offline' : 'Checking status...')}"></span>
-        <span>${escapeHtml(name)}</span>
-      </div>
-    `;
-  }).join('');
-
-  // Refresh live ping status for all devices in submenu
-  devicesList.forEach(async (dev) => {
-    if (!dev.ip) return;
-    const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
-    const data = await pingDeviceCached(dev.ip);
-    const online = data && data.status === 'ok' && data.online === true;
-    const dot = document.getElementById(`matrix-sub-dot-${safeIp}`);
-    if (dot) {
-      dot.className = `sub-dot ${online ? 'online' : 'offline'}`;
-      dot.title = online ? 'Online' : 'Offline';
-    }
-  });
+  const show = !!selectedMatrixDeviceIp && devicesList.length > 0;
+  select.hidden = !show;
+  if (!show) return;
+  select.replaceChildren(...devicesList.map(dev => {
+    const option = document.createElement('option');
+    option.value = dev.ip || '';
+    option.textContent = dev.name || dev.ip || 'WLED Controller';
+    option.selected = dev.ip === selectedMatrixDeviceIp;
+    return option;
+  }));
 }
 
 // Helper to retrieve segments for a device (live segments -> config segments -> hw_ins -> fallback)
@@ -206,7 +146,7 @@ function getDeviceSegments(ip) {
   });
 }
 
-// Select a device from the nav submenu and show its event table
+// Select a controller (landing card or header picker) and show its event table
 function selectMatrixDevice(ip) {
   if (selectedMatrixDeviceIp && selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined) {
     EVENT_DEFS.forEach(def => updateEventConfig(def.key));
@@ -225,17 +165,7 @@ function selectMatrixDevice(ip) {
     selectedMatrixSegmentId = null;
   }
   
-  // Switch to the effects tab
-  switchToTab('tab-effects');
-  
-  // Update submenu active states
-  renderMatrixSubmenu();
-
-  // Render the effects table for the selected device
   renderEffectsTable();
-  
-  // Update URL
-  window.history.pushState({ tab: 'tab-effects' }, '', '/matrix');
 }
 
 // Select a segment for the active device
@@ -283,11 +213,11 @@ function renderMatrixDeviceLanding() {
         <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center;">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
-        <strong style="color: var(--text-primary); font-size: 14px;">No WLED Controllers Configured</strong>
+        <strong style="color: var(--text-primary); font-size: 14px;">No controllers yet</strong>
         <p style="color: var(--text-secondary); font-size: 12px; max-width: 360px; margin: 0; line-height: 1.5;">
-          Add a WLED device in the WLED Devices tab to begin configuring dartboard event lighting animations.
+          Add a WLED controller in Setup first.
         </p>
-        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Go to WLED Devices</button>
+        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Open Setup</button>
       </div>
     `;
     return;
@@ -323,15 +253,6 @@ function renderMatrixDeviceLanding() {
 
 // Called when the effects tab is activated — renders the event table for the selected device & segment
 function renderEffectsTable() {
-  // Also refresh the submenu (in case devices changed)
-  renderMatrixSubmenu();
-  
-  // Auto-open the submenu if we're on this tab
-  const group = document.getElementById('navMatrixGroup');
-  if (group && !group.classList.contains('open')) {
-    group.classList.add('open');
-  }
-  
   const contentArea = document.getElementById('matrixContentArea');
   if (!contentArea) return;
 
@@ -339,9 +260,12 @@ function renderEffectsTable() {
 
   // If no device is selected, render the device selection landing
   if (!selectedMatrixDeviceIp || !devicesList.find(d => d.ip === selectedMatrixDeviceIp)) {
+    selectedMatrixDeviceIp = null;
+    renderMatrixDevicePicker();
     renderMatrixDeviceLanding();
     return;
   }
+  renderMatrixDevicePicker();
 
   renderMatrixForDevice(selectedMatrixDeviceIp);
 }
@@ -1943,54 +1867,22 @@ async function fetchProtocolMode() {
 
 async function toggleProtocolMode() {
   const targetMode = currentProtocolMode === 'udp' ? 'http' : 'udp';
-  const btn = document.getElementById('btnToggleProtocol');
-  if (btn) btn.disabled = true;
   try {
-    const res = await fetch('/api/protocol/mode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: targetMode })
-    });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      currentProtocolMode = data.mode;
-      updateProtocolUI(data.mode);
-      showToast(data.mode === 'udp' ? 'UDP Mode Connected (DRGB Stream Active).' : 'UDP Released. HTTP Mode Idle.', 'info');
-    }
+    const data = await window.api.post('/api/protocol/mode', { mode: targetMode });
+    updateProtocolUI(data.mode);
+    window.toast.info(data.mode === 'udp' ? 'Stream started' : 'Stream stopped');
   } catch (err) {
-    showToast(`Protocol switch failed: ${err.message || err}`, 'error');
-  } finally {
-    if (btn) btn.disabled = false;
+    window.toast.error(err, { onRetry: toggleProtocolMode });
   }
 }
 
+// The header's Stream light shows the mode from the shared store
 function updateProtocolUI(mode) {
   currentProtocolMode = mode;
-  const badge = document.getElementById('protocolStatusBadge');
-  const text = document.getElementById('protocolModeText');
-  const btn = document.getElementById('btnToggleProtocol');
-  const btnText = document.getElementById('protocolBtnText');
-
-  if (mode === 'udp') {
-    if (badge) {
-      badge.className = 'protocol-status-badge udp';
-    }
-    if (text) text.innerText = 'UDP LIVE';
-    if (btn) btn.className = 'btn-ide protocol-toggle-btn active';
-    if (btnText) btnText.innerText = 'Disconnect UDP';
-  } else {
-    if (badge) {
-      badge.className = 'protocol-status-badge http';
-    }
-    if (text) text.innerText = 'HTTP IDLE';
-    if (btn) btn.className = 'btn-ide protocol-toggle-btn';
-    if (btnText) btnText.innerText = 'Connect UDP';
-  }
+  window.appStore.set({ protocolMode: mode });
 }
 
 if (typeof window !== "undefined") {
-  window.toggleMatrixSubmenu = toggleMatrixSubmenu;
-  window.renderMatrixSubmenu = renderMatrixSubmenu;
   window.selectMatrixDevice = selectMatrixDevice;
   window.selectMatrixSegment = selectMatrixSegment;
   window.renderMatrixDeviceLanding = renderMatrixDeviceLanding;

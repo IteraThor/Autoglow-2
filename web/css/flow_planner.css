@@ -1151,20 +1151,6 @@
   font-weight: 600;
 }
 
-.lighting-mode-badge {
-  font-family: var(--font-mono, "JetBrains Mono", monospace);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), 0.15);
-  color: var(--accent-primary);
-  border: 1px solid rgba(var(--accent-rgb), 0.3);
-  margin-left: auto;
-  text-transform: uppercase;
-}
-
 /* =========================================================================
    FLOW MATRIX HARDWARE TOOLBAR (Device & WS281x Segment Selector)
    ========================================================================= */

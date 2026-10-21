@@ -3,115 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/theme.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/layout.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/components.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p2">
-  <link rel="stylesheet" href="/css/hub.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/theme.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/shell.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/layout.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/components.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p3">
+  <link rel="stylesheet" href="/css/hub.css?v=2.2-p3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="app-layout">
-    
-    <!-- Left IDE-Style Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="app-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-        </div>
-        <div class="app-title">AutoGlow <span>2</span></div>
-        <span class="version-tag">v2.1</span>
+  <div class="app-shell">
+
+    <header class="app-header">
+      <a href="/hub" data-link class="brand" aria-label="AutoGlow home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span>AutoGlow</span>
+      </a>
+
+      <!-- What the engine plays. Changing it is confirmed by the server before the switch moves. -->
+      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Playing mode">
+        <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span>Event Matrix</span>
+        </button>
+        <button type="button" class="mode-option" data-mode="flow" aria-pressed="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+          <span>Flow Matrix</span>
+        </button>
       </div>
 
-      <nav class="nav-links">
-        <a href="/hub" class="nav-item active" data-tab="tab-dashboard" data-route="/hub" id="navDashboard">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          <span>Operational Hub</span>
+      <div class="status-pills" id="statusPills" aria-label="Status"></div>
+    </header>
+
+    <div class="app-body">
+      <nav class="app-rail" id="appRail" aria-label="Main">
+        <a href="/hub" data-link data-view="hub" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Hub</span>
         </a>
-        <a href="/devices" class="nav-item" data-tab="tab-devices" data-route="/devices" id="navDevices">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/></svg>
-          <span>WLED Devices</span>
+        <a href="/setup" data-link data-view="setup" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/></svg>
+          <span>Setup</span>
         </a>
-        <a href="/autodarts" class="nav-item" data-tab="tab-autodarts" data-route="/autodarts" id="navAutodarts">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <span>Autodarts</span>
+        <a href="/lighting" data-link data-view="lighting" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span>Lighting</span>
         </a>
-        <div class="nav-group" id="navMatrixGroup">
-          <a href="#" class="nav-item" id="navEffects" onclick="toggleMatrixSubmenu(event)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            <span>Event Matrix</span>
-            <span class="lighting-mode-badge" id="sidebarModeBadgeMatrix">ACTIVE</span>
-            <svg class="nav-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left: 6px;"><polyline points="6 9 12 15 18 9"/></svg>
-          </a>
-          <div class="nav-submenu" id="matrixDeviceSubmenu">
-            <!-- Populated dynamically by renderMatrixSubmenu() -->
-          </div>
-        </div>
-        <a href="/simulator" class="nav-item" data-tab="tab-simulator" data-route="/simulator" id="navSimulator">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
-          <span>Flow Matrix</span>
-          <span class="lighting-mode-badge" id="sidebarModeBadgeFlow" style="display: none;">ACTIVE</span>
+        <a href="/power" data-link data-view="power" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <span>Power</span>
         </a>
-        <div class="nav-group" id="navPowerGroup">
-          <a href="#" class="nav-item" id="navPower" onclick="togglePowerSubmenu(event)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            <span>Power &amp; Idle Mode</span>
-            <svg class="nav-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left: auto;"><polyline points="6 9 12 15 18 9"/></svg>
-          </a>
-          <div class="nav-submenu" id="powerDeviceSubmenu">
-            <!-- Populated dynamically by renderPowerSubmenu() -->
-          </div>
-        </div>
-        <a href="/settings" class="nav-item" data-tab="tab-settings" data-route="/settings" id="navSettings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <a href="/settings" data-link data-view="settings" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Settings</span>
         </a>
       </nav>
 
-      <!-- Bottom-Left Sidebar Lighting Engine Mode Switcher Card -->
-      <div class="sidebar-mode-card" id="sidebarModeCard">
-        <div class="sidebar-protocol-header">
-          <span class="protocol-channel-label">Lighting Engine</span>
-        </div>
-        <div class="sidebar-mode-toggle-group">
-          <button type="button" class="sidebar-mode-btn btn-mode-classic active" onclick="switchLightingMode('matrix')" title="Switch to Classic Event Matrix">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            <span>Event Matrix</span>
-          </button>
-          <button type="button" class="sidebar-mode-btn btn-mode-flow" onclick="switchLightingMode('flow')" title="Switch to Flow Matrix (Visual Pipeline)">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
-            <span>Flow Matrix</span>
-          </button>
-        </div>
-      </div>
+      <main class="main-content">
+        <!-- Sub-tabs of the current page and the "Not playing" banner (web/js/components/shell.js) -->
+        <div class="view-bar" id="viewBar" hidden></div>
 
-      <!-- Bottom-Left Sidebar Protocol Exclusivity Toggle Card -->
-      <div class="sidebar-protocol-card" id="sidebarProtocolCard">
-        <div class="sidebar-protocol-header">
-          <div class="protocol-status-badge http" id="protocolStatusBadge">
-            <span class="protocol-dot" id="protocolDot"></span>
-            <span id="protocolModeText">HTTP IDLE</span>
-          </div>
-          <span class="protocol-channel-label">Live Stream</span>
-        </div>
-        <button class="btn-ide protocol-toggle-btn" id="btnToggleProtocol" onclick="toggleProtocolMode()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span id="protocolBtnText">Connect UDP</span>
-        </button>
-      </div>
-    </aside>
-
-    <!-- Main Workspace -->
-    <main class="main-content">
-      
       <div class="tab-container">
         
         <!-- TAB 1: OPERATIONAL STATUS HUB -->
-        <section id="tab-dashboard" class="tab-pane active">
+        <section id="tab-dashboard" class="tab-pane">
           <div class="hub-header">
             <span class="hub-title">Operational Hub</span>
             <span class="hub-meta" id="hubMeta">Loading status...</span>
@@ -543,6 +502,9 @@
               <div id="matrixLandingHeaderTitle" style="display: none;">
                 <span class="panel-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Select Controller</span></span>
               </div>
+
+              <!-- Controller picker (filled by renderMatrixDevicePicker) -->
+              <select id="matrixDeviceSelect" class="select-ide matrix-device-select" aria-label="Controller" onchange="selectMatrixDevice(this.value)" hidden></select>
 
               <!-- Presets Toolbar (Left side) -->
               <div id="matrixPresetToolbar" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -1163,7 +1125,8 @@
 
 
       </div>
-    </main>
+      </main>
+    </div>
   </div>
 
 
@@ -1293,19 +1256,19 @@
   </div>
 
   <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
-  <script type="module" src="/js/core/index.js?v=2.2-p2"></script>
-  <script defer src="/js/auth.js?v=2.2-p2"></script>
-  <script defer src="/js/state.js?v=2.2-p2"></script>
-  <script defer src="/js/utils.js?v=2.2-p2"></script>
-  <script defer src="/js/devices.js?v=2.2-p2"></script>
-  <script defer src="/js/autodarts.js?v=2.2-p2"></script>
-  <script defer src="/js/matrix.js?v=2.2-p2"></script>
-  <script defer src="/js/power.js?v=2.2-p2"></script>
-  <script defer src="/js/simulator.js?v=2.2-p2"></script>
-  <script defer src="/js/flow_planner.js?v=2.2-p2"></script>
-  <script defer src="/js/system.js?v=2.2-p2"></script>
-  <script defer src="/js/hub.js?v=2.2-p2"></script>
-  <script defer src="/app.js?v=2.2-p2"></script>
+  <script type="module" src="/js/core/index.js?v=2.2-p3"></script>
+  <script defer src="/js/auth.js?v=2.2-p3"></script>
+  <script defer src="/js/state.js?v=2.2-p3"></script>
+  <script defer src="/js/utils.js?v=2.2-p3"></script>
+  <script defer src="/js/devices.js?v=2.2-p3"></script>
+  <script defer src="/js/autodarts.js?v=2.2-p3"></script>
+  <script defer src="/js/matrix.js?v=2.2-p3"></script>
+  <script defer src="/js/power.js?v=2.2-p3"></script>
+  <script defer src="/js/simulator.js?v=2.2-p3"></script>
+  <script defer src="/js/flow_planner.js?v=2.2-p3"></script>
+  <script defer src="/js/system.js?v=2.2-p3"></script>
+  <script defer src="/js/hub.js?v=2.2-p3"></script>
+  <script defer src="/app.js?v=2.2-p3"></script>
 
 </body>
 </html>

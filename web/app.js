@@ -1,54 +1,10 @@
 // AutoGlow 2 - Main SPA Orchestrator & Telemetry Router
 // Coordinates UI state, navigation routing, and live WebSocket telemetry.
 
-// --- Tab Navigation & SPA Routing ---
-function setupNavigation() {
-  document.querySelectorAll('.nav-item[data-tab]').forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const targetId = link.getAttribute('data-tab');
-      const targetRoute = link.getAttribute('data-route') || TAB_TO_ROUTE[targetId] || '/hub';
-      
-      if (window.location.pathname !== targetRoute) {
-        window.history.pushState({ tab: targetId }, '', targetRoute);
-      }
-      switchToTab(targetId);
-    });
-  });
-}
-
-function handleInitialRoute() {
-  const currentPath = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
-  const targetTab = ROUTE_MAP[currentPath] || 'tab-dashboard';
-  switchToTab(targetTab);
-}
-
-function switchToTab(targetId) {
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+// --- Pane rendering ---
+// URLs, the rail and sub-tabs belong to web/js/core/router.js; it calls this to show and refresh a pane.
+function activatePane(targetId) {
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  
-  const navBtn = document.querySelector(`.nav-item[data-tab="${targetId}"]`);
-  if (navBtn) navBtn.classList.add('active');
-
-  const matrixGroup = document.getElementById('navMatrixGroup');
-  const powerGroup = document.getElementById('navPowerGroup');
-
-  // Collapse/Expand groups based on active tab
-  if (targetId === 'tab-effects') {
-    if (matrixGroup) matrixGroup.classList.add('open');
-    if (powerGroup) powerGroup.classList.remove('open');
-    const navEffects = document.getElementById('navEffects');
-    if (navEffects && !selectedMatrixDeviceIp) navEffects.classList.add('active');
-  } else if (targetId === 'tab-power') {
-    if (powerGroup) powerGroup.classList.add('open');
-    if (matrixGroup) matrixGroup.classList.remove('open');
-    const navPower = document.getElementById('navPower');
-    if (navPower && !idlePresetState.ip) navPower.classList.add('active');
-  } else {
-    // Leaving both matrix and power tabs -> collapse both accordion menus
-    if (matrixGroup) matrixGroup.classList.remove('open');
-    if (powerGroup) powerGroup.classList.remove('open');
-  }
 
   const pane = document.getElementById(targetId);
   if (pane) pane.classList.add('active');
@@ -66,6 +22,12 @@ function switchToTab(targetId) {
     renderSettingsTab();
     if (typeof refreshPinSettings === 'function') refreshPinSettings();
   }
+}
+window.activatePane = activatePane;
+
+// Older code opens a pane by id; route it through the router so the URL and navigation follow
+function switchToTab(targetId) {
+  window.router.showPane(targetId);
 }
 
 
@@ -93,8 +55,6 @@ async function loadConfig() {
       renderDevicesTab();
       renderAutodartsTab();
       renderEffectsTable();
-      renderMatrixSubmenu();
-      renderPowerSubmenu();
       renderPowerTab();
       if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
       updateLightingModeUI(appState.lighting_mode || 'matrix');
@@ -187,6 +147,11 @@ function handleTelemetryMessage(msg) {
     if (typeof updateProtocolUI === 'function') {
       updateProtocolUI(msg.mode);
     }
+    return;
+  }
+
+  if (msg.type === 'power_state') {
+    window.appStore.set({ powerState: msg.state === 'active' ? 'on' : msg.state });
     return;
   }
 
@@ -284,67 +249,20 @@ function formatPlayerNamePlates(players, activeIdx = 0) {
   }).join('<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin: 0 6px;">vs</span>');
 }
 
-// --- Lighting Configuration Mode (Event Matrix vs Flow Matrix) ---
+// --- Lighting mode (Event Matrix vs Flow Matrix) ---
+// The header switch and the Lighting page read the mode from the shared store
 function updateLightingModeUI(mode) {
-  const isFlow = (mode === 'flow');
-  
-  document.querySelectorAll('.btn-mode-classic').forEach(b => {
-    b.classList.toggle('active', !isFlow);
-  });
-  document.querySelectorAll('.btn-mode-flow').forEach(b => {
-    b.classList.toggle('active', isFlow);
-  });
-
-  const badgeMatrix = document.getElementById('sidebarModeBadgeMatrix');
-  const badgeFlow = document.getElementById('sidebarModeBadgeFlow');
-  if (badgeMatrix) badgeMatrix.style.display = isFlow ? 'none' : 'inline-block';
-  if (badgeFlow) badgeFlow.style.display = isFlow ? 'inline-block' : 'none';
-
-  // Grey out the inactive engine's nav item
-  const navEffects = document.getElementById('navEffects');
-  const navSimulator = document.getElementById('navSimulator');
-  if (navEffects) navEffects.classList.toggle('nav-engine-inactive', isFlow);
-  if (navSimulator) navSimulator.classList.toggle('nav-engine-inactive', !isFlow);
+  window.appStore.set({ lightingMode: mode === 'flow' ? 'flow' : 'matrix' });
 }
-
-async function switchLightingMode(newMode) {
-  const modeClean = (newMode === 'flow') ? 'flow' : 'matrix';
-  const previousMode = window.appState ? window.appState.lighting_mode : null;
-  if (window.appState) {
-    window.appState.lighting_mode = modeClean;
-  }
-  updateLightingModeUI(modeClean);
-
-  try {
-    await window.api.post('/api/flow/mode', { mode: modeClean });
-    window.toast.success(`${modeClean === 'flow' ? 'Flow Matrix' : 'Event Matrix'} is now playing`);
-  } catch (err) {
-    // The engine kept the old mode, so the switch must show it again
-    if (window.appState) window.appState.lighting_mode = previousMode;
-    updateLightingModeUI(previousMode);
-    window.toast.error(err, { onRetry: () => switchLightingMode(modeClean) });
-    return;
-  }
-
-  // Switch view seamlessly
-  const targetTab = (modeClean === 'flow') ? 'tab-simulator' : 'tab-effects';
-  const targetRoute = (modeClean === 'flow') ? '/simulator' : '/matrix';
-  if (window.location.pathname !== targetRoute) {
-    window.history.pushState({ tab: targetTab }, '', targetRoute);
-  }
-  switchToTab(targetTab);
-}
-window.switchLightingMode = switchLightingMode;
 window.updateLightingModeUI = updateLightingModeUI;
 
 // Document Ready Initialization
 document.addEventListener('DOMContentLoaded', async () => {
-  setupNavigation();
   if (typeof ensureAuthenticated === 'function') await ensureAuthenticated();
   await loadConfig();
   if (typeof fetchProtocolMode === 'function') {
     fetchProtocolMode();
   }
-  handleInitialRoute();
+  window.router.start();
   initTelemetryWebSocket();
 });

@@ -12,7 +12,7 @@ CORE = WEB / "js" / "core"
 
 # Inline style="..." attributes still in index.html and the classic scripts. Lower this as views are
 # rebuilt; it must never go up.
-INLINE_STYLE_BASELINE = 633
+INLINE_STYLE_BASELINE = 628
 
 
 def _ui_sources():

@@ -1,83 +1,5 @@
 // AutoGlow 2 - Power & Idle Mode / Preset 1 Configurator Module
 
-// --- Power & Idle Mode Navigation Submenu ---
-
-function togglePowerSubmenu(e) {
-  e.preventDefault();
-  const group = document.getElementById('navPowerGroup');
-  if (!group) return;
-  
-  // Clicking the parent button sets idlePresetState.ip to null to show device selection landing
-  idlePresetState.ip = null;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('autoglow_selected_power_device');
-  }
-
-  group.classList.add('open');
-  const matrixGroup = document.getElementById('navMatrixGroup');
-  if (matrixGroup) matrixGroup.classList.remove('open');
-
-  renderPowerSubmenu();
-  switchToTab('tab-power');
-  
-  // Ensure the parent nav-item is highlighted
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  const navPower = document.getElementById('navPower');
-  if (navPower) navPower.classList.add('active');
-
-  if (window.location.pathname !== '/power') {
-    window.history.pushState({ tab: 'tab-power' }, '', '/power');
-  }
-}
-
-function renderPowerSubmenu() {
-  const submenu = document.getElementById('powerDeviceSubmenu');
-  if (!submenu) return;
-
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  if (devicesList.length === 0) {
-    submenu.innerHTML = `
-      <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; padding: 6px 20px;">
-        No devices configured
-      </div>
-    `;
-    return;
-  }
-
-  const selectedIp = idlePresetState.ip;
-
-  submenu.innerHTML = devicesList.map(dev => {
-    const ip = dev.ip || '';
-    const name = dev.name || 'WLED Controller';
-    const isActive = selectedIp === ip;
-    const safeIp = (ip || '').replace(/[^a-zA-Z0-9]/g, '_');
-    const cached = lastFetchedLiveDeviceData[ip];
-    const isOnline = cached ? (cached.status === 'ok' && cached.online) : null;
-    const dotClass = isOnline === true ? 'sub-dot online' : (isOnline === false ? 'sub-dot offline' : 'sub-dot');
-
-    return `
-      <div class="nav-submenu-item ${isActive ? 'active' : ''}" onclick="selectPowerDevice('${escapeJsString(ip)}')">
-        <span id="power-sub-dot-${safeIp}" class="${dotClass}" title="${isOnline === true ? 'Online' : (isOnline === false ? 'Offline' : 'Checking status...')}"></span>
-        <span>${escapeHtml(name)}</span>
-      </div>
-    `;
-  }).join('');
-
-  // Refresh live ping status for all devices in submenu
-  devicesList.forEach(async (dev) => {
-    if (!dev.ip) return;
-    const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
-    const data = await pingDeviceCached(dev.ip);
-    const online = data && data.status === 'ok' && data.online === true;
-    const dot = document.getElementById(`power-sub-dot-${safeIp}`);
-    if (dot) {
-      dot.className = `sub-dot ${online ? 'online' : 'offline'}`;
-      dot.title = online ? 'Online' : 'Offline';
-    }
-  });
-}
-
 function selectPowerDevice(ip) {
   idlePresetState.ip = ip;
   if (typeof localStorage !== 'undefined') {
@@ -86,13 +8,8 @@ function selectPowerDevice(ip) {
   
   const select = document.getElementById('idleDeviceSelect');
   if (select) select.value = ip;
-  
-  // Switch to power tab
-  switchToTab('tab-power');
-  
+
   renderPowerTab();
-  
-  window.history.pushState({ tab: 'tab-power' }, '', '/power');
 }
 
 function renderPowerDeviceLanding() {
@@ -107,11 +24,11 @@ function renderPowerDeviceLanding() {
         <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center;">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
-        <strong style="color: var(--text-primary); font-size: 14px;">No WLED Controllers Configured</strong>
+        <strong style="color: var(--text-primary); font-size: 14px;">No controllers yet</strong>
         <p style="color: var(--text-secondary); font-size: 12px; max-width: 360px; margin: 0; line-height: 1.5;">
-          Add a WLED device in the WLED Devices tab to configure ambient idle lighting and boot presets.
+          Add a WLED controller in Setup first.
         </p>
-        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Go to WLED Devices</button>
+        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Open Setup</button>
       </div>
     `;
     return;
@@ -178,8 +95,6 @@ async function loadIdlePresetForSelectedDevice(targetIp) {
   const ip = targetIp || idlePresetState.ip;
   if (!ip) return;
   idlePresetState.ip = ip;
-
-  renderPowerSubmenu();
 
   const container = document.getElementById('idleSegmentsListContainer');
   const btnPreview = document.getElementById('btnPreviewIdlePreset');
@@ -1005,13 +920,6 @@ function handleStandbyTimeoutChange() {
 }
 
 function renderPowerTab() {
-  const group = document.getElementById('navPowerGroup');
-  if (group && !group.classList.contains('open')) {
-    group.classList.add('open');
-  }
-
-  renderPowerSubmenu();
-
   const landing = document.getElementById('powerDeviceLanding');
   const configArea = document.getElementById('powerDeviceConfigArea');
   const timersArea = document.getElementById('powerGlobalTimersArea');
@@ -1221,8 +1129,6 @@ async function testWakeBoard() {
 }
 
 if (typeof window !== "undefined") {
-  window.togglePowerSubmenu = togglePowerSubmenu;
-  window.renderPowerSubmenu = renderPowerSubmenu;
   window.selectPowerDevice = selectPowerDevice;
   window.renderPowerDeviceLanding = renderPowerDeviceLanding;
   window.loadIdlePresetForSelectedDevice = loadIdlePresetForSelectedDevice;
