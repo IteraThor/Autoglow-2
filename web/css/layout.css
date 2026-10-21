@@ -13,10 +13,11 @@
 }
 
 /* Tab Container & Panels */
+/* True-size values of the old zoomed 24px/28px padding and 1280px width */
 .tab-container {
-  padding: 24px 28px;
+  padding: 32px 38px;
   flex: 1;
-  max-width: 1280px;
+  max-width: 1728px;
 }
 
 .tab-pane {

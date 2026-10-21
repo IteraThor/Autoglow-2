@@ -1,0 +1,219 @@
+/**
+ * AutoGlow 2 - Rebuilt Pages (true size)
+ * Shared form controls for redesigned pages and one section per page.
+ */
+
+/* -----------------------------------------------------------------------------
+ * Shared controls
+ * ----------------------------------------------------------------------------- */
+.tab-pane.true-size {
+  gap: var(--space-4);
+  font: var(--fs-md) var(--font-ui);
+}
+
+.ui-input {
+  height: 36px;
+  min-width: 0;
+  padding: 0 var(--space-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: var(--fs-md) var(--font-ui);
+}
+
+.ui-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.ui-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ui-btn[aria-busy] {
+  cursor: progress;
+}
+
+.ui-btn-quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--text-muted);
+}
+
+.ui-btn-quiet:hover {
+  color: var(--status-danger);
+  background: rgba(var(--danger-rgb), 0.1);
+}
+
+.ui-btn:focus-visible,
+.ui-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.status-dot[data-tone="error"] {
+  background: var(--status-danger);
+}
+
+.status-dot[data-tone="pending"] {
+  background: var(--text-muted);
+  animation: conn-pulse 1.2s ease-in-out infinite;
+}
+
+/* Side drawer (editors that open next to a list) */
+.drawer {
+  position: fixed;
+  top: 56px;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-banner);
+  width: min(720px, 100vw);
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-pop);
+}
+
+.drawer[hidden] {
+  display: none;
+}
+
+/* -----------------------------------------------------------------------------
+ * Setup › Controllers
+ * ----------------------------------------------------------------------------- */
+.ctl-page {
+  max-width: 960px;
+}
+
+.ctl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.ctl-add {
+  flex: 1 1 320px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ctl-add .ui-input {
+  flex: 1;
+}
+
+.ctl-add .field-error {
+  flex-basis: 100%;
+  order: 3;
+  margin-top: 0;
+  font-size: var(--fs-sm);
+}
+
+.ctl-toolbar .ui-btn {
+  height: 36px;
+}
+
+.ctl-scan,
+.ctl-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.ctl-scan[hidden] {
+  display: none;
+}
+
+.ctl-scan-row,
+.ctl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ctl-scan-row + .ctl-scan-row,
+.ctl-row + .ctl-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ctl-row[aria-current="true"] {
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.ctl-scan-status,
+.ctl-empty {
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+
+.ctl-scan-row .ctl-name {
+  flex: 1;
+}
+
+.ctl-scan-added {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.ctl-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ctl-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.ctl-ip {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  text-decoration: none;
+}
+
+a.ctl-ip:hover {
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.ctl-switch {
+  flex-shrink: 0;
+}
+
+.ctl-editor-outputs {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 680px) {
+  .ctl-row {
+    flex-wrap: wrap;
+  }
+
+  .ctl-main {
+    flex-basis: calc(100% - 40px);
+  }
+
+  .drawer {
+    top: 0;
+  }
+}

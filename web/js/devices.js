@@ -1,4 +1,4 @@
-// AutoGlow 2 - WLED Devices & Inline Hardware Configuration Module
+// AutoGlow 2 - Controller Editor (WLED outputs & segments)
 
 function updateInlineDeviceName(ip, inputElem) {
   const clean = sanitizeWledName(inputElem.value);
@@ -30,483 +30,191 @@ const WLED_COLOR_ORDERS = [
 ];
 
 // --- Devices Tab (Multi-Device Management with Seamless In-Place Editing) ---
-async function renderDevicesTab() {
-  // Ensure devices array is well-formed
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-  if (!appState.raw) appState.raw = {};
-  appState.raw.devices = devicesList;
+function getEditingControllerIp() {
+  return activeEditingDeviceIp;
+}
 
-  const body = document.getElementById('configuredDeviceBody');
-  const badge = document.getElementById('wledStatusBadge');
-  if (!body) return;
-
-  if (devicesList.length === 0) {
-    if (badge) badge.innerHTML = `<span class="dot dot-gray" style="margin-right: 4px;"></span><span style="color: var(--text-muted);">0 Controllers</span>`;
-    body.innerHTML = `
-      <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; padding: 14px 0;">
-        No WLED controllers configured yet. Enter an IP on the left or click <strong>Scan Network</strong> on the right to add controllers.
-      </div>
-    `;
+// --- Controller editor (outputs & segments), shown in the side drawer of Setup › Controllers ---
+// The controller list itself is web/js/features/controllers.js; renderDevicesTab() re-renders both.
+function renderControllerEditor() {
+  const drawer = document.getElementById('controllerDrawer');
+  const body = document.getElementById('controllerDrawerBody');
+  if (!drawer || !body) return;
+  const dev = (Array.isArray(appState.devices) ? appState.devices : []).find(d => d.ip === activeEditingDeviceIp);
+  if (!dev) {
+    activeEditingDeviceIp = null;
+    drawer.hidden = true;
+    body.replaceChildren();
     return;
   }
+  drawer.hidden = false;
 
-  if (badge) {
-    badge.innerHTML = `<span class="dot dot-green" style="margin-right: 4px;"></span><span style="color: var(--status-success);">${devicesList.length} Controller${devicesList.length > 1 ? 's' : ''}</span>`;
-  }
+  const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
+  const ipEscaped = escapeJsString(dev.ip);
+  const port = dev.udp_port || dev.port || 21324;
 
-  // Render cards for all configured devices
-  body.innerHTML = devicesList.map((dev, idx) => {
-    const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
-    const ipEscaped = escapeJsString(dev.ip);
-    const isEditing = activeEditingDeviceIp === dev.ip;
-    const isEnabled = dev.enabled !== false;
-    const port = dev.udp_port || dev.port || 21324;
+  const editData = inlineEditingDevices[dev.ip] || {
+    name: dev.name || 'WLED Controller',
+    port: port,
+    bri: 255,
+    hw_ins: [
+      { pin: 33, type: 22, start: 0, len: 45, order: 1, rev: false, skip: 0 },
+      { pin: 16, type: 41, start: 45, len: 1, order: 1, rev: false, skip: 0 }
+    ],
+    segments: [
+      { id: 0, name: 'Segment 0', start: 0, stop: 15, on: true, bri: 255 },
+      { id: 1, name: 'Segment 1', start: 15, stop: 45, on: true, bri: 200 },
+      { id: 2, name: 'Segment 2', start: 45, stop: 46, on: true, bri: 255 }
+    ]
+  };
 
-    // --- MODE A: SEAMLESS IN-PLACE EDITABLE CARD (Same layout, interactive fields) ---
-    if (isEditing) {
-      const editData = inlineEditingDevices[dev.ip] || {
-        name: dev.name || 'WLED Controller',
-        port: port,
-        bri: 255,
-        hw_ins: [
-          { pin: 33, type: 22, start: 0, len: 45, order: 1, rev: false, skip: 0 },
-          { pin: 16, type: 41, start: 45, len: 1, order: 1, rev: false, skip: 0 }
-        ],
-        segments: [
-          { id: 0, name: 'Segment 0', start: 0, stop: 15, on: true, bri: 255 },
-          { id: 1, name: 'Segment 1', start: 15, stop: 45, on: true, bri: 200 },
-          { id: 2, name: 'Segment 2', start: 45, stop: 46, on: true, bri: 255 }
-        ]
-      };
+  const renderedGroups = editData.hw_ins.map((h, busIdx) => {
+    const busStart = parseInt(h.start, 10) || 0;
+    const busLen = parseInt(h.len, 10) || 1;
+    const busEnd = busStart + busLen;
+    const pinVal = Array.isArray(h.pin) ? (h.pin[0] !== undefined ? h.pin[0] : (busIdx === 0 ? 33 : 16)) : (h.pin !== undefined ? h.pin : (busIdx === 0 ? 33 : 16));
 
-      const renderedGroups = editData.hw_ins.map((h, busIdx) => {
-        const busStart = parseInt(h.start, 10) || 0;
-        const busLen = parseInt(h.len, 10) || 1;
-        const busEnd = busStart + busLen;
-        const pinVal = Array.isArray(h.pin) ? (h.pin[0] !== undefined ? h.pin[0] : (busIdx === 0 ? 33 : 16)) : (h.pin !== undefined ? h.pin : (busIdx === 0 ? 33 : 16));
+    // Check if this GPIO pin is duplicate across outputs
+    const isDuplicatePin = editData.hw_ins.some((otherH, oIdx) => {
+      if (oIdx === busIdx) return false;
+      const otherPin = Array.isArray(otherH.pin) ? otherH.pin[0] : (parseInt(otherH.pin, 10) || 0);
+      return otherPin === pinVal;
+    });
 
-        // Check if this GPIO pin is duplicate across outputs
-        const isDuplicatePin = editData.hw_ins.some((otherH, oIdx) => {
-          if (oIdx === busIdx) return false;
-          const otherPin = Array.isArray(otherH.pin) ? otherH.pin[0] : (parseInt(otherH.pin, 10) || 0);
-          return otherPin === pinVal;
-        });
+    const isPwm = (parseInt(h.type, 10) === 41 || String(h.type).toLowerCase().includes('pwm'));
+    let busSegments = editData.segments.filter(s => s.busIdx === busIdx || (s.busIdx === undefined && s.start >= busStart && s.start < busEnd));
+    if (isPwm && busSegments.length > 1) {
+      busSegments = [busSegments[0]];
+    }
+    const channelClass = isPwm ? 'hw-channel hw-channel-pwm' : 'hw-channel hw-channel-rgb';
+    const gpioBadgeClass = isPwm ? 'badge-gpio-pwm' : 'badge-gpio-rgb';
+    const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(var(--accent-rgb), 0.08)';
+    const badgeColor = isPwm ? '#f59e0b' : 'var(--accent-primary)';
+    const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(var(--accent-rgb), 0.25)';
 
-        const isPwm = (parseInt(h.type, 10) === 41 || String(h.type).toLowerCase().includes('pwm'));
-        let busSegments = editData.segments.filter(s => s.busIdx === busIdx || (s.busIdx === undefined && s.start >= busStart && s.start < busEnd));
-        if (isPwm && busSegments.length > 1) {
-          busSegments = [busSegments[0]];
-        }
-        const channelClass = isPwm ? 'hw-channel hw-channel-pwm' : 'hw-channel hw-channel-rgb';
-        const gpioBadgeClass = isPwm ? 'badge-gpio-pwm' : 'badge-gpio-rgb';
-        const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(var(--accent-rgb), 0.08)';
-        const badgeColor = isPwm ? '#f59e0b' : 'var(--accent-primary)';
-        const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(var(--accent-rgb), 0.25)';
+    const segRows = busSegments.map(s => {
+      const globalIdx = editData.segments.indexOf(s);
+      const segNameEscaped = escapeHtml(s.name || `Segment ${s.id}`);
 
-        const segRows = busSegments.map(s => {
-          const globalIdx = editData.segments.indexOf(s);
-          const segNameEscaped = escapeHtml(s.name || `Segment ${s.id}`);
-
-          if (isPwm) {
-            // Locked 1-LED Range for PWM White
-            return `
-              <div class="seg-row" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.03); padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-                <div style="display: flex; align-items: center; gap: 4px; flex: 1; overflow: hidden;">
-                  <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">#${s.id !== undefined ? s.id : globalIdx}</span>
-                  <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
-                  <div style="display: inline-flex; align-items: center; gap: 3px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 3px; padding: 1px 6px; font-family: var(--font-mono); font-size: 10px; color: #f59e0b; font-weight: 600;" title="PWM White is fixed to 1 LED (${s.start}–${s.stop})">
-                    <span>LED ${s.start}–${s.stop} (Auto)</span>
-                  </div>
-                  <button class="btn-ide" onclick="removeInlineSegment('${ipEscaped}', ${globalIdx}, this)" style="color: var(--status-danger); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; cursor: pointer;" title="Remove segment">✕</button>
-                </div>
-              </div>
-            `;
-          }
-
-          // Editable Range for WS281x Addressable Strip
-          const len = Math.max(0, (parseInt(s.stop, 10) || 0) - (parseInt(s.start, 10) || 0));
-          return `
-            <div class="seg-row" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.03); padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-              <div style="display: flex; align-items: center; gap: 4px; flex: 1; overflow: hidden;">
-                <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">#${s.id !== undefined ? s.id : globalIdx}</span>
-                <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
-                <div style="display: flex; align-items: center; gap: 2px;">
-                  <span style="color: var(--text-muted); font-size: 10px;">LED</span>
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.start || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'start', parseInt(this.value, 10) || 0)">
-                  <span style="color: var(--text-muted); font-size: 10px;">–</span>
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.stop || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'stop', parseInt(this.value, 10) || 0)">
-                  <span id="inline-seg-len-${safeIp}-${globalIdx}" style="color: var(--text-muted); font-size: 10px; margin-left: 2px;">(${len})</span>
-                </div>
-                <button class="btn-ide" onclick="removeInlineSegment('${ipEscaped}', ${globalIdx}, this)" style="color: var(--status-danger); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; cursor: pointer;" title="Remove segment">✕</button>
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        const isLastOutput = (busIdx === editData.hw_ins.length - 1) && (editData.hw_ins.length > 1);
-        const removeOutputBtn = isLastOutput 
-          ? `<button class="btn-ide" onclick="removeInlineHwOutput('${ipEscaped}', ${busIdx}, this)" style="height: 22px; font-size: 10.5px; font-weight: 600; padding: 0 8px; color: var(--status-danger); border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); border-radius: 3px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;" title="Delete this hardware GPIO output (outputs must be removed in reverse order: last to first)">✕ Delete GPIO</button>` 
-          : '';
-
-        const lengthControl = isPwm
-          ? `<div style="display: inline-flex; align-items: center; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 3px; padding: 1px 6px; gap: 3px;" title="PWM White channel is fixed to 1 LED">
-              <span style="color: #f59e0b; font-size: 10px; font-weight: 600; font-family: var(--font-mono);">1 LED (Auto)</span>
-            </div>`
-          : `<div style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 5px; gap: 4px;" title="Hardware output total strip length (LEDs)">
-              <span style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);">Length:</span>
-              <input type="text" id="inline-hw-len-${safeIp}-${busIdx}" inputmode="numeric" pattern="[0-9]*" style="width: 34px; height: 16px; font-size: 10.5px; font-weight: 600; color: var(--text-primary); background: transparent; border: none; outline: none; font-family: var(--font-mono); text-align: center; padding: 0;" value="${h.len || 1}" oninput="updateInlineHwField('${ipEscaped}', ${busIdx}, 'len', parseInt(this.value, 10) || 1)" placeholder="1">
-              <span style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);">LEDs</span>
-            </div>`;
-
-        const addSegBtn = isPwm
-          ? ''
-          : `<button class="btn-ide" onclick="addInlineSegmentToBus('${ipEscaped}', ${busIdx})" style="height: 22px; font-size: 11px; font-weight: 600; padding: 0 8px; color: var(--accent-primary); border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.06); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" title="Add segment to this GPIO">+ Seg</button>`;
-
+      if (isPwm) {
+        // Locked 1-LED Range for PWM White
         return `
-          <div class="${channelClass}" style="background: rgba(0, 0, 0, 0.22); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; position: relative; margin-bottom: 4px;">
-            <div class="hw-header" style="background: rgba(255, 255, 255, 0.02); padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <div class="${gpioBadgeClass}" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; font-weight: 600; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); display: inline-flex; align-items: center; gap: 3px;" title="${isDuplicatePin ? 'Duplicate GPIO Pin! Each output requires a unique GPIO.' : 'GPIO Pin'}">
-                  <span>GPIO</span>
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 24px; height: 16px; font-size: 10.5px; font-weight: 700; color: inherit; background: rgba(0,0,0,0.25); border: none; border-radius: 2px; outline: none; font-family: var(--font-mono); text-align: center; padding: 0;" value="${pinVal}" oninput="updateInlineHwField('${ipEscaped}', ${busIdx}, 'pin', parseInt(this.value, 10) || 0)">
-                </div>
-                <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 500; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'type', parseInt(this.value, 10))">
-                  <option value="22" ${h.type === 22 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">WS281x</option>
-                  <option value="41" ${h.type === 41 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">PWM White</option>
-                </select>
-                ${!isPwm ? `
-                  <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'order', parseInt(this.value, 10))" title="Color Order">
-                    ${WLED_COLOR_ORDERS.map(co => `<option value="${co.value}" ${(h.order !== undefined ? h.order : 0) === co.value ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">${co.label}</option>`).join('')}
-                  </select>
-                ` : ''}
-                ${lengthControl}
-                ${isDuplicatePin ? '<span style="color: var(--status-danger); font-size: 9.5px; font-weight: 600;">Duplicate GPIO</span>' : ''}
-              </div>
-
-              <div style="display: flex; align-items: center; gap: 6px;">
-                ${addSegBtn}
-                ${removeOutputBtn}
-              </div>
+          <div class="seg-row" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.03); padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+            <div style="display: flex; align-items: center; gap: 4px; flex: 1; overflow: hidden;">
+              <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">#${s.id !== undefined ? s.id : globalIdx}</span>
+              <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
             </div>
-
-            <div class="hw-body" style="padding: 5px 6px; display: flex; flex-direction: column; gap: 3px;">
-              ${busSegments.length > 0 ? segRows : '<div style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); padding: 2px;">No segments on this output. Click <strong>+ Seg</strong>.</div>'}
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
+              <div style="display: inline-flex; align-items: center; gap: 3px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 3px; padding: 1px 6px; font-family: var(--font-mono); font-size: 10px; color: #f59e0b; font-weight: 600;" title="PWM White is fixed to 1 LED (${s.start}–${s.stop})">
+                <span>LED ${s.start}–${s.stop} (Auto)</span>
+              </div>
+              <button class="btn-ide" onclick="removeInlineSegment('${ipEscaped}', ${globalIdx}, this)" style="color: var(--status-danger); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; cursor: pointer;" title="Remove segment">✕</button>
             </div>
           </div>
         `;
-      }).join('');
+      }
 
-      const devNameEscaped = escapeHtml(editData.name || '');
-      const cachedLive = lastFetchedLiveDeviceData[dev.ip];
-      const isLiveOnline = cachedLive ? (cachedLive.status === 'ok' && cachedLive.online) : null;
-      const initialDotClass = isLiveOnline === true ? 'dot-green' : (isLiveOnline === false ? 'dot-red' : 'dot-gray');
-      const statusTextHtml = isLiveOnline === true
-        ? `<span style="color: var(--status-success); font-weight: 600;">Online</span>`
-        : (isLiveOnline === false
-            ? `<span style="color: var(--status-danger); font-weight: 600;">Offline</span>`
-            : `<span style="color: var(--text-muted); font-weight: 600;">Checking...</span>`);
-      const ipLinkColor = isLiveOnline === true ? 'var(--accent-primary)' : 'var(--text-muted)';
-
+      // Editable Range for WS281x Addressable Strip
+      const len = Math.max(0, (parseInt(s.stop, 10) || 0) - (parseInt(s.start, 10) || 0));
       return `
-        <div class="configured-wled-card" id="wled-card-${safeIp}" style="padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.4); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.08); display: flex; flex-direction: column; gap: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <label class="switch" style="transform: scale(0.72); margin: 0;" title="${isEnabled ? 'Disable controller' : 'Enable controller'}">
-                <input type="checkbox" id="device-toggle-edit-${safeIp}" ${isEnabled ? 'checked' : ''} onchange="toggleDeviceEnabled('${ipEscaped}', this.checked)">
-                <span class="switch-slider"></span>
-              </label>
-              <span class="dot ${initialDotClass}" id="dot-${safeIp}" style="width: 6px; height: 6px;"></span>
-              <input type="text" class="form-control" style="font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); padding: 2px 6px; height: 24px; width: 170px;" value="${devNameEscaped}" oninput="updateInlineDeviceName('${ipEscaped}', this)" placeholder="Controller Name">
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <button class="btn-ide" onclick="cancelInlineEdit('${ipEscaped}')" style="font-size: 10.5px; padding: 2px 8px;">Cancel</button>
-              <button class="btn-ide btn-ide-primary" id="btnSaveInline-${safeIp}" onclick="saveInlineEdit('${ipEscaped}')" style="font-size: 10.5px; padding: 2px 10px; font-weight: 600;">✓ Save</button>
-            </div>
+        <div class="seg-row" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.03); padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div style="display: flex; align-items: center; gap: 4px; flex: 1; overflow: hidden;">
+            <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">#${s.id !== undefined ? s.id : globalIdx}</span>
+            <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
           </div>
-
-          <div style="display: grid; grid-template-columns: minmax(200px, 230px) 1fr; gap: 18px; padding-top: 8px; border-top: 1px solid var(--border-subtle); align-items: start;">
-            <!-- Left Column: Connection & Telemetry -->
-            <div style="display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 11.5px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--text-muted); font-size: 10.5px; min-width: 65px;">Status:</span>
-                <span id="status-text-${safeIp}">${statusTextHtml}</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--text-muted); font-size: 10.5px; min-width: 65px;">Local IP:</span>
-                <a id="ip-link-${safeIp}" href="http://${escapeHtml(dev.ip)}" target="_blank" rel="noopener noreferrer" style="color: ${ipLinkColor}; text-decoration: none; font-weight: 500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${escapeHtml(dev.ip)} ↗</a>
-              </div>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <span style="color: var(--text-muted); font-size: 10px;">LED</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.start || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'start', parseInt(this.value, 10) || 0)">
+              <span style="color: var(--text-muted); font-size: 10px;">–</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.stop || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'stop', parseInt(this.value, 10) || 0)">
+              <span id="inline-seg-len-${safeIp}-${globalIdx}" style="color: var(--text-muted); font-size: 10px; margin-left: 2px;">(${len})</span>
             </div>
-
-            <!-- Right Column: Configured Segments & Outputs -->
-            <div style="display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 11px;">
-              <div id="segments-container-${safeIp}" style="display: flex; flex-direction: column; gap: 4px;">
-                ${renderedGroups}
-              </div>
-              <div style="display: flex; justify-content: flex-end; margin-top: 3px;">
-                <button class="btn-ide" onclick="addInlineHwOutput('${ipEscaped}')" style="font-size: 10px; padding: 2px 8px; color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.3); font-weight: 500;" title="Add new physical GPIO output">+ Add Output</button>
-              </div>
-            </div>
+            <button class="btn-ide" onclick="removeInlineSegment('${ipEscaped}', ${globalIdx}, this)" style="color: var(--status-danger); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; cursor: pointer;" title="Remove segment">✕</button>
           </div>
         </div>
       `;
-    }
+    }).join('');
 
-    // --- MODE B: READ-ONLY TELEMETRY CARD ---
-    const readOnlyDevName = escapeHtml(dev.name || 'WLED Controller');
-    const cachedLive = lastFetchedLiveDeviceData[dev.ip];
-    const isLiveOnline = cachedLive ? (cachedLive.status === 'ok' && cachedLive.online) : null;
-    const initialDotClass = isLiveOnline === true ? 'dot-green' : (isLiveOnline === false ? 'dot-red' : 'dot-gray');
-    const isEditDisabled = isLiveOnline === false;
-    const editBtnStyle = isEditDisabled
-      ? 'color: var(--text-muted); border-color: var(--border-subtle); font-size: 10.5px; padding: 2px 8px; opacity: 0.4; cursor: not-allowed;'
-      : 'color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.3); font-size: 10.5px; padding: 2px 8px;';
-    const editBtnTitle = isEditDisabled
-      ? 'Controller is offline — cannot edit hardware configuration'
-      : 'Edit this WLED controller inline';
+    const isLastOutput = (busIdx === editData.hw_ins.length - 1) && (editData.hw_ins.length > 1);
+    const removeOutputBtn = isLastOutput 
+      ? `<button class="btn-ide" onclick="removeInlineHwOutput('${ipEscaped}', ${busIdx}, this)" style="height: 22px; font-size: 10.5px; font-weight: 600; padding: 0 8px; color: var(--status-danger); border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); border-radius: 3px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;" title="Delete this hardware GPIO output (outputs must be removed in reverse order: last to first)">✕ Delete GPIO</button>` 
+      : '';
+
+    const lengthControl = isPwm
+      ? `<div style="display: inline-flex; align-items: center; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 3px; padding: 1px 6px; gap: 3px;" title="PWM White channel is fixed to 1 LED">
+          <span style="color: #f59e0b; font-size: 10px; font-weight: 600; font-family: var(--font-mono);">1 LED (Auto)</span>
+        </div>`
+      : `<div style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 5px; gap: 4px;" title="Hardware output total strip length (LEDs)">
+          <span style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);">Length:</span>
+          <input type="text" id="inline-hw-len-${safeIp}-${busIdx}" inputmode="numeric" pattern="[0-9]*" style="width: 34px; height: 16px; font-size: 10.5px; font-weight: 600; color: var(--text-primary); background: transparent; border: none; outline: none; font-family: var(--font-mono); text-align: center; padding: 0;" value="${h.len || 1}" oninput="updateInlineHwField('${ipEscaped}', ${busIdx}, 'len', parseInt(this.value, 10) || 1)" placeholder="1">
+          <span style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);">LEDs</span>
+        </div>`;
+
+    const addSegBtn = isPwm
+      ? ''
+      : `<button class="btn-ide" onclick="addInlineSegmentToBus('${ipEscaped}', ${busIdx})" style="height: 22px; font-size: 11px; font-weight: 600; padding: 0 8px; color: var(--accent-primary); border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.06); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" title="Add segment to this GPIO">+ Seg</button>`;
 
     return `
-      <div class="configured-wled-card ${!isEnabled ? 'is-disabled' : ''}" id="wled-card-${safeIp}" style="padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <label class="switch" style="transform: scale(0.72); margin: 0;" title="${isEnabled ? 'Disable controller' : 'Enable controller'}">
-              <input type="checkbox" id="device-toggle-${safeIp}" ${isEnabled ? 'checked' : ''} onchange="toggleDeviceEnabled('${ipEscaped}', this.checked)">
-              <span class="switch-slider"></span>
-            </label>
-            <span class="dot ${isEnabled ? initialDotClass : 'dot-gray'}" id="dot-${safeIp}" style="width: 6px; height: 6px;"></span>
-            <strong id="name-${safeIp}" style="color: ${isEnabled ? 'var(--text-primary)' : 'var(--text-muted)'}; font-family: var(--font-mono); font-size: 13.5px;">${readOnlyDevName}</strong>
-            ${!isEnabled ? `<span class="device-badge-disabled">Disabled</span>` : ''}
-          </div>
+      <div class="${channelClass}" style="background: rgba(0, 0, 0, 0.22); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; position: relative; margin-bottom: 4px;">
+        <div class="hw-header" style="background: rgba(255, 255, 255, 0.02); padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11px;">
           <div style="display: flex; align-items: center; gap: 6px;">
-            <button class="btn-ide" id="btn-edit-${safeIp}" onclick="startInlineDeviceEdit('${ipEscaped}')" style="${!isEnabled ? 'color: var(--text-muted); border-color: var(--border-subtle); font-size: 10.5px; padding: 2px 8px; opacity: 0.4; cursor: not-allowed;' : editBtnStyle}" title="${!isEnabled ? 'Enable controller to edit hardware configuration' : editBtnTitle}" ${(!isEnabled || isEditDisabled) ? 'disabled' : ''}>✎ Edit</button>
-            <button class="btn-ide" onclick="removeConfiguredDevice('${ipEscaped}', this)" style="color: var(--status-danger); border-color: rgba(239, 68, 68, 0.3); font-size: 10.5px; padding: 2px 7px;" title="Remove this controller">✕ Remove</button>
+            <div class="${gpioBadgeClass}" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; font-weight: 600; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); display: inline-flex; align-items: center; gap: 3px;" title="${isDuplicatePin ? 'Duplicate GPIO Pin! Each output requires a unique GPIO.' : 'GPIO Pin'}">
+              <span>GPIO</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 24px; height: 16px; font-size: 10.5px; font-weight: 700; color: inherit; background: rgba(0,0,0,0.25); border: none; border-radius: 2px; outline: none; font-family: var(--font-mono); text-align: center; padding: 0;" value="${pinVal}" oninput="updateInlineHwField('${ipEscaped}', ${busIdx}, 'pin', parseInt(this.value, 10) || 0)">
+            </div>
+            <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 500; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'type', parseInt(this.value, 10))">
+              <option value="22" ${h.type === 22 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">WS281x</option>
+              <option value="41" ${h.type === 41 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">PWM White</option>
+            </select>
+            ${!isPwm ? `
+              <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'order', parseInt(this.value, 10))" title="Color Order">
+                ${WLED_COLOR_ORDERS.map(co => `<option value="${co.value}" ${(h.order !== undefined ? h.order : 0) === co.value ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">${co.label}</option>`).join('')}
+              </select>
+            ` : ''}
+            ${lengthControl}
+            ${isDuplicatePin ? '<span style="color: var(--status-danger); font-size: 9.5px; font-weight: 600;">Duplicate GPIO</span>' : ''}
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${addSegBtn}
+            ${removeOutputBtn}
           </div>
         </div>
 
-        <div class="device-card-content" style="display: grid; grid-template-columns: minmax(200px, 230px) 1fr; gap: 18px; padding-top: 8px; border-top: 1px solid var(--border-subtle); align-items: start;">
-          <!-- Left Column: Connection & Telemetry -->
-          <div style="display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 11.5px;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="color: var(--text-muted); font-size: 10.5px; min-width: 65px;">Status:</span>
-              <span id="status-text-${safeIp}" style="color: var(--text-muted); font-weight: 600;">Checking...</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="color: var(--text-muted); font-size: 10.5px; min-width: 65px;">Local IP:</span>
-              <a id="ip-link-${safeIp}" href="http://${escapeHtml(dev.ip)}" target="_blank" rel="noopener noreferrer" style="color: var(--text-muted); text-decoration: none; font-weight: 500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${escapeHtml(dev.ip)} ↗</a>
-            </div>
-          </div>
-
-          <!-- Right Column: Configured Segments & Outputs -->
-          <div style="display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 11px;">
-            <div id="segments-container-${safeIp}" style="display: flex; flex-direction: column; gap: 4px;">
-              <span style="color: var(--text-muted); font-size: 10.5px;">Reading device configuration...</span>
-            </div>
-          </div>
+        <div class="hw-body" style="padding: 5px 6px; display: flex; flex-direction: column; gap: 3px;">
+          ${busSegments.length > 0 ? segRows : '<div style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); padding: 2px;">No segments on this output. Click <strong>+ Seg</strong>.</div>'}
         </div>
       </div>
     `;
   }).join('');
 
-  // Asynchronously query live ping status for all devices
-  devicesList.forEach(async (dev) => {
-    const isEditing = activeEditingDeviceIp === dev.ip;
-    const isEnabled = dev.enabled !== false;
-    const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
+  const devNameEscaped = escapeHtml(editData.name || '');
+  body.innerHTML = `
+    <div class="configured-wled-card" id="wled-card-${safeIp}" style="padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.4); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.08); display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="text" class="form-control" style="font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); padding: 2px 6px; height: 24px; width: 170px;" value="${devNameEscaped}" oninput="updateInlineDeviceName('${ipEscaped}', this)" placeholder="Controller Name">
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="btn-ide" onclick="cancelInlineEdit('${ipEscaped}')" style="font-size: 10.5px; padding: 2px 8px;">Cancel</button>
+          <button class="btn-ide btn-ide-primary" id="btnSaveInline-${safeIp}" onclick="saveInlineEdit('${ipEscaped}')" style="font-size: 10.5px; padding: 2px 10px; font-weight: 600;">✓ Save</button>
+        </div>
+      </div>
 
-    if (!isEnabled) {
-      const dot = document.getElementById(`dot-${safeIp}`);
-      const statusText = document.getElementById(`status-text-${safeIp}`);
-      const matrixSubDot = document.getElementById(`matrix-sub-dot-${safeIp}`);
-      const segContainer = document.getElementById(`segments-container-${safeIp}`);
-      const editBtn = document.getElementById(`btn-edit-${safeIp}`);
-      if (dot) dot.className = 'dot dot-gray';
-      if (matrixSubDot) {
-        matrixSubDot.className = 'sub-dot offline';
-        matrixSubDot.title = 'Disabled';
-      }
-      if (statusText) {
-        statusText.innerHTML = `<span style="color: var(--text-muted); font-weight: 600;">Disabled</span>`;
-      }
-      if (segContainer && !isEditing) {
-        segContainer.innerHTML = `<span style="color: var(--text-muted); font-size: 10.5px;">Controller is disabled</span>`;
-      }
-      if (editBtn) {
-        editBtn.disabled = true;
-        editBtn.style.opacity = '0.4';
-        editBtn.style.cursor = 'not-allowed';
-        editBtn.title = 'Enable controller to edit hardware configuration';
-      }
-      return;
-    }
-
-    try {
-      const data = await pingDeviceCached(dev.ip);
-      const isOnline = data && data.status === 'ok' && data.online === true;
-      lastFetchedLiveDeviceData[dev.ip] = data;
-
-      const dot = document.getElementById(`dot-${safeIp}`);
-      const nameElem = document.getElementById(`name-${safeIp}`);
-      const statusText = document.getElementById(`status-text-${safeIp}`);
-      const ipLink = document.getElementById(`ip-link-${safeIp}`);
-      const editBtn = document.getElementById(`btn-edit-${safeIp}`);
-      const segContainer = document.getElementById(`segments-container-${safeIp}`);
-
-      if (dot) dot.className = `dot ${isOnline ? 'dot-green' : 'dot-red'}`;
-      const matrixSubDot = document.getElementById(`matrix-sub-dot-${safeIp}`);
-      if (matrixSubDot) {
-        matrixSubDot.className = `sub-dot ${isOnline ? 'online' : 'offline'}`;
-        matrixSubDot.title = isOnline ? 'Online' : 'Offline';
-      }
-      if (nameElem && data.name && !isEditing) nameElem.textContent = data.name;
-      if (statusText) {
-        statusText.innerHTML = isOnline
-          ? `<span style="color: var(--status-success);">Online</span>`
-          : `<span style="color: var(--status-danger);">Offline</span>`;
-      }
-      if (ipLink) {
-        ipLink.style.color = isOnline ? 'var(--accent-primary)' : 'var(--text-muted)';
-      }
-      if (editBtn) {
-        if (isOnline) {
-          editBtn.disabled = false;
-          editBtn.style.opacity = '1';
-          editBtn.style.cursor = 'pointer';
-          editBtn.style.color = 'var(--accent-primary)';
-          editBtn.style.borderColor = 'rgba(var(--accent-rgb), 0.3)';
-          editBtn.title = 'Edit this WLED controller inline';
-        } else {
-          editBtn.disabled = true;
-          editBtn.style.opacity = '0.4';
-          editBtn.style.cursor = 'not-allowed';
-          editBtn.style.color = 'var(--text-muted)';
-          editBtn.style.borderColor = 'var(--border-subtle)';
-          editBtn.title = 'Controller is offline — cannot edit hardware configuration';
-        }
-      }
-
-      // Critical guard: if user is editing this device, do not overwrite interactive hardware input elements
-      if (isEditing) return;
-
-      if (segContainer) {
-        let groups = [];
-        if (isOnline && Array.isArray(data.hw_ins) && data.hw_ins.length > 0) {
-          const usedSegIndices = new Set();
-          groups = data.hw_ins.map((h, bIdx) => {
-            const pinNum = Array.isArray(h.pin) ? h.pin[0] : (typeof h.pin === 'number' ? h.pin : '?');
-            const typeCode = h.type !== undefined ? h.type : 22;
-            const isPwmType = (typeCode === 41 || String(typeCode).includes('41') || parseInt(typeCode, 10) >= 40);
-            const typeName = isPwmType ? 'PWM White' : 'WS281x';
-            const hStart = parseInt(h.start, 10) || 0;
-            const hLen = parseInt(h.len, 10) || 1;
-            const hEnd = hStart + hLen;
-
-            const matchingSegs = (data.segments || []).filter((s, idx) => {
-              if (usedSegIndices.has(idx)) return false;
-              const sStart = parseInt(s.start, 10) || 0;
-              const matches = sStart >= hStart && sStart < hEnd;
-              if (matches) usedSegIndices.add(idx);
-              return matches;
-            });
-
-            return {
-              gpio: `GPIO ${pinNum}`,
-              type: typeName,
-              isPwm: isPwmType,
-              totalLeds: hLen,
-              segments: matchingSegs
-            };
-          });
-        } else if (isOnline && Array.isArray(data.segments) && data.segments.length > 0) {
-          // Fallback grouping by segments if hw_ins is not available
-          const groupMap = new Map();
-          data.segments.forEach(s => {
-            const pinKey = s.gpio || 'Unassigned GPIO';
-            const typeKey = s.type || 'WS281x';
-            const isPwmType = String(typeKey).toLowerCase().includes('pwm');
-            const key = `${pinKey}|${typeKey}`;
-
-            if (!groupMap.has(key)) {
-              const newGroup = {
-                gpio: pinKey,
-                type: typeKey,
-                isPwm: isPwmType,
-                totalLeds: 0,
-                segments: []
-              };
-              groupMap.set(key, newGroup);
-              groups.push(newGroup);
-            }
-
-            const g = groupMap.get(key);
-            g.segments.push(s);
-            g.totalLeds += (s.len || 0);
-          });
-        }
-
-        if (groups.length > 0) {
-          segContainer.innerHTML = groups.map(g => {
-            const isPwm = g.isPwm !== undefined ? g.isPwm : String(g.type).toLowerCase().includes('pwm');
-            const channelClass = isPwm ? 'hw-channel hw-channel-pwm' : 'hw-channel hw-channel-rgb';
-            const gpioBadgeClass = isPwm ? 'badge-gpio-pwm' : 'badge-gpio-rgb';
-            const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(var(--accent-rgb), 0.08)';
-            const badgeColor = isPwm ? '#f59e0b' : 'var(--accent-primary)';
-            const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(var(--accent-rgb), 0.25)';
-
-            const typeLabel = isPwm 
-              ? `<span style="color: var(--text-primary); font-weight: 600; font-size: 11px;">PWM White</span>`
-              : `<span style="color: var(--text-primary); font-weight: 600; font-size: 11px;">WS281x</span>`;
-
-            const segRows = g.segments.map(s => {
-              const rangeInfo = `<span style="color: var(--text-primary); font-weight: 500;">LED ${s.start}–${s.stop}</span> <span style="color: var(--text-muted);">(${s.len} LED${s.len !== 1 ? 's' : ''})</span>`;
-              return `
-                <div class="seg-row" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.03); padding: 3px 6px; border-radius: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-                  <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    <span style="color: var(--text-muted); font-size: 10px; font-weight: 600;">#${s.id}</span>
-                    <span style="color: var(--text-primary); font-weight: 500;">${s.name || `Segment ${s.id}`}</span>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 8px; font-size: 10.5px;">
-                    <div>${rangeInfo}</div>
-                  </div>
-                </div>
-              `;
-            }).join('');
-
-            return `
-              <div class="${channelClass}" style="background: rgba(0, 0, 0, 0.22); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; position: relative; margin-bottom: 4px;">
-                <div class="hw-header" style="background: rgba(255, 255, 255, 0.02); padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="${gpioBadgeClass}" style="background: ${badgeBg}; color: ${badgeColor}; border: 1px solid ${badgeBorder}; font-weight: 600; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono);">${g.gpio}</span>
-                    <div>${typeLabel}</div>
-                  </div>
-                  <span style="color: var(--text-muted); font-size: 10.5px; font-family: var(--font-mono);">${g.totalLeds} LED${g.totalLeds !== 1 ? 's' : ''}</span>
-                </div>
-
-                <div class="hw-body" style="padding: 5px 6px; display: flex; flex-direction: column; gap: 3px;">
-                  ${g.segments.length > 0 ? segRows : '<div style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono); padding: 2px;">No active segments assigned to this output.</div>'}
-                </div>
-              </div>
-            `;
-          }).join('');
-        } else if (isOnline) {
-          segContainer.innerHTML = `<span style="color: var(--text-muted); font-size: 10.5px;">No active segments defined in WLED.</span>`;
-        } else {
-          segContainer.innerHTML = `<span style="color: var(--text-muted); font-size: 10.5px;">Device offline</span>`;
-        }
-      }
-    } catch (err) {
-      const dot = document.getElementById(`dot-${safeIp}`);
-      const statusText = document.getElementById(`status-text-${safeIp}`);
-      const segContainer = document.getElementById(`segments-container-${safeIp}`);
-      if (dot) dot.className = 'dot dot-red';
-      if (statusText) statusText.innerHTML = `<span style="color: var(--status-danger);">Offline</span>`;
-      if (segContainer) segContainer.innerHTML = `<span style="color: var(--text-muted); font-size: 10.5px;">Device offline</span>`;
-    }
-  });
+      <div class="ctl-editor-outputs">
+        <div style="display: flex; flex-direction: column; gap: 5px; font-family: var(--font-mono); font-size: 11px;">
+          <div id="segments-container-${safeIp}" style="display: flex; flex-direction: column; gap: 4px;">
+            ${renderedGroups}
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 3px;">
+            <button class="btn-ide" onclick="addInlineHwOutput('${ipEscaped}')" style="font-size: 10px; padding: 2px 8px; color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.3); font-weight: 500;" title="Add new physical GPIO output">+ Add Output</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
 }
-
 
 // Helper to reconstruct hw_ins from a list of segments
 function deriveHwOutputsFromSegments(segments) {
@@ -896,33 +604,6 @@ function addInlineHwOutput(ip) {
   renderDevicesTab();
 }
 
-function handleInlineConfirm(btn, confirmHtml, onConfirmCallback, timeoutMs = 3500) {
-  if (!btn) {
-    onConfirmCallback();
-    return;
-  }
-
-  if (btn.dataset.confirming === 'true') {
-    clearTimeout(btn._confirmTimer);
-    btn.dataset.confirming = 'false';
-    btn.classList.remove('btn-ide-confirming');
-    onConfirmCallback();
-  } else {
-    btn.dataset.confirming = 'true';
-    btn.dataset.originalHtml = btn.innerHTML;
-    btn.classList.add('btn-ide-confirming');
-    btn.innerHTML = confirmHtml;
-
-    btn._confirmTimer = setTimeout(() => {
-      if (btn && btn.dataset.confirming === 'true') {
-        btn.dataset.confirming = 'false';
-        btn.classList.remove('btn-ide-confirming');
-        btn.innerHTML = btn.dataset.originalHtml;
-      }
-    }, timeoutMs);
-  }
-}
-
 function removeInlineHwOutput(ip, busIdx) {
   if (inlineEditingDevices[ip] && inlineEditingDevices[ip].hw_ins) {
     inlineEditingDevices[ip].hw_ins.splice(busIdx, 1);
@@ -1198,154 +879,6 @@ async function saveInlineEdit(ip) {
 }
 
 
-async function addManualDevice() {
-  const ipInput = document.getElementById('deviceIpInput');
-  const ip = ipInput ? ipInput.value.trim() : '';
-  const port = 21324;
-
-  if (!ip) {
-    showToast('Please enter an IP address or hostname.', 'error');
-    return;
-  }
-
-  if (!Array.isArray(appState.devices)) appState.devices = [];
-  const existing = appState.devices.find(d => d.ip === ip);
-  if (existing) {
-    existing.udp_port = port;
-    showToast(`Updated WLED Controller: ${ip}`, 'info');
-  } else {
-    const newDev = {
-      id: 'device_' + Date.now(),
-      name: 'WLED Controller (' + ip + ')',
-      ip: ip,
-      udp_port: port,
-      rgb_count: 45,
-      pwm_index: 45,
-      pwm_seg_id: 1,
-      default_pwm_brightness: 200,
-      enabled: true
-    };
-    appState.devices.push(newDev);
-    if (!appState.device || !appState.device.ip) {
-      appState.device = newDev;
-    }
-    showToast(`Added WLED Controller: ${ip}`, 'success');
-  }
-
-  if (!appState.raw) appState.raw = {};
-  appState.raw.devices = appState.devices;
-  appState.raw.wled_ip = appState.devices[0]?.ip || ip;
-
-  const ok = await saveAllConfig();
-  if (ok) {
-    if (ipInput) ipInput.value = '';
-    renderDevicesTab();
-  }
-}
-
-async function addDiscoveredDevice(ip, name) {
-  if (!Array.isArray(appState.devices)) appState.devices = [];
-  const existing = appState.devices.find(d => d.ip === ip);
-  if (existing) {
-    showToast(`WLED Controller ${ip} is already in the list.`, 'info');
-    return;
-  }
-
-  const newDev = {
-    id: 'device_' + Date.now(),
-    name: name || 'WLED Controller (' + ip + ')',
-    ip: ip,
-    udp_port: 21324,
-    rgb_count: 45,
-    pwm_index: 45,
-    pwm_seg_id: 1,
-    default_pwm_brightness: 200,
-    enabled: true
-  };
-  appState.devices.push(newDev);
-  if (!appState.device || !appState.device.ip) {
-    appState.device = newDev;
-  }
-  if (!appState.raw) appState.raw = {};
-  appState.raw.devices = appState.devices;
-  appState.raw.wled_ip = appState.devices[0]?.ip || ip;
-
-  const ok = await saveAllConfig();
-  if (ok) {
-    showToast(`Added WLED Controller: ${ip}`, 'success');
-    renderDevicesTab();
-  }
-}
-
-async function removeConfiguredDevice(ip, btn = null) {
-  handleInlineConfirm(btn, 'Confirm Remove?', async () => {
-    if (!Array.isArray(appState.devices)) return;
-    appState.devices = appState.devices.filter(d => d.ip !== ip);
-    if (appState.device?.ip === ip) {
-      appState.device = appState.devices[0] || {};
-    }
-    if (!appState.raw) appState.raw = {};
-    appState.raw.devices = appState.devices;
-    appState.raw.wled_ip = appState.devices[0]?.ip || '';
-
-    const ok = await saveAllConfig();
-    if (ok) {
-      showToast(`Removed WLED Controller: ${ip}`, 'info');
-      renderDevicesTab();
-    }
-  });
-}
-
-async function pingSpecificController(ip) {
-  showToast(`Pinging ${ip}...`, 'info');
-  try {
-    const data = await ((await fetch(`/api/ping?ip=${encodeURIComponent(ip)}`)).json());
-    if (data.status === 'ok' && data.online) {
-      showToast(`Controller online! ${data.name || 'WLED'} (v${data.version || '1.0'})`, 'success');
-      renderDevicesTab();
-    } else {
-      showToast(`Ping failed: Controller at ${ip} unreachable.`, 'error');
-    }
-  } catch (err) {
-    showToast(`Ping network error: ${err.message || err}`, 'error');
-  }
-}
-
-async function scanNetworkDevices() {
-  showToast('Scanning network via mDNS & UDP broadcast...', 'info');
-  const placeholder = document.getElementById('scanStatusPlaceholder');
-  const list = document.getElementById('scanResultsList');
-  if (placeholder) placeholder.style.display = 'none';
-  if (list) {
-    list.style.display = 'flex';
-    list.innerHTML = '<div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">Broadcasting discovery queries...</div>';
-  }
-
-  try {
-    const data = await ((await fetch('/api/scan/network')).json());
-    if (data.status === 'ok' && data.devices && data.devices.length > 0) {
-      list.innerHTML = '';
-      data.devices.forEach(d => {
-        const item = document.createElement('div');
-        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border-subtle);';
-        item.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="dot dot-green" style="width: 6px; height: 6px;"></span>
-            <strong style="color: var(--text-primary); font-family: var(--font-mono); font-size: 12.5px;">${d.ip}</strong>
-            <span style="color: var(--text-muted); font-size: 11px;">(${d.name || 'WLED Device'})</span>
-          </div>
-          <button class="btn-ide btn-ide-primary" onclick="addDiscoveredDevice('${d.ip}', '${(d.name || 'WLED').replace(/'/g, "\\'")}')" style="font-size: 11px; padding: 2px 10px;">+ Add Device</button>
-        `;
-        list.appendChild(item);
-      });
-    } else {
-      list.innerHTML = '<div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">No active WLED controllers found on local subnet.</div>';
-    }
-  } catch (err) {
-    list.innerHTML = `<div style="color: var(--status-danger); font-family: var(--font-mono); font-size: 11.5px;">Scan error: ${err}</div>`;
-  }
-}
-
 async function scanSerialPorts() {
   showToast('Scanning USB COM ports for ESP32...', 'info');
   const placeholder = document.getElementById('scanStatusPlaceholder');
@@ -1382,47 +915,9 @@ async function scanSerialPorts() {
   }
 }
 
-async function toggleDeviceEnabled(ip, enabled) {
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-  const dev = devicesList.find(d => d.ip === ip);
-  if (!dev) return;
-
-  dev.enabled = enabled;
-  if (!appState.raw) appState.raw = {};
-  appState.raw.devices = devicesList;
-
-  if (appState.device && appState.device.ip === ip) {
-    appState.device.enabled = enabled;
-  }
-
-  showToast(`Controller ${dev.name || ip} ${enabled ? 'enabled' : 'disabled'}.`, 'info');
-  renderDevicesTab();
-
-  const saveFn = window.saveAllConfig || (typeof saveAllConfig === 'function' ? saveAllConfig : null);
-  if (saveFn) {
-    await saveFn();
-  } else {
-    try {
-      const fullState = window.appState || appState || {};
-      const payload = {
-        ...fullState,
-        devices: devicesList
-      };
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch (err) {
-      console.error('Failed to save device enabled state:', err);
-      showToast('Failed to save controller state to server.', 'error');
-    }
-  }
-}
-
 if (typeof window !== "undefined") {
-  window.renderDevicesTab = renderDevicesTab;
-  window.toggleDeviceEnabled = toggleDeviceEnabled;
+  window.renderControllerEditor = renderControllerEditor;
+  window.getEditingControllerIp = getEditingControllerIp;
   window.updateInlineDeviceName = updateInlineDeviceName;
   window.startInlineDeviceEdit = startInlineDeviceEdit;
   window.cancelInlineEdit = cancelInlineEdit;
@@ -1432,11 +927,6 @@ if (typeof window !== "undefined") {
   window.addInlineSegmentToBus = addInlineSegmentToBus;
   window.updateInlineSegmentField = updateInlineSegmentField;
   window.removeInlineSegment = removeInlineSegment;
-  window.addManualDevice = addManualDevice;
-  window.addDiscoveredDevice = addDiscoveredDevice;
-  window.removeConfiguredDevice = removeConfiguredDevice;
-  window.pingSpecificController = pingSpecificController;
-  window.scanNetworkDevices = scanNetworkDevices;
   window.scanSerialPorts = scanSerialPorts;
 }
 

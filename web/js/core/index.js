@@ -11,6 +11,7 @@ import { toast } from './toast.js';
 import { initModeSwitch, setLightingMode } from '../components/mode-switch.js';
 import { initShell } from '../components/shell.js';
 import { initStatusPills } from '../components/status-pills.js';
+import { initControllers } from '../features/controllers.js';
 
 Object.assign(window, {
   api,
@@ -28,3 +29,4 @@ Object.assign(window, {
 initShell();
 initModeSwitch();
 initStatusPills();
+initControllers();

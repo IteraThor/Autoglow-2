@@ -8,11 +8,12 @@ import unittest
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parent.parent / "web"
-CORE = WEB / "js" / "core"
+# ES modules written for the redesign: built with DOM helpers, never innerHTML or inline styles
+MODULE_DIRS = [WEB / "js" / "core", WEB / "js" / "components", WEB / "js" / "features"]
 
 # Inline style="..." attributes still in index.html and the classic scripts. Lower this as views are
 # rebuilt; it must never go up.
-INLINE_STYLE_BASELINE = 628
+INLINE_STYLE_BASELINE = 538
 
 
 def _ui_sources():
@@ -39,8 +40,8 @@ class TestFrontendHygiene(unittest.TestCase):
         count = sum(text.count('style="') for _, text in _ui_sources())
         self.assertLessEqual(count, INLINE_STYLE_BASELINE, "move new styling into CSS classes")
 
-    def test_core_modules_build_dom_safely(self):
-        for path in CORE.glob("*.js"):
+    def test_redesign_modules_build_dom_safely(self):
+        for path in (p for d in MODULE_DIRS for p in d.glob("*.js")):
             text = path.read_text(encoding="utf-8")
             self.assertNotRegex(text, r"\.innerHTML\s*[+]?=", path.name)
             self.assertNotIn('style="', text, path.name)
