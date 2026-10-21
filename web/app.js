@@ -160,6 +160,8 @@ function initTelemetryWebSocket() {
   try {
     const ws = new WebSocket(wsUrl);
 
+    ws.onopen = () => window.connection.reportUp();
+
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
@@ -170,6 +172,7 @@ function initTelemetryWebSocket() {
     };
 
     ws.onclose = () => {
+      window.connection.reportDown();
       setTimeout(initTelemetryWebSocket, 3000);
     };
   } catch (err) {
@@ -306,26 +309,21 @@ function updateLightingModeUI(mode) {
 
 async function switchLightingMode(newMode) {
   const modeClean = (newMode === 'flow') ? 'flow' : 'matrix';
+  const previousMode = window.appState ? window.appState.lighting_mode : null;
   if (window.appState) {
     window.appState.lighting_mode = modeClean;
   }
   updateLightingModeUI(modeClean);
 
   try {
-    const res = await fetch('/api/flow/mode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: modeClean })
-    });
-    const data = await res.json();
-    if (data.status === 'ok') {
-      if (typeof showToast === 'function') {
-        const title = (modeClean === 'flow') ? 'Flow Matrix' : 'Classic Event Matrix';
-        showToast(`Active lighting engine switched to ${title}`, 'success');
-      }
-    }
+    await window.api.post('/api/flow/mode', { mode: modeClean });
+    window.toast.success(`${modeClean === 'flow' ? 'Flow Matrix' : 'Event Matrix'} is now playing`);
   } catch (err) {
-    console.error('Failed to switch lighting mode:', err);
+    // The engine kept the old mode, so the switch must show it again
+    if (window.appState) window.appState.lighting_mode = previousMode;
+    updateLightingModeUI(previousMode);
+    window.toast.error(err, { onRetry: () => switchLightingMode(modeClean) });
+    return;
   }
 
   // Switch view seamlessly

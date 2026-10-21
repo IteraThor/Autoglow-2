@@ -1,0 +1,270 @@
+/**
+ * AutoGlow 2 - Layout Tokens & Core UI Components
+ * Spacing, type scale and layering at true pixel size (colours live in theme.css),
+ * plus the shared toast, dialog, connection banner and field error styles.
+ */
+
+:root {
+  --accent-rgb: 20, 184, 166; /* --accent-primary as channels, for rgba(var(--accent-rgb), a) */
+  --danger-rgb: 244, 63, 94;
+  --warning-rgb: 245, 158, 11;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  --z-banner: 900;
+  --z-dialog: 1000;
+  --z-toast: 1100;
+
+  /* Views built before the redesign were drawn for a 1.35x page zoom. Each redesign phase
+     rebuilds its view at true size and removes it from the .legacy-scale selector below. */
+  --legacy-zoom: 1.35;
+}
+
+.sidebar,
+.tab-container,
+.modal-card,
+.flow-modal-content {
+  zoom: var(--legacy-zoom);
+}
+
+/* -----------------------------------------------------------------------------
+ * Toasts (web/js/core/toast.js)
+ * ----------------------------------------------------------------------------- */
+.toast-host {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+  pointer-events: none;
+}
+
+.toast-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--status-info);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  animation: toast-in 0.16s ease-out;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-item.is-leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.toast-item[data-type="success"] { border-left-color: var(--status-success); }
+.toast-item[data-type="warning"] { border-left-color: var(--status-warning); }
+.toast-item[data-type="error"] { border-left-color: var(--status-danger); }
+
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast-action,
+.toast-close {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-primary);
+  font: 600 var(--fs-sm) var(--font-ui);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.toast-close {
+  color: var(--text-muted);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+
+.toast-action:hover,
+.toast-close:hover {
+  background: var(--bg-card-hover);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* -----------------------------------------------------------------------------
+ * Dialogs (web/js/core/dialog.js)
+ * ----------------------------------------------------------------------------- */
+.ui-dialog {
+  width: min(400px, calc(100vw - 2 * var(--space-4)));
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-modal);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+}
+
+.ui-dialog::backdrop {
+  background: rgba(10, 14, 20, 0.7);
+  backdrop-filter: blur(3px);
+}
+
+.ui-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.ui-dialog-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.ui-dialog-body {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.ui-dialog-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font: var(--fs-md) var(--font-ui);
+}
+
+.ui-dialog-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.ui-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.ui-btn {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: 500 var(--fs-md) var(--font-ui);
+  cursor: pointer;
+}
+
+.ui-btn:hover { background: var(--bg-card-hover); }
+
+.ui-btn-primary {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: #0b1416;
+}
+
+.ui-btn-primary:hover { background: var(--accent-primary-hover); }
+
+.ui-btn-danger {
+  border-color: var(--status-danger);
+  background: var(--status-danger);
+  color: #fff;
+}
+
+.ui-btn-danger:hover { background: rgba(var(--danger-rgb), 0.85); }
+
+/* -----------------------------------------------------------------------------
+ * Connection banner (web/js/core/connection.js)
+ * ----------------------------------------------------------------------------- */
+.conn-banner {
+  position: fixed;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-banner);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(var(--warning-rgb), 0.14);
+  border: 1px solid rgba(var(--warning-rgb), 0.45);
+  border-radius: 999px;
+  color: var(--status-warning);
+  font: 500 var(--fs-sm) var(--font-ui);
+  box-shadow: var(--shadow-pop);
+  backdrop-filter: blur(6px);
+}
+
+.conn-banner[hidden] { display: none; }
+
+.conn-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: conn-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes conn-pulse {
+  50% { opacity: 0.3; }
+}
+
+/* -----------------------------------------------------------------------------
+ * Inline field errors (web/js/core/dom.js showFieldError)
+ * ----------------------------------------------------------------------------- */
+[aria-invalid="true"] {
+  border-color: var(--status-danger) !important;
+}
+
+.field-error {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--status-danger);
+  font-size: 11px; /* rendered inside legacy-zoom views for now */
+}
+
+.ui-dialog .field-error {
+  font-size: var(--fs-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item,
+  .conn-banner-dot {
+    animation: none;
+  }
+}

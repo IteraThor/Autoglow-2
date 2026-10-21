@@ -61,25 +61,9 @@ function rgbToHex(r, g, b) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+// Legacy entry point for the classic scripts; core/toast.js does the work
 function showToast(msg, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = msg;
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(8px)';
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-    }, 300);
-  }, 3500);
+  return window.toast.show(msg, { type });
 }
 
 var _activePingPromises = {};

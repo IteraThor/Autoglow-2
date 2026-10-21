@@ -1,6 +1,6 @@
 /**
  * AutoGlow 2 - Shared UI Components
- * Technical IDE inputs, buttons, data tables, switches, toasts, modals, and terminals.
+ * Technical IDE inputs, buttons, data tables, switches, modals, and terminals.
  */
 
 /* -----------------------------------------------------------------------------
@@ -366,44 +366,6 @@ input[type="password"]:focus {
 .term-msg {
   color: var(--text-code);
   word-break: break-all;
-}
-
-/* -----------------------------------------------------------------------------
- * Toast Notifications
- * ----------------------------------------------------------------------------- */
-#toast-container {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 1000;
-}
-
-.toast {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  padding: 10px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  animation: slideIn 0.15s ease-out;
-}
-
-.toast.success, .toast-success { border-left: 3px solid var(--status-success); }
-.toast.error, .toast-error { border-left: 3px solid var(--status-danger); }
-.toast.warning, .toast-warning { border-left: 3px solid var(--status-warning); }
-.toast.info, .toast-info { border-left: 3px solid var(--status-info); }
-
-@keyframes slideIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
 }
 
 /* Status Indicators */

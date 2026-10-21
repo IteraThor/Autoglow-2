@@ -13,7 +13,7 @@ async function fetchBackupsList() {
   if (!container) return;
 
   try {
-    const data = await (window.api ? window.api.listBackups() : (await fetch('/api/system/backups')).json());
+    const data = await ((await fetch('/api/system/backups')).json());
 
     if (data.status === 'ok' && Array.isArray(data.backups) && data.backups.length > 0) {
       container.innerHTML = data.backups.map(b => {
@@ -56,12 +56,18 @@ async function fetchBackupsList() {
 }
 
 async function promptCreateBackup() {
-  const note = prompt("Enter an optional description for this backup snapshot (e.g. 'Before update' or 'Working dartboard setup'):", "Snapshot before update");
+  const note = await window.promptDialog({
+    title: 'Create backup',
+    body: 'Optional note, e.g. "Before update".',
+    value: 'Snapshot before update',
+    confirmLabel: 'Create',
+    maxLength: 120
+  });
   if (note === null) return; // User cancelled
 
   showToast('Creating system backup snapshot...', 'info');
   try {
-    const data = await (window.api ? window.api.createBackup(note.trim()) : (await fetch('/api/system/backup/create', {
+    const data = await ((await fetch('/api/system/backup/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: note.trim() })
@@ -78,12 +84,17 @@ async function promptCreateBackup() {
 }
 
 async function restoreBackup(filename) {
-  const confirmed = confirm(`WARNING: Are you sure you want to restore the backup:\n\n${filename}\n\nThis will overwrite current files with the contents of this snapshot. AutoGlow will reload after restore.`);
+  const confirmed = await window.confirmDialog({
+    title: 'Restore this backup?',
+    body: `${filename} replaces the current files. AutoGlow reloads afterwards.`,
+    confirmLabel: 'Restore',
+    danger: true
+  });
   if (!confirmed) return;
 
   showToast(`Restoring backup ${filename}...`, 'info');
   try {
-    const data = await (window.api ? window.api.restoreBackup(filename) : (await fetch('/api/system/backup/restore', {
+    const data = await ((await fetch('/api/system/backup/restore', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename: filename })
@@ -100,11 +111,11 @@ async function restoreBackup(filename) {
 }
 
 async function deleteBackup(filename) {
-  const confirmed = confirm(`Delete backup archive "${filename}"?`);
+  const confirmed = await window.confirmDialog({ title: 'Delete backup?', body: filename, confirmLabel: 'Delete', danger: true });
   if (!confirmed) return;
 
   try {
-    const data = await (window.api ? window.api.deleteBackup(filename) : (await fetch('/api/system/backup/delete', {
+    const data = await ((await fetch('/api/system/backup/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filename: filename })
@@ -140,7 +151,7 @@ function handleZipDragOver(e) {
   const dropZone = document.getElementById('zipDropZone');
   if (dropZone) {
     dropZone.style.borderColor = 'var(--accent-primary)';
-    dropZone.style.background = 'rgba(0, 240, 255, 0.08)';
+    dropZone.style.background = 'rgba(var(--accent-rgb), 0.08)';
   }
 }
 
@@ -149,8 +160,8 @@ function handleZipDragLeave(e) {
   e.stopPropagation();
   const dropZone = document.getElementById('zipDropZone');
   if (dropZone) {
-    dropZone.style.borderColor = 'rgba(0, 240, 255, 0.35)';
-    dropZone.style.background = 'rgba(0, 240, 255, 0.02)';
+    dropZone.style.borderColor = 'rgba(var(--accent-rgb), 0.35)';
+    dropZone.style.background = 'rgba(var(--accent-rgb), 0.02)';
   }
 }
 
@@ -159,8 +170,8 @@ function handleZipDrop(e) {
   e.stopPropagation();
   const dropZone = document.getElementById('zipDropZone');
   if (dropZone) {
-    dropZone.style.borderColor = 'rgba(0, 240, 255, 0.35)';
-    dropZone.style.background = 'rgba(0, 240, 255, 0.02)';
+    dropZone.style.borderColor = 'rgba(var(--accent-rgb), 0.35)';
+    dropZone.style.background = 'rgba(var(--accent-rgb), 0.02)';
   }
 
   if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
@@ -214,10 +225,11 @@ async function applyZipUpdate() {
     return;
   }
 
-  const confirmed = confirm(
-    `Install update from file "${selectedZipFile.name}"?\n\n` +
-    `AutoGlow will extract and apply this package, then reload the dashboard.`
-  );
+  const confirmed = await window.confirmDialog({
+    title: 'Install update?',
+    body: `${selectedZipFile.name} is applied and AutoGlow reloads.`,
+    confirmLabel: 'Install'
+  });
   if (!confirmed) return;
 
   const btn = document.getElementById('btnApplyZipUpdate');
@@ -232,18 +244,16 @@ async function applyZipUpdate() {
 
   if (statusBox) {
     statusBox.style.display = 'block';
-    statusBox.style.background = 'rgba(0, 240, 255, 0.08)';
+    statusBox.style.background = 'rgba(var(--accent-rgb), 0.08)';
     statusBox.style.color = 'var(--accent-primary)';
-    statusBox.style.border = '1px solid rgba(0, 240, 255, 0.25)';
+    statusBox.style.border = '1px solid rgba(var(--accent-rgb), 0.25)';
     statusBox.innerHTML = `Uploading and applying ZIP update... please wait.`;
   }
 
   showToast('Uploading and applying update...', 'info');
 
   try {
-    const data = await (window.api
-      ? window.api.applyZipUpdate(selectedZipFile, autoBackup)
-      : (async () => {
+    const data = await ((async () => {
           const fd = new FormData();
           fd.append('file', selectedZipFile);
           fd.append('auto_backup', autoBackup ? 'true' : 'false');

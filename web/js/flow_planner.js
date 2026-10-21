@@ -2113,38 +2113,29 @@
       seg: (selectedFlowDeviceIp && selectedFlowDeviceIp !== 'all') ? selectedFlowSegmentId : null
     };
 
-    fetch('/api/flow/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-      .then(function (res) { return res.json(); })
+    window.api.post('/api/flow/save', payload)
       .then(function () {
         saveBtns.forEach(function (btn) {
           btn.textContent = 'Saved!';
           setTimeout(function () { btn.textContent = 'Save Flow'; }, 1800);
         });
-        if (typeof showToast === 'function') {
-          var targetLabel = (selectedFlowDeviceIp && selectedFlowDeviceIp !== 'all')
-            ? ('for ' + selectedFlowDeviceIp + ' [Seg #' + (selectedFlowSegmentId !== null ? selectedFlowSegmentId : 0) + ']')
-            : 'across all devices';
-          showToast('Flow Matrix saved successfully ' + targetLabel + '!', 'success');
-        }
+        window.toast.success('Flow saved');
       })
       .catch(function (err) {
-        console.error('Error saving game flow:', err);
-        saveBtns.forEach(function (btn) { btn.textContent = 'Error'; });
-        if (typeof showToast === 'function') {
-          showToast('Failed to save game flow', 'error');
-        }
+        saveBtns.forEach(function (btn) { btn.textContent = 'Save Flow'; });
+        window.toast.error(err, { onRetry: window.saveGameFlow });
       });
   };
 
   window.resetGameFlow = function () {
-    if (!confirm('Reset game flow to standard 5-step player loop?')) return;
-    fetch('/api/flow/reset', { method: 'POST' })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
+    window.confirmDialog({
+      title: 'Reset game flow?',
+      body: 'All phases go back to the default player loop.',
+      confirmLabel: 'Reset',
+      danger: true
+    }).then(function (confirmed) {
+      if (!confirmed) return;
+      return window.api.post('/api/flow/reset').then(function (data) {
         if (data && data.flow) {
           currentFlow = data.flow;
           renderFlowPipeline();
@@ -2152,10 +2143,10 @@
             selectPhase(currentFlow.phases[0].id, false);
           }
         }
-      })
-      .catch(function (err) {
-        console.error('Error resetting game flow:', err);
       });
+    }).catch(function (err) {
+      window.toast.error(err, { onRetry: window.resetGameFlow });
+    });
   };
 
   window.highlightFlowPhase = function (phaseId) {

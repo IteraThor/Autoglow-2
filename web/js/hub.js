@@ -262,7 +262,12 @@ async function hubToggleStream() {
 
 async function hubRunAction(action) {
   const endpoints = { wake: '/api/power/test_wake', dim: '/api/power/test_dim', off: '/api/power/test_off' };
-  if (action === 'off' && !confirm('Turn off all WLED controllers and the board light?')) return;
+  if (action === 'off' && !await window.confirmDialog({
+    title: 'Turn everything off?',
+    body: 'All WLED controllers and the board light switch off.',
+    confirmLabel: 'Turn off',
+    danger: true
+  })) return;
   try {
     const res = await fetch(endpoints[action], { method: 'POST' });
     const data = await res.json();

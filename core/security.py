@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 
+from core.errors import error_body
 from core.models import AppConfig
 
 logger = logging.getLogger("autoglow.security")
@@ -211,7 +212,7 @@ async def security_middleware(request: web.Request, handler):
         reason = bridge_rejection_reason(request)
         if reason:
             logger.warning(f"Rejected extension bridge connection from {request.remote}: {reason}")
-            return web.json_response({"status": "error", "message": reason}, status=403)
+            return web.json_response(error_body("FORBIDDEN", reason), status=403)
         return await handler(request)
     is_api = path.startswith("/api/") or path.startswith("/ws/")
 
@@ -219,9 +220,9 @@ async def security_middleware(request: web.Request, handler):
     if is_api and (request.method not in ("GET", "HEAD", "OPTIONS") or path.startswith("/ws/")):
         if _is_cross_origin(request):
             logger.warning(f"Rejected cross-origin {request.method} {path} from Origin {request.headers.get('Origin')}")
-            return web.json_response({"status": "error", "message": "Cross-origin request rejected"}, status=403)
+            return web.json_response(error_body("FORBIDDEN", "Cross-origin request rejected"), status=403)
 
     if is_api and path not in PUBLIC_API_PATHS and not is_authenticated(request):
-        return web.json_response({"status": "error", "message": "Access PIN required", "auth_required": True}, status=401)
+        return web.json_response({**error_body("AUTH_REQUIRED", "Access PIN required"), "auth_required": True}, status=401)
 
     return await handler(request)

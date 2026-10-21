@@ -683,7 +683,7 @@
         ctx.arc(centerX, centerY, rRingOuter + 0.5, aStart, aEnd, false);
         ctx.arc(centerX, centerY, rRingInner - 0.5, aEnd, aStart, true);
         ctx.closePath();
-        ctx.strokeStyle = 'var(--accent-primary, #00f0ff)';
+        ctx.strokeStyle = 'var(--accent-primary)';
         ctx.lineWidth = 2.0;
         ctx.stroke();
       }

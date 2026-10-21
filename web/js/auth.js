@@ -110,7 +110,12 @@ async function savePinSettings(remove = false) {
   if (!remove) {
     if (!next) { showToast('Enter a new PIN.', 'error'); return; }
     if (next !== confirmVal) { showToast('PIN confirmation does not match.', 'error'); return; }
-  } else if (!confirm('Remove the access PIN? Anyone on your network will be able to control AutoGlow.')) {
+  } else if (!await window.confirmDialog({
+    title: 'Remove the access PIN?',
+    body: 'Anyone on your network will be able to control AutoGlow.',
+    confirmLabel: 'Remove PIN',
+    danger: true
+  })) {
     return;
   }
 

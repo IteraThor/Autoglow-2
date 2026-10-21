@@ -9,6 +9,7 @@ import logging
 from aiohttp import web
 from typing import Optional
 
+from core.errors import AppError, PersistenceError, ServiceUnavailable, read_json
 from core.game_flow import GameFlowStorageManager, GameFlow, create_default_game_flow
 from core.models import EffectConfig, AnimationType, RGBColor, ProtocolMode, LightingMode
 from core.animations import render_animation_frame, blend_frames
@@ -102,16 +103,18 @@ async def handle_get_flow(request: web.Request) -> web.Response:
             logger.debug(f"Could not enrich flow events: {e_ev}")
 
         return web.json_response({"status": "ok", "flow": flow_dict})
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error loading game flow: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not load the game flow") from e
 
 
 
 async def handle_save_flow(request: web.Request) -> web.Response:
     """Save user-customized Game Flow definition."""
     try:
-        data = await request.json()
+        data = await read_json(request)
         flow_data = data.get("flow", data)
         flow = GameFlow.from_dict(flow_data)
 
@@ -166,7 +169,7 @@ async def handle_save_flow(request: web.Request) -> web.Response:
                 logger.warning(f"Could not sync flow events to profile: {ex_sync}")
 
         if not success:
-            return web.json_response({"status": "error", "message": "Failed to write game_flows.json"}, status=500)
+            raise PersistenceError("Failed to write game_flows.json")
 
         # Notify engine of updated game flow definition
         engine = request.app.get("engine")
@@ -174,9 +177,11 @@ async def handle_save_flow(request: web.Request) -> web.Response:
             engine.reload_game_flow(flow)
 
         return web.json_response({"status": "ok", "flow": flow.to_dict()})
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error saving game flow: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not save the game flow") from e
 
 
 async def handle_reset_flow(request: web.Request) -> web.Response:
@@ -186,19 +191,21 @@ async def handle_reset_flow(request: web.Request) -> web.Response:
         storage = _get_flow_storage(request)
         storage.save(flow)
         return web.json_response({"status": "ok", "flow": flow.to_dict()})
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error resetting game flow: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not reset the game flow") from e
 
 
 async def handle_play_phase(request: web.Request) -> web.Response:
     """Execute a single phase effect on the live engine and simulator."""
     engine = request.app.get("engine")
     if not engine:
-        return web.json_response({"status": "error", "message": "Engine not available"}, status=500)
+        raise ServiceUnavailable("Engine not available")
 
     try:
-        data = await request.json()
+        data = await read_json(request)
         phase_id = str(data.get("phase_id", "")).lower()
 
         # Handle Inactivity Dimming simulation
@@ -276,9 +283,11 @@ async def handle_play_phase(request: web.Request) -> web.Response:
                 await loop.run_in_executor(None, _send_wled_idle)
 
         return web.json_response({"status": "ok", "effect": effect.to_dict()})
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error playing flow phase: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not play the flow phase") from e
 
 
 async def handle_test_transition(request: web.Request) -> web.Response:
@@ -290,10 +299,10 @@ async def handle_test_transition(request: web.Request) -> web.Response:
     global _active_transition_task
     engine = request.app.get("engine")
     if not engine:
-        return web.json_response({"status": "error", "message": "Engine not available"}, status=500)
+        raise ServiceUnavailable("Engine not available")
 
     try:
-        data = await request.json()
+        data = await read_json(request)
         from_phase_id = str(data.get("from_phase_id", "")).strip()
         to_phase_id = str(data.get("to_phase_id", "")).strip()
 
@@ -404,9 +413,11 @@ async def handle_test_transition(request: web.Request) -> web.Response:
             "duration": duration,
             "message": "Transition test started"
         })
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error running transition test: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not run the transition test") from e
 
 
 async def handle_get_lighting_mode(request: web.Request) -> web.Response:
@@ -421,7 +432,7 @@ async def handle_get_lighting_mode(request: web.Request) -> web.Response:
 async def handle_set_lighting_mode(request: web.Request) -> web.Response:
     """Switch the active lighting mode between Classic Event Matrix and Flow Matrix."""
     try:
-        data = await request.json()
+        data = await read_json(request)
         mode_str = str(data.get("mode", "matrix")).strip().lower()
         mode = LightingMode.FLOW if mode_str == "flow" else LightingMode.MATRIX
 
@@ -450,9 +461,11 @@ async def handle_set_lighting_mode(request: web.Request) -> web.Response:
 
         logger.info(f"Lighting mode changed to '{mode.value}' and persisted.")
         return web.json_response({"status": "ok", "mode": mode.value})
+    except AppError:
+        raise
     except Exception as e:
         logger.exception(f"Error setting lighting mode: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
+        raise AppError("Could not change the lighting mode") from e
 
 
 def register_flow_routes(app: web.Application) -> None:

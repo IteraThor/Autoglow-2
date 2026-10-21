@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from aiohttp import web
 
+from core.errors import Conflict, NotFound, PersistenceError, ValidationError, read_json
 from core.models import ProfileConfig
 from core.storage import (
     load_app_config, save_app_config, save_preset_file,
@@ -41,21 +42,18 @@ async def handle_select_preset(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
     cfg = load_app_config(config_path)
 
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"status": "error", "message": "Invalid JSON payload"}, status=400)
+    data = await read_json(request)
 
     target_name = str(data.get("name", "")).strip()
     if not target_name:
-        return web.json_response({"status": "error", "message": "Preset name is required"}, status=400)
+        raise ValidationError("Preset name is required", field="name")
 
     if not cfg.set_active_profile(target_name):
-        return web.json_response({"status": "error", "message": f"Preset '{target_name}' not found"}, status=404)
+        raise NotFound(f"Preset '{target_name}' not found")
 
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist active preset '{target_name}' to disk")
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
+        raise PersistenceError("Failed to persist configuration to disk")
 
     request.app["current_app_config"] = cfg
     if engine:
@@ -78,17 +76,14 @@ async def handle_save_preset(request: web.Request) -> web.Response:
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
 
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"status": "error", "message": "Invalid JSON payload"}, status=400)
+    data = await read_json(request)
 
     preset_name = str(data.get("name", "")).strip()
     if not preset_name:
-        return web.json_response({"status": "error", "message": "Preset name cannot be empty"}, status=400)
+        raise ValidationError("Preset name cannot be empty", field="name")
 
     if len(preset_name) > 60:
-        return web.json_response({"status": "error", "message": "Preset name exceeds 60 characters"}, status=400)
+        raise ValidationError("Preset name exceeds 60 characters", field="name")
 
     profile_data = data.get("profile")
     if profile_data and isinstance(profile_data, dict):
@@ -107,7 +102,7 @@ async def handle_save_preset(request: web.Request) -> web.Response:
     save_preset_file(new_profile, presets_dir=presets_dir)
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist preset '{preset_name}' to disk")
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
+        raise PersistenceError("Failed to persist configuration to disk")
 
     request.app["current_app_config"] = cfg
     if engine and set_active:
@@ -130,25 +125,22 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
 
-    try:
-        data = await request.json()
-    except Exception:
-        return web.json_response({"status": "error", "message": "Invalid JSON payload"}, status=400)
+    data = await read_json(request)
 
     old_name = str(data.get("old_name", "")).strip()
     new_name = str(data.get("new_name", "")).strip()
 
     if not old_name:
-        return web.json_response({"status": "error", "message": "Original preset name is required"}, status=400)
+        raise ValidationError("Original preset name is required")
 
     if not new_name:
-        return web.json_response({"status": "error", "message": "New preset name cannot be empty"}, status=400)
+        raise ValidationError("New preset name cannot be empty", field="name")
 
     if len(new_name) > 60:
-        return web.json_response({"status": "error", "message": "Preset name exceeds 60 characters"}, status=400)
+        raise ValidationError("Preset name exceeds 60 characters", field="name")
 
     if old_name.lower() == "default":
-        return web.json_response({"status": "error", "message": "The 'Default' preset cannot be renamed"}, status=400)
+        raise ValidationError("The 'Default' preset cannot be renamed")
 
     if old_name == new_name:
         return web.json_response({
@@ -159,11 +151,11 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
 
     # Ensure new name doesn't collide with existing preset
     if any(p.name.lower() == new_name.lower() for p in cfg.profiles if p.name.lower() != old_name.lower()):
-        return web.json_response({"status": "error", "message": f"A preset named '{new_name}' already exists"}, status=400)
+        raise Conflict(f"A preset named '{new_name}' already exists", field="name")
 
     target_profile = cfg.get_profile(old_name)
     if not target_profile:
-        return web.json_response({"status": "error", "message": f"Preset '{old_name}' not found"}, status=404)
+        raise NotFound(f"Preset '{old_name}' not found")
 
     target_profile.name = new_name
     if cfg.active_profile == old_name:
@@ -176,7 +168,7 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
 
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist renamed preset '{new_name}' to disk")
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
+        raise PersistenceError("Failed to persist configuration to disk")
 
     request.app["current_app_config"] = cfg
     if engine and cfg.active_profile == new_name:
@@ -205,17 +197,17 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
 
     target_name = str(data.get("name", request.query.get("name", ""))).strip()
     if not target_name:
-        return web.json_response({"status": "error", "message": "Preset name to delete is required"}, status=400)
+        raise ValidationError("Preset name to delete is required")
 
     if target_name.lower() == "default":
-        return web.json_response({"status": "error", "message": "The 'Default' preset cannot be deleted"}, status=400)
+        raise ValidationError("The 'Default' preset cannot be deleted")
 
     if len(cfg.profiles) <= 1:
-        return web.json_response({"status": "error", "message": "Cannot delete the only remaining preset"}, status=400)
+        raise ValidationError("Cannot delete the only remaining preset")
 
     target_profile = cfg.get_profile(target_name)
     if not target_profile:
-        return web.json_response({"status": "error", "message": f"Preset '{target_name}' not found"}, status=404)
+        raise NotFound(f"Preset '{target_name}' not found")
 
     cfg.profiles = [p for p in cfg.profiles if p.name != target_name]
     delete_preset_file(target_name, presets_dir=presets_dir)
@@ -229,7 +221,7 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
 
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist configuration after deleting preset '{target_name}'")
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
+        raise PersistenceError("Failed to persist configuration to disk")
 
     request.app["current_app_config"] = cfg
     if engine:
@@ -253,7 +245,7 @@ async def handle_export_preset(request: web.Request) -> web.Response:
     target_name = request.query.get("name", "").strip() or cfg.active_profile
     profile = cfg.get_profile(target_name)
     if not profile:
-        return web.json_response({"status": "error", "message": f"Preset '{target_name}' not found"}, status=404)
+        raise NotFound(f"Preset '{target_name}' not found")
 
     export_data = profile.to_dict()
     filename = sanitize_preset_filename(target_name)
@@ -273,23 +265,22 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
 
-    try:
-        if request.content_type.startswith("multipart/"):
-            reader = await request.multipart()
-            part = await reader.next()
-            if part is None:
-                return web.json_response({"status": "error", "message": "No file uploaded"}, status=400)
-            file_bytes = await part.read()
-            data = json.loads(file_bytes.decode("utf-8"))
-            filename_stem = Path(part.filename).stem if part.filename else "Imported Preset"
-        else:
-            data = await request.json()
-            filename_stem = "Imported Preset"
-    except Exception as e:
-        return web.json_response({"status": "error", "message": f"Invalid JSON format: {e}"}, status=400)
+    if request.content_type.startswith("multipart/"):
+        reader = await request.multipart()
+        part = await reader.next()
+        if part is None:
+            raise ValidationError("No file uploaded", field="file")
+        try:
+            data = json.loads((await part.read()).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValidationError("Preset file is not valid JSON", field="file")
+        filename_stem = Path(part.filename).stem if part.filename else "Imported Preset"
+    else:
+        data = await read_json(request)
+        filename_stem = "Imported Preset"
 
     if not isinstance(data, dict):
-        return web.json_response({"status": "error", "message": "Preset file must contain a JSON object"}, status=400)
+        raise ValidationError("Preset file must contain a JSON object")
 
     preset_name = str(data.get("name", filename_stem)).strip() or filename_stem
     if len(preset_name) > 60:
@@ -310,7 +301,7 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     save_preset_file(imported_profile, presets_dir=presets_dir)
 
     if not save_app_config(cfg, config_path):
-        return web.json_response({"status": "error", "message": "Failed to persist configuration"}, status=500)
+        raise PersistenceError("Failed to persist configuration")
 
     request.app["current_app_config"] = cfg
     if engine:

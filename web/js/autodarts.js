@@ -270,7 +270,7 @@ async function submitAutodartsLogin() {
 
   showToast('Connecting to api.autodarts.com...', 'info');
   try {
-    const data = await (window.api ? window.api.autodartsLogin(email, password) : (await fetch('/api/autodarts/login', {
+    const data = await ((await fetch('/api/autodarts/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -289,9 +289,9 @@ async function submitAutodartsLogin() {
 }
 
 async function disconnectAutodarts() {
-  if (!confirm('Disconnect Autodarts account and return to Local mode?')) return;
+  if (!await window.confirmDialog({ title: 'Disconnect Autodarts?', body: 'AutoGlow returns to local mode.', confirmLabel: 'Disconnect', danger: true })) return;
   try {
-    const data = await (window.api ? window.api.autodartsLogout() : (await fetch('/api/autodarts/logout', { method: 'POST' })).json());
+    const data = await ((await fetch('/api/autodarts/logout', { method: 'POST' })).json());
     if (data.status === 'ok') {
       if (!appState.autodarts) appState.autodarts = {};
       if (!appState.raw) appState.raw = {};
@@ -443,7 +443,11 @@ function copyBridgeValue(elementId, label) {
 }
 
 async function regenerateBridgeKey() {
-  if (!confirm('Create a new pairing key? Extensions on other computers must enter the new key.')) return;
+  if (!await window.confirmDialog({
+    title: 'Create a new pairing key?',
+    body: 'Extensions on other computers must enter the new key.',
+    confirmLabel: 'Create key'
+  })) return;
   try {
     const data = await (await fetch('/api/autodarts/bridge/key', { method: 'POST' })).json();
     if (data.status === 'ok') {

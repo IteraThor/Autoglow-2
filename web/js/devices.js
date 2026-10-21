@@ -99,9 +99,9 @@ async function renderDevicesTab() {
         }
         const channelClass = isPwm ? 'hw-channel hw-channel-pwm' : 'hw-channel hw-channel-rgb';
         const gpioBadgeClass = isPwm ? 'badge-gpio-pwm' : 'badge-gpio-rgb';
-        const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(0,242,254,0.08)';
+        const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(var(--accent-rgb), 0.08)';
         const badgeColor = isPwm ? '#f59e0b' : 'var(--accent-primary)';
-        const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(0,242,254,0.25)';
+        const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(var(--accent-rgb), 0.25)';
 
         const segRows = busSegments.map(s => {
           const globalIdx = editData.segments.indexOf(s);
@@ -164,7 +164,7 @@ async function renderDevicesTab() {
 
         const addSegBtn = isPwm
           ? ''
-          : `<button class="btn-ide" onclick="addInlineSegmentToBus('${ipEscaped}', ${busIdx})" style="height: 22px; font-size: 11px; font-weight: 600; padding: 0 8px; color: var(--accent-primary); border: 1px solid rgba(0,242,254,0.35); background: rgba(0,242,254,0.06); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" title="Add segment to this GPIO">+ Seg</button>`;
+          : `<button class="btn-ide" onclick="addInlineSegmentToBus('${ipEscaped}', ${busIdx})" style="height: 22px; font-size: 11px; font-weight: 600; padding: 0 8px; color: var(--accent-primary); border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.06); border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" title="Add segment to this GPIO">+ Seg</button>`;
 
         return `
           <div class="${channelClass}" style="background: rgba(0, 0, 0, 0.22); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; display: flex; flex-direction: column; position: relative; margin-bottom: 4px;">
@@ -212,7 +212,7 @@ async function renderDevicesTab() {
       const ipLinkColor = isLiveOnline === true ? 'var(--accent-primary)' : 'var(--text-muted)';
 
       return `
-        <div class="configured-wled-card" id="wled-card-${safeIp}" style="padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid rgba(0,242,254,0.4); box-shadow: 0 0 14px rgba(0,242,254,0.08); display: flex; flex-direction: column; gap: 8px;">
+        <div class="configured-wled-card" id="wled-card-${safeIp}" style="padding: 12px 14px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.4); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.08); display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <label class="switch" style="transform: scale(0.72); margin: 0;" title="${isEnabled ? 'Disable controller' : 'Enable controller'}">
@@ -247,7 +247,7 @@ async function renderDevicesTab() {
                 ${renderedGroups}
               </div>
               <div style="display: flex; justify-content: flex-end; margin-top: 3px;">
-                <button class="btn-ide" onclick="addInlineHwOutput('${ipEscaped}')" style="font-size: 10px; padding: 2px 8px; color: var(--accent-primary); border-color: rgba(0,242,254,0.3); font-weight: 500;" title="Add new physical GPIO output">+ Add Output</button>
+                <button class="btn-ide" onclick="addInlineHwOutput('${ipEscaped}')" style="font-size: 10px; padding: 2px 8px; color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.3); font-weight: 500;" title="Add new physical GPIO output">+ Add Output</button>
               </div>
             </div>
           </div>
@@ -263,7 +263,7 @@ async function renderDevicesTab() {
     const isEditDisabled = isLiveOnline === false;
     const editBtnStyle = isEditDisabled
       ? 'color: var(--text-muted); border-color: var(--border-subtle); font-size: 10.5px; padding: 2px 8px; opacity: 0.4; cursor: not-allowed;'
-      : 'color: var(--accent-primary); border-color: rgba(0, 242, 254, 0.3); font-size: 10.5px; padding: 2px 8px;';
+      : 'color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.3); font-size: 10.5px; padding: 2px 8px;';
     const editBtnTitle = isEditDisabled
       ? 'Controller is offline — cannot edit hardware configuration'
       : 'Edit this WLED controller inline';
@@ -375,7 +375,7 @@ async function renderDevicesTab() {
           editBtn.style.opacity = '1';
           editBtn.style.cursor = 'pointer';
           editBtn.style.color = 'var(--accent-primary)';
-          editBtn.style.borderColor = 'rgba(0, 242, 254, 0.3)';
+          editBtn.style.borderColor = 'rgba(var(--accent-rgb), 0.3)';
           editBtn.title = 'Edit this WLED controller inline';
         } else {
           editBtn.disabled = true;
@@ -451,9 +451,9 @@ async function renderDevicesTab() {
             const isPwm = g.isPwm !== undefined ? g.isPwm : String(g.type).toLowerCase().includes('pwm');
             const channelClass = isPwm ? 'hw-channel hw-channel-pwm' : 'hw-channel hw-channel-rgb';
             const gpioBadgeClass = isPwm ? 'badge-gpio-pwm' : 'badge-gpio-rgb';
-            const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(0,242,254,0.08)';
+            const badgeBg = isPwm ? 'rgba(245,158,11,0.08)' : 'rgba(var(--accent-rgb), 0.08)';
             const badgeColor = isPwm ? '#f59e0b' : 'var(--accent-primary)';
-            const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(0,242,254,0.25)';
+            const badgeBorder = isPwm ? 'rgba(245,158,11,0.25)' : 'rgba(var(--accent-rgb), 0.25)';
 
             const typeLabel = isPwm 
               ? `<span style="color: var(--text-primary); font-weight: 600; font-size: 11px;">PWM White</span>`
@@ -1120,7 +1120,7 @@ async function saveInlineEdit(ip) {
         seg: segPayload
       }
     };
-    const data = await (window.api ? window.api.updateWledDevice(payload) : (await fetch('/api/wled/update', {
+    const data = await ((await fetch('/api/wled/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1301,7 +1301,7 @@ async function removeConfiguredDevice(ip, btn = null) {
 async function pingSpecificController(ip) {
   showToast(`Pinging ${ip}...`, 'info');
   try {
-    const data = await (window.api ? window.api.pingDevice(ip) : (await fetch(`/api/ping?ip=${encodeURIComponent(ip)}`)).json());
+    const data = await ((await fetch(`/api/ping?ip=${encodeURIComponent(ip)}`)).json());
     if (data.status === 'ok' && data.online) {
       showToast(`Controller online! ${data.name || 'WLED'} (v${data.version || '1.0'})`, 'success');
       renderDevicesTab();
@@ -1324,7 +1324,7 @@ async function scanNetworkDevices() {
   }
 
   try {
-    const data = await (window.api ? window.api.scanNetwork() : (await fetch('/api/scan/network')).json());
+    const data = await ((await fetch('/api/scan/network')).json());
     if (data.status === 'ok' && data.devices && data.devices.length > 0) {
       list.innerHTML = '';
       data.devices.forEach(d => {

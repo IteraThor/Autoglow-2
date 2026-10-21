@@ -7,6 +7,7 @@ import asyncio
 import logging
 from aiohttp import web
 
+from core.errors import DeviceUnreachable, NotFound, PersistenceError, ServiceUnavailable, ValidationError, read_json
 from core.models import (
     DeviceConfig, SegmentConfig, EffectConfig, AnimationType,
     RGBColor, ProtocolMode, _safe_int
@@ -37,16 +38,16 @@ async def handle_ping_device(request: web.Request) -> web.Response:
             "status": "ok",
             "online": False,
             "ip": ip,
-            "message": str(e)
+            "message": "Controller did not respond"
         })
 
 
 async def handle_wled_update(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
-    data = await request.json()
+    data = await read_json(request)
     ip = data.get("ip", "").strip()
     if not ip:
-        return web.json_response({"status": "error", "message": "No IP specified"}, status=400)
+        raise ValidationError("No IP specified", field="ip")
 
     # 1. Update AutoGlow internal config FIRST so changes persist even if hardware is offline
     # Use in-memory config if available to avoid losing devices added since last disk read
@@ -128,7 +129,7 @@ async def handle_wled_update(request: web.Request) -> web.Response:
 
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist WLED controller update to {config_path}")
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
+        raise PersistenceError("Failed to persist configuration to disk")
     request.app["current_app_config"] = cfg
 
     # 2. Attempt physical WLED hardware mutation
@@ -165,14 +166,14 @@ async def handle_get_wled_preset(request: web.Request) -> web.Response:
         if dev:
             ip = dev.ip
     if not ip:
-        return web.json_response({"status": "error", "message": "No IP specified"}, status=400)
+        raise ValidationError("No IP specified", field="ip")
     loop = asyncio.get_running_loop()
     try:
         data = await loop.run_in_executor(None, WLEDDriver.get_wled_preset, ip, preset_id)
         return web.json_response(data)
     except Exception as e:
-        logger.exception(f"Error loading WLED preset from {ip}")
-        return web.json_response({"status": "error", "message": str(e)}, status=400)
+        logger.warning(f"Error loading WLED preset from {ip}: {e}")
+        raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
 
 
 async def handle_get_wled_effects(request: web.Request) -> web.Response:
@@ -188,13 +189,13 @@ async def handle_get_wled_effects(request: web.Request) -> web.Response:
         effects = await loop.run_in_executor(None, WLEDDriver.get_wled_effects_list, ip)
         return web.json_response({"effects": effects})
     except Exception as e:
-        logger.exception(f"Error fetching WLED effects from {ip}")
-        return web.json_response({"status": "error", "message": str(e)}, status=400)
+        logger.warning(f"Error fetching WLED effects from {ip}: {e}")
+        raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
 
 
 async def handle_save_wled_preset(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
-    data = await request.json()
+    data = await read_json(request)
     ip = data.get("ip", "").strip()
     if not ip:
         cfg = load_app_config(config_path)
@@ -202,7 +203,7 @@ async def handle_save_wled_preset(request: web.Request) -> web.Response:
         if dev:
             ip = dev.ip
     if not ip:
-        return web.json_response({"status": "error", "message": "No IP specified"}, status=400)
+        raise ValidationError("No IP specified", field="ip")
 
     preset_id = int(data.get("preset_id", 1))
     name = str(data.get("name", "AutoGlow Default"))
@@ -220,26 +221,16 @@ async def handle_save_wled_preset(request: web.Request) -> web.Response:
             if start is not None and stop is not None:
                 try:
                     if int(stop) <= int(start):
-                        return web.json_response(
-                            {"status": "error", "message": f"Invalid segment bounds: stop ({stop}) must be greater than start ({start})"},
-                            status=400
-                        )
+                        raise ValidationError(f"Invalid segment bounds: stop ({stop}) must be greater than start ({start})")
                 except (ValueError, TypeError):
-                    return web.json_response(
-                        {"status": "error", "message": "Segment start and stop must be valid integers"},
-                        status=400
-                    )
+                    raise ValidationError("Segment start and stop must be valid integers")
 
         # Protect against saving single segment when device has multiple segments configured
         cfg = request.app.get("current_app_config") or load_app_config(config_path)
         dev = next((d for d in cfg.devices if d.ip == ip), cfg.primary_device)
         if dev and dev.segments and len(dev.segments) > len(segments):
-            return web.json_response(
-                {
-                    "status": "error",
-                    "message": f"Segment count mismatch: device has {len(dev.segments)} segments configured, but preset only provided {len(segments)}."
-                },
-                status=400
+            raise ValidationError(
+                f"Segment count mismatch: device has {len(dev.segments)} segments configured, but preset only provided {len(segments)}."
             )
 
     loop = asyncio.get_running_loop()
@@ -256,14 +247,14 @@ async def handle_save_wled_preset(request: web.Request) -> web.Response:
         )
         return web.json_response({"status": "ok", "message": f"Preset {preset_id} saved to WLED device {ip}."})
     except Exception as e:
-        logger.exception("Error saving WLED preset")
-        return web.json_response({"status": "error", "message": str(e)}, status=400)
+        logger.warning(f"Error saving WLED preset to {ip}: {e}")
+        raise DeviceUnreachable(f"Could not save the preset on the WLED controller at {ip}", field="ip") from e
 
 
 async def handle_preview_wled_state(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
-    data = await request.json()
+    data = await read_json(request)
     ip = data.get("ip", "").strip()
     if not ip:
         cfg = load_app_config(config_path)
@@ -271,7 +262,7 @@ async def handle_preview_wled_state(request: web.Request) -> web.Response:
         if dev:
             ip = dev.ip
     if not ip:
-        return web.json_response({"status": "error", "message": "No IP specified"}, status=400)
+        raise ValidationError("No IP specified", field="ip")
 
     if engine and hasattr(engine, "driver") and engine.driver.protocol_mode == ProtocolMode.ACTIVE_UDP:
         logger.info("Live preview requested while in UDP mode -> Releasing UDP stream to allow HTTP state preview...")
@@ -282,8 +273,8 @@ async def handle_preview_wled_state(request: web.Request) -> web.Response:
         await loop.run_in_executor(None, WLEDDriver.preview_wled_state, ip, data)
         return web.json_response({"status": "ok", "message": "Live preview sent to WLED."})
     except Exception as e:
-        logger.exception(f"Error sending live preview to WLED {ip}")
-        return web.json_response({"status": "error", "message": str(e)}, status=400)
+        logger.warning(f"Error sending live preview to WLED {ip}: {e}")
+        raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
 
 
 async def handle_scan_network(request: web.Request) -> web.Response:
@@ -300,9 +291,9 @@ async def handle_test_effect(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
     if not engine:
-        return web.json_response({"status": "error", "message": "Engine not initialized"}, status=500)
+        raise ServiceUnavailable("Engine not initialized")
 
-    data = await request.json()
+    data = await read_json(request)
     evt_data = data.get("effect", {})
     event_key = data.get("event")
     target_ip = data.get("ip")
@@ -346,10 +337,7 @@ async def handle_test_effect(request: web.Request) -> web.Response:
 
     target_driver = engine.get_driver(target_ip) if target_ip else engine.driver
     if not target_driver:
-        return web.json_response({
-            "status": "error",
-            "message": f"No driver configured for controller {target_ip or 'primary'}."
-        }, status=400)
+        raise NotFound(f"No driver configured for controller {target_ip or 'primary'}.", field="ip")
 
     # Ensure UDP mode is active for live effect streaming (auto-connect if currently in HTTP idle)
     if target_driver.protocol_mode != ProtocolMode.ACTIVE_UDP:
@@ -384,18 +372,17 @@ async def handle_test_effect(request: web.Request) -> web.Response:
 async def handle_test_light(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     if not engine:
-        return web.json_response({"status": "error", "message": "Engine not initialized"}, status=500)
+        raise ServiceUnavailable("Engine not initialized")
+    data = await read_json(request)
     try:
-        data = await request.json()
         bri = int(data.get("brightness", 200))
-        target_ip = data.get("ip")
-        ok = await engine.set_board_light(bri, target_ip=target_ip)
-        if not ok:
-            logger.warning(f"set_board_light returned False for brightness {bri} on {target_ip or 'all'}")
-        return web.json_response({"status": "ok", "brightness": bri, "success": ok})
-    except Exception as e:
-        logger.exception("Error in handle_test_light")
-        return web.json_response({"status": "error", "message": str(e)}, status=400)
+    except (TypeError, ValueError):
+        raise ValidationError("Brightness must be a number", field="brightness")
+    target_ip = data.get("ip")
+    ok = await engine.set_board_light(bri, target_ip=target_ip)
+    if not ok:
+        logger.warning(f"set_board_light returned False for brightness {bri} on {target_ip or 'all'}")
+    return web.json_response({"status": "ok", "brightness": bri, "success": ok})
 
 
 async def handle_get_protocol_mode(request: web.Request) -> web.Response:
@@ -409,8 +396,8 @@ async def handle_get_protocol_mode(request: web.Request) -> web.Response:
 async def handle_post_protocol_mode(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     if not engine:
-        return web.json_response({"status": "error", "message": "Engine not initialized"}, status=500)
-    data = await request.json()
+        raise ServiceUnavailable("Engine not initialized")
+    data = await read_json(request)
     req_mode = str(data.get("mode", "http")).lower()
     target_mode = ProtocolMode.ACTIVE_UDP if req_mode == "udp" else ProtocolMode.IDLE_HTTP
     verified = await engine.set_protocol_mode(target_mode)

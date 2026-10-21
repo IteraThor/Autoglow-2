@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/theme.css?v=147.0">
-  <link rel="stylesheet" href="/css/layout.css?v=148.0">
-  <link rel="stylesheet" href="/css/components.css?v=149.0">
-  <link rel="stylesheet" href="/css/tabs.css?v=169.0">
-  <link rel="stylesheet" href="/css/flow_planner.css?v=6.6">
-  <link rel="stylesheet" href="/css/hub.css?v=1.0">
+  <link rel="stylesheet" href="/css/theme.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/layout.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/components.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p2">
+  <link rel="stylesheet" href="/css/hub.css?v=2.2-p2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -417,7 +418,7 @@
                       Enter this code at <a id="deviceLinkUrlDirect" href="https://auth.autodarts.com/link" target="_blank" style="color: var(--accent-primary); text-decoration: none; font-weight: 600;">auth.autodarts.com/link ↗</a>:
                     </div>
                     
-                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.35); border: 1px solid rgba(0,242,254,0.35); border-radius: 4px; padding: 8px 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.35); border: 1px solid rgba(var(--accent-rgb), 0.35); border-radius: 4px; padding: 8px 12px;">
                       <span id="deviceLinkCodeDisplay" style="font-family: var(--font-mono); font-size: 20px; font-weight: 800; letter-spacing: 3px; color: var(--accent-primary);">----</span>
                       <button class="btn-ide" onclick="copyDeviceLinkCode()" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;" title="Copy Code to Clipboard">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -567,7 +568,7 @@
               </div>
 
               <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
-                <label id="matrixLivePreviewContainer" style="display: none; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 11.5px; font-family: var(--font-mono); color: var(--accent-primary); background: var(--bg-surface); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 242, 254, 0.35);" title="Live Preview Mode&#10;When enabled, dragging color pickers or changing animation effects immediately streams live to your physical LEDs via UDP in real-time (no need to click Test).">
+                <label id="matrixLivePreviewContainer" style="display: none; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 11.5px; font-family: var(--font-mono); color: var(--accent-primary); background: var(--bg-surface); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.35);" title="Live Preview Mode&#10;When enabled, dragging color pickers or changing animation effects immediately streams live to your physical LEDs via UDP in real-time (no need to click Test).">
                   <span style="font-weight: 600; display: flex; align-items: center; gap: 4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Live Preview</span></span>
                   <label class="switch" style="transform: scale(0.75); margin: 0;" title="Toggle Live Preview on / off">
                     <input type="checkbox" id="matrixLivePreviewSwitch" onchange="toggleMatrixLivePreview()">
@@ -709,7 +710,7 @@
                       <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">min</span>
                     </div>
                     <button class="btn-ide" id="btnTestAutoOff" onclick="testPowerOff()" style="height: 26px; font-size: 10.5px; padding: 0 10px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--status-danger); border-color: rgba(239, 68, 68, 0.35);" title="Simulate auto-off (powers off lights)">Test</button>
-                    <button class="btn-ide" id="btnRevertPowerOff" onclick="testWakeBoard()" style="width: 26px; height: 26px; padding: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-primary); border-color: rgba(0, 242, 254, 0.35); border-radius: var(--radius-sm);" title="Revert / Turn lights back on">
+                    <button class="btn-ide" id="btnRevertPowerOff" onclick="testWakeBoard()" style="width: 26px; height: 26px; padding: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.35); border-radius: var(--radius-sm);" title="Revert / Turn lights back on">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                         <path d="M3 3v5h5"/>
@@ -772,7 +773,7 @@
                 <input type="file" id="zipUpdateFileInput" accept=".zip,application/zip" style="display: none;" onchange="handleZipFileSelected(this)">
 
                 <!-- Compact Drop Zone / Upload Area -->
-                <div id="zipDropZone" onclick="triggerZipSelect()" ondragover="handleZipDragOver(event)" ondragleave="handleZipDragLeave(event)" ondrop="handleZipDrop(event)" style="border: 1px dashed rgba(0, 240, 255, 0.35); border-radius: var(--radius-sm); padding: 10px 14px; cursor: pointer; transition: all 0.2s ease; background: rgba(0, 240, 255, 0.02); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div id="zipDropZone" onclick="triggerZipSelect()" ondragover="handleZipDragOver(event)" ondragleave="handleZipDragLeave(event)" ondrop="handleZipDrop(event)" style="border: 1px dashed rgba(var(--accent-rgb), 0.35); border-radius: var(--radius-sm); padding: 10px 14px; cursor: pointer; transition: all 0.2s ease; background: rgba(var(--accent-rgb), 0.02); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     <span style="font-size: 11.5px; color: var(--text-secondary);">Select or drop update package (.zip)</span>
@@ -781,10 +782,10 @@
                 </div>
 
                 <!-- Selected File Card (hidden until file chosen) -->
-                <div id="selectedZipCard" style="display: none; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 240, 255, 0.35);">
+                <div id="selectedZipCard" style="display: none; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.35);">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                      <div style="width: 26px; height: 26px; border-radius: 4px; background: rgba(0, 240, 255, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                      <div style="width: 26px; height: 26px; border-radius: 4px; background: rgba(var(--accent-rgb), 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
                       </div>
                       <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -1129,13 +1130,13 @@
                     <span>Auto Play</span>
                   </button>
 
-                  <button class="btn-ide" id="btnAutoPlayNext" onclick="autoPlayNextPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(0,240,255,0.3);" title="Play next turn in player loop">
+                  <button class="btn-ide" id="btnAutoPlayNext" onclick="autoPlayNextPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(var(--accent-rgb), 0.3);" title="Play next turn in player loop">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:-2px"><line x1="13" y1="5" x2="13" y2="19"/><line x1="20" y1="5" x2="20" y2="19"/></svg>
                     <span>Play Next</span>
                   </button>
 
-                  <button class="btn-ide" id="btnPlayNextStep" onclick="playNextStepPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(0,240,255,0.3);" title="Advance to the next phase (exits turn loop to Leg Won)">
+                  <button class="btn-ide" id="btnPlayNextStep" onclick="playNextStepPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(var(--accent-rgb), 0.3);" title="Advance to the next phase (exits turn loop to Leg Won)">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
                     <span>Next Step</span>
                   </button>
@@ -1291,22 +1292,20 @@
     </div>
   </div>
 
-  <!-- Global Toast Notification Hub -->
-  <div id="toast-container"></div>
-
-  <!-- Modular Application Architecture -->
-  <script src="/js/auth.js?v=1.0"></script>
-  <script src="/js/state.js?v=163.0"></script>
-  <script src="/js/utils.js?v=156.0"></script>
-  <script src="/js/devices.js?v=155.0"></script>
-  <script src="/js/autodarts.js?v=156.0"></script>
-  <script src="/js/matrix.js?v=168.0"></script>
-  <script src="/js/power.js?v=155.0"></script>
-  <script src="/js/simulator.js?v=189.0"></script>
-  <script src="/js/flow_planner.js?v=6.6"></script>
-  <script src="/js/system.js?v=155.0"></script>
-  <script src="/js/hub.js?v=1.1"></script>
-  <script src="/app.js?v=159.0"></script>
+  <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
+  <script type="module" src="/js/core/index.js?v=2.2-p2"></script>
+  <script defer src="/js/auth.js?v=2.2-p2"></script>
+  <script defer src="/js/state.js?v=2.2-p2"></script>
+  <script defer src="/js/utils.js?v=2.2-p2"></script>
+  <script defer src="/js/devices.js?v=2.2-p2"></script>
+  <script defer src="/js/autodarts.js?v=2.2-p2"></script>
+  <script defer src="/js/matrix.js?v=2.2-p2"></script>
+  <script defer src="/js/power.js?v=2.2-p2"></script>
+  <script defer src="/js/simulator.js?v=2.2-p2"></script>
+  <script defer src="/js/flow_planner.js?v=2.2-p2"></script>
+  <script defer src="/js/system.js?v=2.2-p2"></script>
+  <script defer src="/js/hub.js?v=2.2-p2"></script>
+  <script defer src="/app.js?v=2.2-p2"></script>
 
 </body>
 </html>

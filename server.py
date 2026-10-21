@@ -5,6 +5,7 @@ Modularized modern web server with mDNS discovery, REST API, and WebSocket strea
 
 import os
 import sys
+import secrets
 import socket
 import asyncio
 import logging
@@ -20,6 +21,7 @@ from core.autodarts_bridge import AutodartsBridgeClient, CLOUD_API_ON_HOLD, ensu
 from routes import register_routes
 from routes.telemetry_routes import broadcast_telemetry
 from core.security import security_middleware
+from core.errors import AppError, error_body
 
 try:
     from zeroconf import Zeroconf, ServiceInfo
@@ -252,15 +254,37 @@ async def on_cleanup(app: web.Application):
 
 @web.middleware
 async def global_error_middleware(request: web.Request, handler):
-    """Catch and log any unhandled exceptions across all HTTP endpoints."""
+    """Turn every API failure into the standard error body (core/errors.py) and never leak exception text."""
+    is_api = request.path.startswith("/api/")
+
+    def as_api_error(resp: web.StreamResponse) -> Optional[web.Response]:
+        # Unknown /api paths and wrong methods answer in JSON like every other API error
+        if not is_api or resp.status < 400 or resp.content_type == "application/json":
+            return None
+        code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(resp.status, "HTTP_ERROR")
+        return web.json_response(error_body(code, resp.reason), status=resp.status)
+
+    # An /api path that only the static file route matched is an unknown endpoint, not a file
+    route = request.match_info.route
+    if is_api and isinstance(getattr(route, "resource", None), web.StaticResource):
+        return web.json_response(error_body("NOT_FOUND", "Unknown API endpoint"), status=404)
+
     try:
-        return await handler(request)
-    except web.HTTPException:
+        resp = await handler(request)
+        return as_api_error(resp) or resp
+    except AppError:
         raise
-    except Exception as ex:
-        logger.exception(f"Unhandled exception processing {request.method} {request.path}")
+    except web.HTTPException as ex:
+        converted = as_api_error(ex)
+        if converted:
+            return converted
+        raise
+    except Exception:
+        request_id = secrets.token_hex(4)
+        logger.exception(f"Unhandled exception [{request_id}] processing {request.method} {request.path}")
         return web.json_response(
-            {"status": "error", "message": f"Internal server error: {str(ex)}"},
+            error_body("INTERNAL", f"Internal server error (ref {request_id}). Details are in autoglow.log.",
+                       details={"request_id": request_id}),
             status=500
         )
 

@@ -72,14 +72,14 @@ html {
 }
 
 body {
-  zoom: 1.35;
   background-color: var(--bg-workspace);
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
-  height: calc(100vh / 1.35);
-  max-height: calc(100vh / 1.35);
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   margin: 0;
   padding: 0;
   display: flex;
