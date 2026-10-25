@@ -88,6 +88,20 @@ if [ ! -d /etc/systemd/system ] || ! command -v systemctl >/dev/null 2>&1; then
     exit 0
 fi
 
+# Fedora/RHEL: SELinux stops systemd from executing binaries labeled as home
+# files (user_home_t), which fails with status=203/EXEC. Label the venv's
+# executables as normal binaries so the service can start.
+if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
+    echo "--> SELinux detected, labeling the virtual environment for systemd..."
+    if command -v semanage >/dev/null 2>&1; then
+        semanage fcontext -a -t bin_t "$PROJECT_DIR/venv/bin(/.*)?" 2>/dev/null \
+            || semanage fcontext -m -t bin_t "$PROJECT_DIR/venv/bin(/.*)?" 2>/dev/null || true
+        restorecon -R "$PROJECT_DIR/venv/bin" || true
+    else
+        chcon -R -t bin_t "$PROJECT_DIR/venv/bin" || true
+    fi
+fi
+
 echo "--> Creating systemd service file..."
 
 # Write unified AutoGlow 2 service configuration
