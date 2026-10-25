@@ -46,3 +46,11 @@ docs/superpowers/
 
 # Local copies of old releases kept for reference
 old autoglow version/
+
+# Development files: kept locally, not published (the repository holds only what runs the app)
+/tests/
+/.github/
+/docs/
+/dev.py
+/requirements-dev.txt
+/pyproject.toml
