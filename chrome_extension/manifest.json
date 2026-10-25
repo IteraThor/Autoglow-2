@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AutoGlow Bridge for Autodarts",
   "short_name": "AutoGlow Bridge",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Sends your live Autodarts game events from play.autodarts.com to AutoGlow 2 so your WLED board lighting follows the game.",
   "minimum_chrome_version": "116",
   "permissions": ["alarms"],

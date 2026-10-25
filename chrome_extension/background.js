@@ -2,9 +2,10 @@
 // Keeps a WebSocket open to the local AutoGlow server and relays game data from one
 // play.autodarts.com tab (the oldest open one, so two tabs never double-fire events).
 
+// 127.0.0.1, not "localhost": localhost can resolve to IPv6 ::1 first.
 // AutoGlow only accepts the extension from Chrome on the same computer, on its default port
-const SERVER_URL = 'http://localhost:8080';
-const BRIDGE_URL = 'ws://localhost:8080/ws/autodarts-bridge';
+const SERVER_URL = 'http://127.0.0.1:8080';
+const BRIDGE_URL = 'ws://127.0.0.1:8080/ws/autodarts-bridge';
 const PING_MS = 20000;
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;

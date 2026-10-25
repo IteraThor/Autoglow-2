@@ -314,8 +314,12 @@ async def run_server() -> bool:
     app = create_app()
     runner = web.AppRunner(app, access_log=logger)
     await runner.setup()
-    site = web.TCPSite(runner, host="0.0.0.0", port=PORT)
-    await site.start()
+    await web.TCPSite(runner, host="0.0.0.0", port=PORT).start()
+    # "localhost" resolves to ::1 first on many systems, so also listen on IPv6 where it exists
+    try:
+        await web.TCPSite(runner, host="::", port=PORT).start()
+    except OSError as e:
+        logger.info(f"IPv6 listener not available ({e}); serving on IPv4 only")
     logger.info(f"AutoGlow 2 Web Server running at http://localhost:{PORT}")
     try:
         await app["restart_event"].wait()
