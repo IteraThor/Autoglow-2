@@ -1,7 +1,7 @@
 """
 AutoGlow 2 - Operational Hub Routes Module
-Handlers for /api/hub/status (engine, Autodarts and controller health) and /api/status
-(the cheap header snapshot polled by every page; it never contacts the controllers).
+Handlers for /api/hub/status (engine, Autodarts and controller health), /api/status (the cheap
+header snapshot polled by every page; it never contacts the controllers) and /api/setup/checklist.
 """
 
 import asyncio
@@ -10,7 +10,7 @@ import logging
 from aiohttp import web
 from typing import Any, Dict, Optional
 
-from core.models import ProtocolMode
+from core.models import AppConfig, LightingMode, ProtocolMode
 from core.autodarts_bridge import AutodartsBridgeClient
 from core.version import __version__
 from core.wled_driver import WLEDDriver
@@ -84,11 +84,15 @@ async def _device_snapshot(dev, engine) -> Dict[str, Any]:
         return out
     if streaming:
         # Protocol exclusivity (ADR-001): no HTTP polling while the UDP stream owns the controller
-        out.update({"online": None, "streaming": True, "warnings": []})
+        out.update({"online": None, "streaming": True, "warnings": [],
+                    "playing": "effects" if drv.is_playing_effects else "idle"})
         return out
     loop = asyncio.get_running_loop()
     health = await loop.run_in_executor(None, WLEDDriver.fetch_device_health, dev.ip)
     out.update(health)
+    if health.get("online"):
+        # Without the stream the controller runs its own idle preset
+        out["playing"] = "off" if health.get("on") is False else "idle"
     return out
 
 
@@ -119,3 +123,31 @@ async def handle_status(request: web.Request) -> web.Response:
         "flow_phase": eng.get("flow_phase"),
         "autodarts": _autodarts_snapshot(engine),
     })
+
+
+def _lighting_configured(cfg: AppConfig) -> bool:
+    """Flow Matrix ships with working default phases; the Event Matrix needs an enabled effect on a controller."""
+    if cfg.lighting_mode == LightingMode.FLOW:
+        return True
+    for ip in {d.ip for d in cfg.devices if d.ip}:
+        # Each controller counts with the effects of the profile it uses
+        segments = (cfg.profile_for(ip).device_events or {}).get(ip)
+        if not isinstance(segments, dict):
+            continue
+        for effects in segments.values():
+            if isinstance(effects, dict) and any(getattr(e, "enabled", False) for e in effects.values()):
+                return True
+    return False
+
+
+async def handle_setup_checklist(request: web.Request) -> web.Response:
+    """First-run steps, worked out from the saved config and live state (nothing extra is stored)."""
+    engine = request.app.get("engine")
+    cfg = request.app.get("current_app_config") or load_app_config(request.app.get("config_path", "config.json"))
+    client = getattr(engine, "autodarts", None) if engine else None
+    steps = [
+        {"id": "controller", "done": any(d.ip for d in cfg.devices)},
+        {"id": "autodarts", "done": bool(client and client.is_connected)},
+        {"id": "lighting", "done": _lighting_configured(cfg)},
+    ]
+    return web.json_response({"status": "ok", "steps": steps, "complete": all(s["done"] for s in steps)})

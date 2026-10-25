@@ -102,23 +102,10 @@ async function refreshPinSettings() {
   renderPinSettings();
 }
 
+// Sends the PIN fields of the Settings page. remove=true clears the PIN. Resolves true on success.
 async function savePinSettings(remove = false) {
   const current = (document.getElementById('pinCurrentInput') || {}).value || '';
   const next = remove ? '' : ((document.getElementById('pinNewInput') || {}).value || '').trim();
-  const confirmVal = remove ? '' : ((document.getElementById('pinConfirmInput') || {}).value || '').trim();
-
-  if (!remove) {
-    if (!next) { showToast('Enter a new PIN.', 'error'); return; }
-    if (next !== confirmVal) { showToast('PIN confirmation does not match.', 'error'); return; }
-  } else if (!await window.confirmDialog({
-    title: 'Remove the access PIN?',
-    body: 'Anyone on your network will be able to control AutoGlow.',
-    confirmLabel: 'Remove PIN',
-    danger: true
-  })) {
-    return;
-  }
-
   try {
     const res = await fetch('/api/auth/pin', {
       method: 'POST',
@@ -128,21 +115,18 @@ async function savePinSettings(remove = false) {
     const data = await res.json();
     if (data.status === 'ok') {
       authState.pinEnabled = !!data.pin_enabled;
-      ['pinCurrentInput', 'pinNewInput', 'pinConfirmInput'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      showToast(data.pin_enabled ? 'Access PIN saved. Other browsers must sign in.' : 'Access PIN removed.', 'success');
       renderPinSettings();
-    } else {
-      showToast(data.message || 'Could not update PIN.', 'error');
+      return true;
     }
+    showToast(data.message || 'Could not update PIN.', 'error');
   } catch (err) {
     showToast(`Network error: ${err.message || err}`, 'error');
   }
+  return false;
 }
 
 window.ensureAuthenticated = ensureAuthenticated;
 window.submitPinLogin = submitPinLogin;
 window.refreshPinSettings = refreshPinSettings;
 window.savePinSettings = savePinSettings;
+window.isPinEnabled = () => !!authState.pinEnabled;

@@ -20,7 +20,6 @@ export const VIEWS = [
       { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator', mode: 'flow' }
     ]
   },
-  { id: 'power', label: 'Power', path: '/power', pane: 'tab-power' },
   { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
 ];
 
@@ -30,7 +29,7 @@ const ALIASES = {
   '/autodarts': '/setup/connection', '/autodarts-account': '/setup/connection',
   '/matrix': '/lighting/matrix', '/event-matrix': '/lighting/matrix',
   '/simulator': '/lighting/flow', '/led-simulator': '/lighting/flow',
-  '/power-timers': '/power', '/idle': '/power', '/idle-mode': '/power',
+  '/power': '/settings', '/power-timers': '/settings', '/idle': '/settings', '/idle-mode': '/settings',
   '/updates': '/settings', '/updates-backups': '/settings', '/backups': '/settings'
 };
 
@@ -49,7 +48,8 @@ export function resolve(rawPath) {
   const [, viewId, subId] = path.split('/');
   const view = VIEWS.find(v => v.id === viewId) || VIEWS[0];
   if (!view.subs) return { view, sub: null, pane: view.pane, path: view.path };
-  const sub = view.subs.find(s => s.id === subId) || defaultSub(view);
+  // Lighting always shows the engine selected in Settings
+  const sub = view.id === 'lighting' ? defaultSub(view) : view.subs.find(s => s.id === subId) || defaultSub(view);
   return { view, sub, pane: sub.pane, path: `${view.path}/${sub.id}` };
 }
 
@@ -62,8 +62,10 @@ function pathForPane(paneId) {
   return '/hub';
 }
 
-export function navigate(path, { replace = false } = {}) {
-  const route = resolve(path);
+// A page can veto leaving it: guard(fromRoute, toRoute) returns true to allow, or a promise of true/false
+let leaveGuard = null;
+
+function enter(route, replace) {
   if (route.path !== location.pathname) {
     history[replace ? 'replaceState' : 'pushState']({ path: route.path }, '', route.path);
   }
@@ -73,12 +75,30 @@ export function navigate(path, { replace = false } = {}) {
   return route;
 }
 
+export function navigate(path, { replace = false, fromHistory = false } = {}) {
+  const route = resolve(path);
+  const current = appStore.get().route;
+  if (leaveGuard && current && current.pane !== route.pane) {
+    const verdict = leaveGuard(current, route);
+    if (verdict !== true) {
+      Promise.resolve(verdict).then(ok => {
+        if (ok) enter(route, replace);
+        // Back/Forward already changed the URL; put it back
+        else if (fromHistory) history.pushState({ path: current.path }, '', current.path);
+      });
+      return current;
+    }
+  }
+  return enter(route, replace);
+}
+
 export const router = {
   navigate,
   resolve,
   showPane: paneId => navigate(pathForPane(paneId)),
+  setLeaveGuard(fn) { leaveGuard = fn; },
   start() {
-    window.addEventListener('popstate', () => navigate(location.pathname, { replace: true }));
+    window.addEventListener('popstate', () => navigate(location.pathname, { replace: true, fromHistory: true }));
     // Links with data-link navigate without a page load
     document.addEventListener('click', event => {
       const link = event.target.closest('a[data-link]');

@@ -168,6 +168,14 @@ class AutodartsClient:
 
         return True
 
+    def any_board_online(self) -> bool:
+        """True unless boards are known and every one of them is offline."""
+        ids = {str(i) for i in self.board_states} | {str(b.get("id", "")) for b in self._boards_cache}
+        ids.discard("")
+        if not ids:
+            return True
+        return any(self.is_board_online(i) for i in ids)
+
     async def fetch_match_details(self, match_id: str) -> Dict[str, Any]:
         """Fetch real-time match details including player names from Autodarts API."""
         token = await self._get_valid_token()

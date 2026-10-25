@@ -16,8 +16,8 @@ let activeEditingDeviceIp = null;
 let inlineEditingDevices = {};
 
 const WLED_OUTPUT_TYPES = [
-  { value: 22, label: "WS281x" },
-  { value: 41, label: "PWM White" }
+  { value: 22, label: "RGB strip (WS281x)" },
+  { value: 41, label: "Light strip (PWM)" }
 ];
 
 const WLED_COLOR_ORDERS = [
@@ -34,8 +34,32 @@ function getEditingControllerIp() {
   return activeEditingDeviceIp;
 }
 
-// --- Controller editor (outputs & segments), shown in the side drawer of Setup › Controllers ---
+// --- Controller drawer of Setup › Controllers ---
+// Two tabs: outputs & segments (rendered here) and idle lighting (web/js/power.js).
 // The controller list itself is web/js/features/controllers.js; renderDevicesTab() re-renders both.
+let activeDrawerTab = 'layout';
+
+function setControllerDrawerTab(tab) {
+  activeDrawerTab = tab === 'idle' ? 'idle' : 'layout';
+  syncDrawerTabs();
+}
+
+function syncDrawerTabs() {
+  const ip = activeEditingDeviceIp;
+  document.querySelectorAll('#controllerDrawer [data-drawer-tab]').forEach(btn => {
+    btn.setAttribute('aria-selected', String(btn.dataset.drawerTab === activeDrawerTab));
+  });
+  const layoutPanel = document.getElementById('controllerDrawerBody');
+  const idlePanel = document.getElementById('controllerIdlePanel');
+  if (layoutPanel) layoutPanel.hidden = activeDrawerTab !== 'layout';
+  if (idlePanel) idlePanel.hidden = activeDrawerTab !== 'idle';
+  // Load the idle lighting the first time its tab is shown for this controller
+  if (ip && activeDrawerTab === 'idle' && idlePresetState.ip !== ip) {
+    resetIdleLighting();
+    loadIdlePresetForSelectedDevice(ip);
+  }
+}
+
 function renderControllerEditor() {
   const drawer = document.getElementById('controllerDrawer');
   const body = document.getElementById('controllerDrawerBody');
@@ -43,11 +67,14 @@ function renderControllerEditor() {
   const dev = (Array.isArray(appState.devices) ? appState.devices : []).find(d => d.ip === activeEditingDeviceIp);
   if (!dev) {
     activeEditingDeviceIp = null;
+    activeDrawerTab = 'layout';
     drawer.hidden = true;
     body.replaceChildren();
+    if (idlePresetState.ip) resetIdleLighting();
     return;
   }
   drawer.hidden = false;
+  syncDrawerTabs();
 
   const safeIp = (dev.ip || '').replace(/[^a-zA-Z0-9]/g, '_');
   const ipEscaped = escapeJsString(dev.ip);
@@ -105,8 +132,8 @@ function renderControllerEditor() {
               <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
             </div>
             <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
-              <div style="display: inline-flex; align-items: center; gap: 3px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 3px; padding: 1px 6px; font-family: var(--font-mono); font-size: 10px; color: #f59e0b; font-weight: 600;" title="PWM White is fixed to 1 LED (${s.start}–${s.stop})">
-                <span>LED ${s.start}–${s.stop} (Auto)</span>
+              <div style="display: inline-flex; align-items: center; gap: 3px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.22); border-radius: 3px; padding: 1px 6px; font-family: var(--font-mono); font-size: 10px; color: #f59e0b; font-weight: 600;" title="A regular light strip on one channel. WLED counts it as LED ${s.start} after the RGB strip.">
+                <span>Light strip (auto)</span>
               </div>
               <button class="btn-ide" onclick="removeInlineSegment('${ipEscaped}', ${globalIdx}, this)" style="color: var(--status-danger); border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.06); font-size: 11px; font-weight: 700; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 3px; cursor: pointer;" title="Remove segment">✕</button>
             </div>
@@ -123,9 +150,9 @@ function renderControllerEditor() {
             <input type="text" style="font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; padding: 1px 5px; height: 20px; width: 100px; flex: 1; max-width: 140px;" value="${segNameEscaped}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'name', this.value, this)" placeholder="Segment Name">
           </div>
           <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px; flex-shrink: 0;">
-            <div style="display: flex; align-items: center; gap: 2px;">
-              <span style="color: var(--text-muted); font-size: 10px;">LED</span>
-              <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.start || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'start', parseInt(this.value, 10) || 0)">
+            <div style="display: flex; align-items: center; gap: 2px;" title="LEDs are counted from 1 and both ends are included">
+              <span style="color: var(--text-muted); font-size: 10px;">LEDs</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${(s.start || 0) + 1}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'start', Math.max(0, (parseInt(this.value, 10) || 1) - 1))">
               <span style="color: var(--text-muted); font-size: 10px;">–</span>
               <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 32px; height: 18px; font-size: 10.5px; font-family: var(--font-mono); background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 2px; color: var(--text-primary); padding: 0 2px; text-align: center;" value="${s.stop || 0}" oninput="updateInlineSegmentField('${ipEscaped}', ${globalIdx}, 'stop', parseInt(this.value, 10) || 0)">
               <span id="inline-seg-len-${safeIp}-${globalIdx}" style="color: var(--text-muted); font-size: 10px; margin-left: 2px;">(${len})</span>
@@ -142,8 +169,8 @@ function renderControllerEditor() {
       : '';
 
     const lengthControl = isPwm
-      ? `<div style="display: inline-flex; align-items: center; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 3px; padding: 1px 6px; gap: 3px;" title="PWM White channel is fixed to 1 LED">
-          <span style="color: #f59e0b; font-size: 10px; font-weight: 600; font-family: var(--font-mono);">1 LED (Auto)</span>
+      ? `<div style="display: inline-flex; align-items: center; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 3px; padding: 1px 6px; gap: 3px;" title="A light strip output is one channel: on/off and dimming">
+          <span style="color: #f59e0b; font-size: 10px; font-weight: 600; font-family: var(--font-mono);">1 channel</span>
         </div>`
       : `<div style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: 3px; padding: 1px 5px; gap: 4px;" title="Hardware output total strip length (LEDs)">
           <span style="color: var(--text-muted); font-size: 10px; font-family: var(--font-mono);">Length:</span>
@@ -164,8 +191,8 @@ function renderControllerEditor() {
               <input type="text" inputmode="numeric" pattern="[0-9]*" style="width: 24px; height: 16px; font-size: 10.5px; font-weight: 700; color: inherit; background: rgba(0,0,0,0.25); border: none; border-radius: 2px; outline: none; font-family: var(--font-mono); text-align: center; padding: 0;" value="${pinVal}" oninput="updateInlineHwField('${ipEscaped}', ${busIdx}, 'pin', parseInt(this.value, 10) || 0)">
             </div>
             <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 500; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'type', parseInt(this.value, 10))">
-              <option value="22" ${h.type === 22 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">WS281x</option>
-              <option value="41" ${h.type === 41 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">PWM White</option>
+              <option value="22" ${h.type === 22 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">RGB strip (WS281x)</option>
+              <option value="41" ${h.type === 41 ? 'selected' : ''} style="background-color: #1a1b20; color: #f4f4f5;">Light strip (PWM)</option>
             </select>
             ${!isPwm ? `
               <select class="form-control" style="width: auto; height: 22px; padding: 0 6px; font-size: 10.5px; font-weight: 600; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border-subtle); color-scheme: dark;" onchange="updateInlineHwField('${ipEscaped}', ${busIdx}, 'order', parseInt(this.value, 10))" title="Color Order">
@@ -458,7 +485,7 @@ function recalculateHwAndSegmentOffsets(ip) {
       newSegList.push({
         busIdx: bIdx,
         id: 0,
-        name: existing?.name || `PWM White (GPIO ${pinVal})`,
+        name: existing?.name || `Light strip (GPIO ${pinVal})`,
         start: newBusStart,
         stop: newBusEnd,
         on: existing?.on !== undefined ? existing.on : true,
@@ -471,7 +498,7 @@ function recalculateHwAndSegmentOffsets(ip) {
         newSegList.push({
           busIdx: bIdx,
           id: 0,
-          name: `WS281x Strip (GPIO ${pinVal})`,
+          name: `RGB strip (GPIO ${pinVal})`,
           start: newBusStart,
           stop: newBusEnd,
           on: true,
@@ -534,7 +561,7 @@ function updateInlineHwField(ip, busIdx, field, val) {
       if (typeNum === 41) {
         inlineEditingDevices[ip].hw_ins[busIdx].len = 1;
         if (busSegs.length > 0) {
-          busSegs[0].name = `PWM White (GPIO ${pinVal})`;
+          busSegs[0].name = `Light strip (GPIO ${pinVal})`;
         }
       } else {
         if (!inlineEditingDevices[ip].hw_ins[busIdx].len || inlineEditingDevices[ip].hw_ins[busIdx].len <= 1) {
@@ -542,8 +569,8 @@ function updateInlineHwField(ip, busIdx, field, val) {
         }
         if (busSegs.length > 0) {
           busSegs.forEach(s => {
-            if (String(s.name || '').toLowerCase().includes('pwm')) {
-              s.name = `WS281x Strip (GPIO ${pinVal})`;
+            if (/pwm|light strip/.test(String(s.name || '').toLowerCase())) {
+              s.name = `RGB strip (GPIO ${pinVal})`;
             }
           });
         }
@@ -618,7 +645,7 @@ function addInlineSegmentToBus(ip, busIdx) {
   if (!hw) return;
   const isPwm = (parseInt(hw.type, 10) === 41 || String(hw.type).toLowerCase().includes('pwm'));
   if (isPwm) {
-    showToast('PWM White is a single 1-LED channel (1 segment max).', 'warning');
+    showToast('A light strip is a single channel, so it has one segment.', 'warning');
     return;
   }
   const busStart = parseInt(hw.start, 10) || 0;
@@ -879,45 +906,10 @@ async function saveInlineEdit(ip) {
 }
 
 
-async function scanSerialPorts() {
-  showToast('Scanning USB COM ports for ESP32...', 'info');
-  const placeholder = document.getElementById('scanStatusPlaceholder');
-  const list = document.getElementById('scanResultsList');
-  if (placeholder) placeholder.style.display = 'none';
-  if (list) {
-    list.style.display = 'flex';
-    list.innerHTML = '<div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">Querying local serial interfaces...</div>';
-  }
-
-  try {
-    const res = await fetch('/api/scan/serial');
-    const data = await res.json();
-    if (data.status === 'ok' && data.ports && data.ports.length > 0) {
-      list.innerHTML = '';
-      data.ports.forEach(p => {
-        const item = document.createElement('div');
-        item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border-subtle);';
-        item.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="dot dot-green" style="width: 6px; height: 6px;"></span>
-            <strong style="color: var(--text-primary); font-family: var(--font-mono); font-size: 12.5px;">${p.device || p.port}</strong>
-            <span style="color: var(--text-muted); font-size: 11px;">(${p.description || 'USB Serial'})</span>
-          </div>
-          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-primary); font-weight: 600;">CONNECTED</span>
-        `;
-        list.appendChild(item);
-      });
-    } else {
-      list.innerHTML = '<div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">No USB serial microcontrollers detected.</div>';
-    }
-  } catch (err) {
-    list.innerHTML = `<div style="color: var(--status-danger); font-family: var(--font-mono); font-size: 11.5px;">Serial scan error: ${err}</div>`;
-  }
-}
-
 if (typeof window !== "undefined") {
   window.renderControllerEditor = renderControllerEditor;
   window.getEditingControllerIp = getEditingControllerIp;
+  window.setControllerDrawerTab = setControllerDrawerTab;
   window.updateInlineDeviceName = updateInlineDeviceName;
   window.startInlineDeviceEdit = startInlineDeviceEdit;
   window.cancelInlineEdit = cancelInlineEdit;
@@ -927,7 +919,6 @@ if (typeof window !== "undefined") {
   window.addInlineSegmentToBus = addInlineSegmentToBus;
   window.updateInlineSegmentField = updateInlineSegmentField;
   window.removeInlineSegment = removeInlineSegment;
-  window.scanSerialPorts = scanSerialPorts;
 }
 
 

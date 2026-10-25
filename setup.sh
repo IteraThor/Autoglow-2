@@ -36,15 +36,16 @@ else
     exit 1
 fi
 
-# Assign USB permissions (dialout group)
-echo "--> Granting USB permissions to user $ORIGINAL_USER..."
-usermod -a -G dialout "$ORIGINAL_USER"
-
 # Dynamically determine the project path
 PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 if [ ! -f "$PROJECT_DIR/server.py" ]; then
     echo "❌ ERROR: server.py not found in $PROJECT_DIR."
+    exit 1
+fi
+
+if ! python3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"; then
+    echo "❌ ERROR: AutoGlow needs Python 3.10 or newer (found $(python3 --version 2>&1))."
     exit 1
 fi
 
@@ -61,11 +62,31 @@ echo "--> Installing the AutoGlow Bridge Chrome extension (Chrome/Chromium polic
 # The signing key is created once per installation; its ID ties the policy to the CRX AutoGlow serves
 EXT_ID=$(cd "$PROJECT_DIR" && sudo -u "$ORIGINAL_USER" "$PROJECT_DIR/venv/bin/python3" -m core.extension_packager id)
 EXT_POLICY="{\"ExtensionInstallForcelist\": [\"$EXT_ID;http://localhost:8080/extension/update.xml\"]}"
-for POLICY_DIR in /etc/opt/chrome/policies/managed /etc/chromium/policies/managed; do
+# Google Chrome and Chromium always; Ubuntu's Chromium (snap), Brave and Edge when installed
+POLICY_DIRS="/etc/opt/chrome/policies/managed /etc/chromium/policies/managed"
+if command -v chromium-browser >/dev/null 2>&1 || [ -d /snap/chromium ]; then
+    POLICY_DIRS="$POLICY_DIRS /etc/chromium-browser/policies/managed"
+fi
+if command -v brave-browser >/dev/null 2>&1 || command -v brave >/dev/null 2>&1; then
+    POLICY_DIRS="$POLICY_DIRS /etc/brave/policies/managed"
+fi
+if command -v microsoft-edge >/dev/null 2>&1 || command -v microsoft-edge-stable >/dev/null 2>&1; then
+    POLICY_DIRS="$POLICY_DIRS /etc/opt/edge/policies/managed"
+fi
+for POLICY_DIR in $POLICY_DIRS; do
     mkdir -p "$POLICY_DIR"
     echo "$EXT_POLICY" > "$POLICY_DIR/autoglow.json"
     chmod 644 "$POLICY_DIR/autoglow.json"
+    echo "    $POLICY_DIR/autoglow.json"
 done
+
+if [ ! -d /etc/systemd/system ] || ! command -v systemctl >/dev/null 2>&1; then
+    echo ""
+    echo "⚠️ systemd was not found, so AutoGlow was installed but not set up as a service."
+    echo "Start it manually with:"
+    echo "   $PROJECT_DIR/venv/bin/python3 $PROJECT_DIR/server.py"
+    exit 0
+fi
 
 echo "--> Creating systemd service file..."
 
@@ -99,7 +120,6 @@ echo "AutoGlow 2 is running as a systemd service: autoglow.service"
 echo "Open http://localhost:8080 or http://autoglow.local:8080 in your browser to configure."
 echo ""
 echo "The AutoGlow Bridge extension ($EXT_ID) installs itself in Chrome/Chromium"
-echo "(restart the browser if it is open). Then play on https://play.autodarts.com -"
-echo "the extension icon shows ON when AutoGlow receives the game."
-echo "NOTE: If USB access fails, please log out and back in or run 'newgrp dialout'."
+echo "on this computer (restart the browser if it is open). Then play on"
+echo "https://play.autodarts.com - the extension icon shows ON when AutoGlow receives the game."
 

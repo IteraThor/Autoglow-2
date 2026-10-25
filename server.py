@@ -17,7 +17,7 @@ from core.models import AppConfig, DeviceConfig
 from core.storage import load_app_config, save_app_config, resolve_config_path
 from core.engine import AutoGlowEngine
 from core.autodarts_client import AutodartsClient
-from core.autodarts_bridge import AutodartsBridgeClient, CLOUD_API_ON_HOLD, ensure_bridge_key
+from core.autodarts_bridge import AutodartsBridgeClient, CLOUD_API_ON_HOLD
 from routes import register_routes
 from routes.telemetry_routes import broadcast_telemetry
 from core.security import security_middleware
@@ -193,7 +193,8 @@ async def on_startup(app: web.Application):
 
     if CLOUD_API_ON_HOLD:
         # Game data comes from the AutoGlow Chrome extension; stored cloud credentials are kept but unused
-        if ensure_bridge_key(cfg):
+        # Earlier builds stored a pairing key for extensions on other computers; the bridge is local-only now
+        if cfg.extra.pop("autodarts_bridge_key", None):
             save_app_config(cfg, CONFIG_PATH)
         autodarts_client = AutodartsBridgeClient(board_id=board_id)
         logger.info("Autodarts source: Chrome extension bridge (direct cloud login on hold)")
@@ -296,7 +297,7 @@ def create_app() -> web.Application:
         middlewares=[global_error_middleware, security_middleware]
     )
     app["config_path"] = CONFIG_PATH
-    # Set by routes (after updates / backup restores) to request a clean process restart
+    # Set to request a clean process restart
     app["restart_event"] = asyncio.Event()
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
@@ -328,6 +329,8 @@ async def run_server() -> bool:
 
 def main():
     """Server entry point."""
+    from core.legacy_cleanup import remove_legacy_files
+    remove_legacy_files()
     try:
         restart = asyncio.run(run_server())
     except (KeyboardInterrupt, SystemExit):

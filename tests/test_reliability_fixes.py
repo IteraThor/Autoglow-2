@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch
 from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
-from core.backup_manager import _is_excluded_archive_path
 from core.engine import AutoGlowEngine
 from core.models import AppConfig, DeviceConfig, ProtocolMode, SegmentConfig
 from core.wled_driver import WLEDDriver, is_host_online
@@ -93,15 +92,6 @@ class TestHardwareVerification(unittest.TestCase):
             self.assertIn(fragment, text)
         # lor > 0 is expected while streaming
         self.assertEqual(WLEDDriver.evaluate_state_blockers({"on": True, "bri": 255, "lor": 2}, expect_live=True), [])
-
-
-class TestBackupExclusions(unittest.TestCase):
-
-    def test_environment_and_vcs_paths_excluded(self):
-        for path in ["venv/bin/python3", ".git/HEAD", "core/__pycache__/x.pyc", "autoglow.log"]:
-            self.assertTrue(_is_excluded_archive_path(path), path)
-        for path in ["core/engine.py", "game_flows.json", "presets/Default.json"]:
-            self.assertFalse(_is_excluded_archive_path(path), path)
 
 
 class TestEngineBookkeeping(unittest.IsolatedAsyncioTestCase):

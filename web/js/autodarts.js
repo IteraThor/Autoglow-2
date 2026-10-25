@@ -49,142 +49,7 @@ async function renderAutodartsTab() {
 
     }
 
-    // 2. Connected Dartboards
-    const boardsBadge = document.getElementById('boardsCountBadge');
-    const boardsContainer = document.getElementById('boardsContainer');
-
-    if (boardsBadge) {
-      const count = (isAuth || isExtension) ? (data.board.boards_count || (data.board.boards ? data.board.boards.length : 0)) : 0;
-      boardsBadge.innerText = `${count} Board(s)`;
-      boardsBadge.style.color = 'var(--text-muted)';
-    }
-
-    // 3. Device Link Panel (4th Window)
-    const deviceLinkBadge = document.getElementById('deviceLinkBadge');
-    const deviceLinkInitial = document.getElementById('deviceLinkInitialView');
-    const deviceLinkActive = document.getElementById('deviceLinkActiveView');
-    const deviceLinkConnected = document.getElementById('deviceLinkConnectedView');
-
-    if (deviceLinkBadge) {
-      if (isAuth) {
-        deviceLinkBadge.innerHTML = `<span class="dot dot-green" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px;"></span><span style="color: var(--status-success);">Linked</span>`;
-      } else if (activeDeviceLinkPolling) {
-        deviceLinkBadge.innerHTML = `<span class="dot dot-green" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px; animation: pulse 1.5s infinite;"></span><span style="color: var(--accent-primary);">Authorizing...</span>`;
-      } else {
-        deviceLinkBadge.innerHTML = `<span class="dot dot-gray" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px;"></span><span style="color: var(--text-muted);">Standby</span>`;
-      }
-    }
-
-    if (!activeDeviceLinkPolling) {
-      if (isAuth) {
-        if (deviceLinkInitial) deviceLinkInitial.style.display = 'none';
-        if (deviceLinkActive) deviceLinkActive.style.display = 'none';
-        if (deviceLinkConnected) deviceLinkConnected.style.display = 'flex';
-      } else {
-        if (deviceLinkInitial) deviceLinkInitial.style.display = 'flex';
-        if (deviceLinkActive) deviceLinkActive.style.display = 'none';
-        if (deviceLinkConnected) deviceLinkConnected.style.display = 'none';
-      }
-    }
-
-    if (boardsContainer) {
-      if (data.board.boards && data.board.boards.length > 0) {
-        boardsContainer.innerHTML = '';
-        data.board.boards.forEach(b => {
-          const card = document.createElement('div');
-          card.style.cssText = `padding: 10px 12px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 6px;`;
-          
-          const rawIp = b.ip || '';
-          const parsedIp = parseBoardIp(rawIp);
-          const ipUrl = parsedIp.url;
-          const ipClean = parsedIp.display;
-          
-          const osName = b.os ? (b.os.charAt(0).toUpperCase() + b.os.slice(1)) : 'Vantage Engine';
-          const v = (b.version || '').trim();
-          const osDisplay = v ? `${osName} (${v})` : osName;
-
-          let isUpToDate = true;
-          if (v) {
-            if (v.startsWith('0.') || (v.startsWith('1.0.') && parseInt(v.split('.')[2], 10) < 7)) {
-              isUpToDate = false;
-            }
-          }
-          const updateBadge = isUpToDate
-            ? `<span style="font-size: 10px; color: var(--status-success); background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.28); border-radius: 3px; padding: 1px 5px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">✓ Up to date</span>`
-            : `<span style="font-size: 10px; color: var(--status-warning); background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 3px; padding: 1px 5px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">Overdue</span>`;
-
-          // Live Board Status Handling
-          const rawStatus = (b.local_status || b.local_state?.status || b.state?.status || '').trim();
-          const rawEvent = (b.local_event || b.local_state?.event || b.state?.event || '').trim();
-
-          let displayStatus = rawStatus || (b.online ? 'Online' : 'Offline');
-          if (rawStatus === 'Starting' || rawEvent === 'Starting') {
-            displayStatus = 'Starting';
-          } else if (rawStatus === 'Takeout in progress' || rawStatus === 'Takeout' || rawEvent === 'Takeout') {
-            displayStatus = 'Takeout in Progress';
-          } else if (rawStatus === 'Throw' || rawEvent === 'Throw') {
-            displayStatus = 'Throw Active';
-          } else if (rawStatus === 'Idle' || rawStatus === 'Ready') {
-            displayStatus = 'Idle / Ready';
-          } else if (rawStatus === 'Stopped') {
-            displayStatus = 'Stopped';
-          }
-
-          const isOffline = displayStatus.toLowerCase() === 'offline';
-          const isOnline = !isOffline && (b.online || rawStatus !== '');
-
-          let statusHtml = '';
-          let dotClass = 'dot-green';
-
-          if (isOffline) {
-            statusHtml = `<span style="color: var(--status-danger); font-weight: 600;">Offline</span>`;
-            dotClass = 'dot-red';
-          } else {
-            statusHtml = `<span style="color: var(--status-success); font-weight: 600;">${escapeHtml(displayStatus)}</span>`;
-            dotClass = 'dot-green';
-          }
-
-          card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="dot ${dotClass}" style="width: 6px; height: 6px;"></span>
-                <strong style="color: var(--text-primary); font-family: var(--font-mono); font-size: 13px;">${escapeHtml(b.name || 'Dartboard')}</strong>
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px; font-family: var(--font-mono);">
-                <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(osDisplay)}</span>
-                ${updateBadge}
-              </div>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border-subtle); font-family: var(--font-mono); font-size: 11px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--text-muted); font-size: 10.5px; min-width: 58px;">Status:</span>
-                <div>${statusHtml}</div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="color: var(--text-muted); font-size: 10.5px; min-width: 58px;">Local IP:</span>
-                ${ipUrl 
-                  ? `<a href="${escapeHtml(ipUrl)}" target="_blank" rel="noopener noreferrer" style="color: ${isOnline ? 'var(--accent-primary)' : 'var(--text-muted)'}; text-decoration: none; font-weight: 500;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${escapeHtml(ipClean)} ↗</a>` 
-                  : `<span style="color: var(--text-muted);">${escapeHtml(ipClean)}</span>`
-                }
-              </div>
-            </div>
-          `;
-          boardsContainer.appendChild(card);
-        });
-      } else {
-        let emptyMsg = 'No cloud account connected.';
-        if (isExtension) emptyMsg = 'No boards seen yet. Open play.autodarts.com in Chrome.';
-        else if (isAuth) emptyMsg = 'No dartboards found on this account.';
-        boardsContainer.innerHTML = `
-          <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px; padding: 6px 0;">
-            ${emptyMsg}
-          </div>
-        `;
-      }
-    }
-
-    // 3. Live Match Status Panel
+    // 2. Live Match Status Panel
     const matchBadge = document.getElementById('liveMatchBadge');
     const matchName = document.getElementById('liveMatchName');
     const matchPlayers = document.getElementById('liveMatchPlayers');
@@ -409,8 +274,6 @@ async function loadBridgeSetupInfo(force = false) {
     if (data.status !== 'ok') return;
     bridgeSetupLoaded = true;
     setTextById('bridgeExtensionDir', data.extension_dir || 'chrome_extension');
-    setTextById('bridgePairingKey', data.pairing_key || '—');
-    setTextById('bridgeServerAddress', window.location.origin);
   } catch (err) {
     console.warn('[AutoGlow] Could not load extension setup info:', err);
   }
@@ -439,25 +302,6 @@ function copyBridgeValue(elementId, label) {
       .catch(() => showToast(`${label}: ${value}`, 'info'));
   } else {
     showToast(`${label}: ${value}`, 'info');
-  }
-}
-
-async function regenerateBridgeKey() {
-  if (!await window.confirmDialog({
-    title: 'Create a new pairing key?',
-    body: 'Extensions on other computers must enter the new key.',
-    confirmLabel: 'Create key'
-  })) return;
-  try {
-    const data = await (await fetch('/api/autodarts/bridge/key', { method: 'POST' })).json();
-    if (data.status === 'ok') {
-      setTextById('bridgePairingKey', data.pairing_key);
-      showToast('New pairing key created.', 'success');
-    } else {
-      showToast(`Could not create key: ${data.message}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Could not create key: ${err.message || err}`, 'error');
   }
 }
 
@@ -629,7 +473,6 @@ if (typeof window !== "undefined") {
   window.cancelDeviceLink = cancelDeviceLink;
   window.copyDeviceLinkCode = copyDeviceLinkCode;
   window.copyBridgeValue = copyBridgeValue;
-  window.regenerateBridgeKey = regenerateBridgeKey;
 }
 
 

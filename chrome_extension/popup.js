@@ -1,4 +1,4 @@
-// AutoGlow Bridge - toolbar popup: connection status and AutoGlow address / pairing key.
+// AutoGlow Bridge - toolbar popup: connection status and a reconnect button.
 const $ = (id) => document.getElementById(id);
 
 function setDot(id, state) {
@@ -39,20 +39,9 @@ function refresh() {
   chrome.runtime.sendMessage({ type: 'getStatus' }, render);
 }
 
-async function init() {
-  const stored = await chrome.storage.local.get({ serverUrl: 'http://localhost:8080', pairingKey: '' });
-  $('serverUrl').value = stored.serverUrl;
-  $('pairingKey').value = stored.pairingKey;
-  refresh();
-  setInterval(refresh, 1000);
-}
-
-$('settings').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const serverUrl = $('serverUrl').value.trim().replace(/\/+$/, '');
-  const pairingKey = $('pairingKey').value.trim();
-  await chrome.storage.local.set({ serverUrl, pairingKey });
+$('reconnect').addEventListener('click', () => {
   chrome.runtime.sendMessage({ type: 'reconnect' }, render);
 });
 
-init();
+refresh();
+setInterval(refresh, 1000);

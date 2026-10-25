@@ -17,41 +17,7 @@ except ImportError:
     ServiceBrowser = None
     ServiceListener = None
 
-try:
-    import serial
-    import serial.tools.list_ports
-except ImportError:
-    serial = None
-
 logger = logging.getLogger("autoglow.discovery")
-
-KNOWN_VID_PIDS = [
-    (0x10C4, 0xEA60),  # CP210x
-    (0x1A86, 0x7523),  # CH340
-    (0x0403, 0x6001),  # FTDI
-    (0x303A, 0x1001),  # Espressif USB JTAG/serial
-    (0x303A, 0x0002),  # ESP32-S2 USB CDC
-]
-
-
-def _get_available_ports() -> List[Dict[str, Any]]:
-    """Detect available COM/TTY ports and flag ESP32 devices."""
-    if not serial:
-        return []
-    results = []
-    try:
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
-            is_esp32 = (port.vid, port.pid) in KNOWN_VID_PIDS
-            results.append({
-                "device": port.device,
-                "description": port.description or "Unknown",
-                "is_esp32": is_esp32
-            })
-    except Exception:
-        logger.exception("Error listing serial ports")
-    return results
-
 
 def _get_primary_subnets() -> List[str]:
     """Detect primary LAN subnets, filtering out virtual/docker networks."""
@@ -88,6 +54,28 @@ def _get_primary_subnets() -> List[str]:
         subnets = ["192.168.1", "192.168.2", "192.168.0", "192.168.178"]
 
     return subnets[:2]
+
+
+def _get_local_ips() -> set:
+    """All IPv4 addresses of this machine, so discovery never reports itself."""
+    ips = {"127.0.0.1"}
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ips.add(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    try:
+        ips.update(socket.gethostbyname_ex(socket.gethostname())[2])
+    except Exception:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(info[4][0])
+    except Exception:
+        pass
+    return ips
 
 
 if ServiceListener:
@@ -128,7 +116,7 @@ async def _async_scan_mdns(timeout: float = 1.0) -> List[Dict[str, Any]]:
         try:
             zc = Zeroconf()
             listener = WLEDMdnsListener(zc)
-            _browser = ServiceBrowser(zc, ["_wled._tcp.local.", "_http._tcp.local."], listener)
+            _browser = ServiceBrowser(zc, ["_wled._tcp.local."], listener)
             import time
             time.sleep(timeout)
             return listener.discovered
@@ -202,7 +190,7 @@ async def _async_scan_subnets_fast() -> List[Dict[str, Any]]:
 
 
 class DiscoveryService:
-    """Async wrapper for finding WLED devices on network and USB serial ports."""
+    """Async wrapper for finding WLED devices on the network."""
 
     @staticmethod
     async def scan_network() -> List[Dict[str, Any]]:
@@ -235,18 +223,12 @@ class DiscoveryService:
                             if d.get("name") and not discovered_by_ip[ip].get("name"):
                                 discovered_by_ip[ip]["name"] = d["name"]
 
+            for local_ip in _get_local_ips():
+                discovered_by_ip.pop(local_ip, None)
+
             return list(discovered_by_ip.values())
         except Exception:
             logger.exception("Fast network discovery failed")
-            return []
-
-    @staticmethod
-    async def scan_serial() -> List[Dict[str, Any]]:
-        loop = asyncio.get_running_loop()
-        try:
-            return await loop.run_in_executor(None, _get_available_ports)
-        except Exception:
-            logger.exception("Serial port scan failed")
             return []
 
     @staticmethod

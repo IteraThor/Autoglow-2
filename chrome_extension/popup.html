@@ -19,16 +19,11 @@
     <p id="hint" class="muted" hidden>Open <a href="https://play.autodarts.com" target="_blank">play.autodarts.com</a> and play as usual. AutoGlow receives the game events from this tab.</p>
   </section>
 
-  <form id="settings">
-    <label for="serverUrl">AutoGlow address</label>
-    <input id="serverUrl" type="url" placeholder="http://localhost:8080" required>
-    <label for="pairingKey">Pairing key <span class="muted">(only if AutoGlow runs on another computer)</span></label>
-    <input id="pairingKey" type="text" autocomplete="off" spellcheck="false" placeholder="from AutoGlow → Autodarts tab">
-    <div class="actions">
-      <button type="submit">Save &amp; connect</button>
-      <a id="openAutoglow" href="#" target="_blank">Open AutoGlow ↗</a>
-    </div>
-  </form>
+  <p class="muted">AutoGlow must run on this computer (port 8080).</p>
+  <div class="actions">
+    <button id="reconnect" type="button">Reconnect</button>
+    <a id="openAutoglow" href="http://localhost:8080" target="_blank">Open AutoGlow ↗</a>
+  </div>
 
   <script src="popup.js"></script>
 </body>

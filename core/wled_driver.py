@@ -396,10 +396,7 @@ class WLEDDriver:
         if clean_name:
             cfg_payload["id"] = {"name": clean_name}
         if hw_ins is not None and isinstance(hw_ins, list):
-            for ins in hw_ins:
-                if isinstance(ins, dict) and ins.get("type", 0) >= 40:
-                    if ins.get("rgbwm") not in (1, 2, 3, 4):
-                        ins["rgbwm"] = 4
+            WLEDDriver._normalize_pwm_outputs(hw_ins)
             cfg_payload.setdefault("hw", {}).setdefault("led", {})["ins"] = hw_ins
         # Ensure Preset 1 is configured as Boot Preset and live mso=False
         cfg_payload.setdefault("def", {})["ps"] = 1
@@ -460,6 +457,14 @@ class WLEDDriver:
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     resp.read()
+                if hw_ins:
+                    # WLED's LED bus rebuild after new outputs can land after this state and reset the
+                    # segments, so send it once more (without saving the preset again)
+                    time.sleep(0.8)
+                    resend = {k: v for k, v in state_copy.items() if k not in ("psave", "n", "ib", "sb")}
+                    req = urllib.request.Request(url_state, data=json.dumps(resend).encode("utf-8"), headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=timeout) as resp:
+                        resp.read()
             except Exception as e:
                 logger.warning(f"Failed to update /json/state on {ip}: {e}")
 
@@ -470,6 +475,67 @@ class WLEDDriver:
             readback = json.loads(resp.read().decode())
 
         return readback
+
+    @staticmethod
+    def _normalize_pwm_outputs(hw_ins: List[dict]) -> None:
+        """PWM outputs need a white-balance mode, or WLED leaves the channel dark."""
+        for ins in hw_ins:
+            if isinstance(ins, dict) and ins.get("type", 0) >= 40:
+                if ins.get("rgbwm") not in (1, 2, 3, 4):
+                    ins["rgbwm"] = 4
+
+    @staticmethod
+    def apply_setup_preview(
+        ip: str,
+        hw_ins: Optional[List[dict]] = None,
+        state_payload: Optional[dict] = None,
+        timeout: float = 3.0
+    ) -> None:
+        """
+        Write a temporary LED layout for the setup guide's light tests.
+        Unlike apply_wled_mutations nothing is saved to Preset 1 and the boot settings stay untouched.
+        """
+        if not ip or not ip.strip():
+            raise ValueError("No IP address specified")
+        ip_clean = ip.strip()
+
+        if hw_ins:
+            WLEDDriver._normalize_pwm_outputs(hw_ins)
+            body = json.dumps({"hw": {"led": {"ins": hw_ins}}}).encode("utf-8")
+            req = urllib.request.Request(f"http://{ip_clean}/json/cfg", data=body, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                resp.read()
+            # WLED rebuilds its LED buses in the main loop; segments sent earlier would be cut to the old length
+            time.sleep(0.4)
+
+        if state_payload:
+            state = dict(state_payload)
+            state["v"] = False
+            state["lor"] = 0
+            segs = [s for s in state.get("seg", []) if isinstance(s, dict)]
+            if segs:
+                # Drop segments left over from the controller's previous layout
+                existing_seg_count = 0
+                try:
+                    with urllib.request.urlopen(f"http://{ip_clean}/json/state", timeout=1.5) as r:
+                        existing_seg_count = len(json.loads(r.read().decode()).get("seg", []))
+                except Exception:
+                    existing_seg_count = 8
+                used = {s.get("id") for s in segs}
+                segs += [{"id": sid, "stop": 0} for sid in range(max(existing_seg_count, 8)) if sid not in used and sid >= len(segs)]
+                for s in segs:
+                    if "n" in s:
+                        s["n"] = sanitize_wled_name(s["n"])
+                state["seg"] = segs
+            body = json.dumps(state).encode("utf-8")
+            # The bus rebuild after new outputs can land after the first state and wipe single-LED colors,
+            # so the state is sent once more when it has settled
+            for attempt in range(2 if hw_ins else 1):
+                if attempt:
+                    time.sleep(0.8)
+                req = urllib.request.Request(f"http://{ip_clean}/json/state", data=body, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    resp.read()
 
     def set_target_ips(self, ips: List[str]):
         """Update list of active target WLED IPs for simultaneous broadcast."""
@@ -605,6 +671,21 @@ class WLEDDriver:
         if s_id in self._segment_channels:
             self._segment_channels[s_id]["baseline_effect"] = None
             self._segment_channels[s_id]["transient_effect"] = None
+
+    @property
+    def is_playing_effects(self) -> bool:
+        """True while the UDP stream renders an AutoGlow effect on any segment."""
+        if self._protocol_mode != ProtocolMode.ACTIVE_UDP:
+            return False
+        now = time.time()
+        for ch in self._segment_channels.values():
+            transient = ch.get("transient_effect")
+            if transient and now - ch.get("transient_start_time", 0.0) < ch.get("transient_duration", 0.0):
+                return True
+            baseline = ch.get("baseline_effect")
+            if baseline and baseline.animation != AnimationType.OFF:
+                return True
+        return False
 
     async def stop_effect(self) -> None:
         """

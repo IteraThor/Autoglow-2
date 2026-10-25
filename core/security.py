@@ -26,7 +26,6 @@ SECRET_KEYS = (
     "autodarts_access_token",
     "autodarts_refresh_token",
     "access_pin_hash",
-    "autodarts_bridge_key",
 )
 
 PIN_HASH_KEY = "access_pin_hash"
@@ -43,9 +42,8 @@ LOGIN_LOCKOUT_SECONDS = 30
 PUBLIC_API_PATHS = {"/api/auth/status", "/api/auth/login"}
 
 # The Chrome extension relays Autodarts game data here. It cannot hold a PIN session, so it is
-# authorised separately: local connections are trusted, others must present the pairing key.
+# authorised separately: only Chrome on the AutoGlow computer itself may connect.
 BRIDGE_WS_PATH = "/ws/autodarts-bridge"
-BRIDGE_KEY_SETTING = "autodarts_bridge_key"
 
 _login_failures: Dict[str, list] = {}
 
@@ -196,12 +194,7 @@ def bridge_rejection_reason(request: web.Request) -> Optional[str]:
         return "Only the AutoGlow Chrome extension may connect to the bridge"
     if _is_loopback(request.remote):
         return None
-    cfg = request.app.get("current_app_config")
-    expected = str(cfg.extra.get(BRIDGE_KEY_SETTING, "") or "") if cfg else ""
-    supplied = request.query.get("key", "")
-    if expected and supplied and hmac.compare_digest(supplied, expected):
-        return None
-    return "Pairing key required for connections from another computer"
+    return "The extension must run in Chrome on the AutoGlow computer itself"
 
 
 @web.middleware

@@ -10,20 +10,22 @@ export const MODE_LABELS = { matrix: 'Event Matrix', flow: 'Flow Matrix' };
 
 let pending = null;
 
-export async function setLightingMode(mode) {
+// Resolves true when the engine now plays the mode. quiet skips the success toast (the Settings page reports its own).
+export async function setLightingMode(mode, { quiet = false } = {}) {
   const target = mode === 'flow' ? 'flow' : 'matrix';
-  if (pending || appStore.get().lightingMode === target) return;
+  if (pending) return false;
+  if (appStore.get().lightingMode === target) return true;
   pending = target;
   render();
   try {
     await api.post('/api/flow/mode', { mode: target });
     if (window.appState) window.appState.lighting_mode = target;
     appStore.set({ lightingMode: target });
-    toast.success(`${MODE_LABELS[target]} is playing`);
-    // On the Lighting page, show the workspace that now plays
-    if (appStore.get().route?.view.id === 'lighting') navigate(`/lighting/${target}`);
+    if (!quiet) toast.success(`${MODE_LABELS[target]} is playing`);
+    return true;
   } catch (err) {
     toast.error(err, { onRetry: () => setLightingMode(target) });
+    return false;
   } finally {
     pending = null;
     render();
@@ -31,7 +33,8 @@ export async function setLightingMode(mode) {
 }
 
 function render() {
-  const active = appStore.get().lightingMode;
+  // The Settings page shows its draft choice until it is saved
+  const active = window.settingsDraftMode?.() ?? appStore.get().lightingMode;
   document.querySelectorAll('#modeSwitch [data-mode]').forEach(btn => {
     const mode = btn.dataset.mode;
     btn.setAttribute('aria-pressed', String(mode === active));
@@ -41,9 +44,11 @@ function render() {
 }
 
 export function initModeSwitch() {
-  document.querySelectorAll('#modeSwitch [data-mode]').forEach(btn => {
-    btn.addEventListener('click', () => setLightingMode(btn.dataset.mode));
+  appStore.subscribe(s => s.lightingMode, () => {
+    render();
+    // On the Lighting page, show the workspace of the engine that now plays
+    const route = appStore.get().route;
+    if (route?.view.id === 'lighting' && route.sub.mode !== appStore.get().lightingMode) navigate('/lighting', { replace: true });
   });
-  appStore.subscribe(s => s.lightingMode, render);
   render();
 }

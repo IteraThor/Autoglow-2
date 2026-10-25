@@ -1,6 +1,9 @@
 """
 AutoGlow 2 - Event Matrix Presets & Profile Routes Module
 Handlers for /api/matrix/presets (GET, select, save, rename, delete, export, import).
+
+Profiles are one shared list; each controller picks the one it uses. Calls that pass a controller
+"ip" (JSON body or query) act on that controller's choice, calls without one on the shared default.
 """
 
 import json
@@ -18,6 +21,32 @@ from core.storage import (
 logger = logging.getLogger("autoglow.routes.profiles")
 
 
+def _target_ip(request: web.Request, data=None) -> str:
+    ip = data.get("ip") if isinstance(data, dict) else None
+    return str(ip or request.query.get("ip", "")).strip()
+
+
+def _preset_state(cfg, ip: str, with_profile: bool = True) -> dict:
+    """Response body: preset names, the profile in use (for ip, else the default) and every controller's choice."""
+    out = {
+        "status": "ok",
+        "active_profile": cfg.profile_name_for(ip),
+        "presets": [p.name for p in cfg.profiles],
+        "device_profiles": {d.ip: cfg.profile_name_for(d.ip) for d in cfg.devices if d.ip},
+    }
+    if with_profile:
+        out["profile"] = cfg.profile_for(ip).to_dict()
+    return out
+
+
+def _apply(request: web.Request, cfg) -> None:
+    request.app["current_app_config"] = cfg
+    engine = request.app.get("engine")
+    if engine:
+        engine.profile = cfg.profile
+        engine.app_config = cfg
+
+
 async def handle_get_presets(request: web.Request) -> web.Response:
     """Return all available Event Matrix preset names and the currently active preset, syncing with presets/ folder."""
     config_path = request.app.get("config_path", "config.json")
@@ -28,17 +57,12 @@ async def handle_get_presets(request: web.Request) -> web.Response:
     if sync_presets_with_disk(cfg, presets_dir=presets_dir):
         save_app_config(cfg, config_path)
 
-    presets = [p.name for p in cfg.profiles]
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": presets
-    })
+    ip = _target_ip(request)
+    return web.json_response(_preset_state(cfg, ip, with_profile=bool(ip)))
 
 
 async def handle_select_preset(request: web.Request) -> web.Response:
-    """Switch active Event Matrix preset and immediately sync engine profile."""
-    engine = request.app.get("engine")
+    """Switch the preset a controller uses (or the shared default) and immediately sync the engine."""
     config_path = request.app.get("config_path", "config.json")
     cfg = load_app_config(config_path)
 
@@ -48,30 +72,22 @@ async def handle_select_preset(request: web.Request) -> web.Response:
     if not target_name:
         raise ValidationError("Preset name is required", field="name")
 
-    if not cfg.set_active_profile(target_name):
+    ip = _target_ip(request, data)
+    found = cfg.set_device_profile(ip, target_name) if ip else cfg.set_active_profile(target_name)
+    if not found:
         raise NotFound(f"Preset '{target_name}' not found")
 
     if not save_app_config(cfg, config_path):
         logger.error(f"Failed to persist active preset '{target_name}' to disk")
         raise PersistenceError("Failed to persist configuration to disk")
 
-    request.app["current_app_config"] = cfg
-    if engine:
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-
-    logger.info(f"Switched active Event Matrix preset to '{target_name}'")
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": [p.name for p in cfg.profiles],
-        "profile": cfg.profile.to_dict()
-    })
+    _apply(request, cfg)
+    logger.info(f"Switched Event Matrix preset to '{target_name}'" + (f" on {ip}" if ip else ""))
+    return web.json_response(_preset_state(cfg, ip))
 
 
 async def handle_save_preset(request: web.Request) -> web.Response:
     """Save or create an Event Matrix preset and sync engine profile."""
-    engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
@@ -90,13 +106,17 @@ async def handle_save_preset(request: web.Request) -> web.Response:
         new_profile = ProfileConfig.from_dict(profile_data)
         new_profile.name = preset_name
     else:
-        # Clone current active profile with new name
-        current = cfg.profile
+        # Clone the profile currently in use with the new name
+        current = cfg.profile_for(_target_ip(request, data))
         new_profile = ProfileConfig.from_dict(current.to_dict())
         new_profile.name = preset_name
 
+    ip = _target_ip(request, data)
     set_active = bool(data.get("set_active", True))
-    cfg.add_or_update_profile(new_profile, set_active=set_active)
+    # With a controller, "active" means that controller uses it; the shared default stays as it is
+    cfg.add_or_update_profile(new_profile, set_active=set_active and not ip)
+    if set_active and ip:
+        cfg.set_device_profile(ip, new_profile.name)
 
     # Save to disk (config.json + presets/ folder)
     save_preset_file(new_profile, presets_dir=presets_dir)
@@ -104,23 +124,13 @@ async def handle_save_preset(request: web.Request) -> web.Response:
         logger.error(f"Failed to persist preset '{preset_name}' to disk")
         raise PersistenceError("Failed to persist configuration to disk")
 
-    request.app["current_app_config"] = cfg
-    if engine and set_active:
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-
+    _apply(request, cfg)
     logger.info(f"Saved Event Matrix preset '{preset_name}' (active={set_active})")
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": [p.name for p in cfg.profiles],
-        "profile": cfg.profile.to_dict()
-    })
+    return web.json_response(_preset_state(cfg, ip))
 
 
 async def handle_rename_preset(request: web.Request) -> web.Response:
     """Rename an existing Event Matrix preset."""
-    engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
@@ -142,12 +152,9 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
     if old_name.lower() == "default":
         raise ValidationError("The 'Default' preset cannot be renamed")
 
+    ip = _target_ip(request, data)
     if old_name == new_name:
-        return web.json_response({
-            "status": "ok",
-            "active_profile": cfg.active_profile,
-            "presets": [p.name for p in cfg.profiles]
-        })
+        return web.json_response(_preset_state(cfg, ip, with_profile=False))
 
     # Ensure new name doesn't collide with existing preset
     if any(p.name.lower() == new_name.lower() for p in cfg.profiles if p.name.lower() != old_name.lower()):
@@ -161,6 +168,7 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
     if cfg.active_profile == old_name:
         cfg.active_profile = new_name
         cfg.profile = target_profile
+    cfg.rename_profile_refs(old_name, new_name)
 
     # Update on disk
     delete_preset_file(old_name, presets_dir=presets_dir)
@@ -170,22 +178,13 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
         logger.error(f"Failed to persist renamed preset '{new_name}' to disk")
         raise PersistenceError("Failed to persist configuration to disk")
 
-    request.app["current_app_config"] = cfg
-    if engine and cfg.active_profile == new_name:
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-
+    _apply(request, cfg)
     logger.info(f"Renamed Event Matrix preset '{old_name}' to '{new_name}'")
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": [p.name for p in cfg.profiles]
-    })
+    return web.json_response(_preset_state(cfg, ip, with_profile=False))
 
 
 async def handle_delete_preset(request: web.Request) -> web.Response:
-    """Delete an existing Event Matrix preset."""
-    engine = request.app.get("engine")
+    """Delete an existing Event Matrix preset; controllers that used it fall back to the shared default."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
@@ -210,6 +209,7 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
         raise NotFound(f"Preset '{target_name}' not found")
 
     cfg.profiles = [p for p in cfg.profiles if p.name != target_name]
+    cfg.drop_profile_refs(target_name)
     delete_preset_file(target_name, presets_dir=presets_dir)
 
     # If the active preset was deleted, fall back to Default or first available preset
@@ -223,18 +223,9 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
         logger.error(f"Failed to persist configuration after deleting preset '{target_name}'")
         raise PersistenceError("Failed to persist configuration to disk")
 
-    request.app["current_app_config"] = cfg
-    if engine:
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-
-    logger.info(f"Deleted Event Matrix preset '{target_name}'. Active is now '{cfg.active_profile}'")
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": [p.name for p in cfg.profiles],
-        "profile": cfg.profile.to_dict()
-    })
+    _apply(request, cfg)
+    logger.info(f"Deleted Event Matrix preset '{target_name}'. Default is now '{cfg.active_profile}'")
+    return web.json_response(_preset_state(cfg, _target_ip(request, data)))
 
 
 async def handle_export_preset(request: web.Request) -> web.Response:
@@ -260,7 +251,6 @@ async def handle_export_preset(request: web.Request) -> web.Response:
 
 async def handle_import_preset(request: web.Request) -> web.Response:
     """Import a preset from uploaded JSON and add to presets/ and config."""
-    engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
     cfg = load_app_config(config_path)
@@ -297,21 +287,16 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     imported_profile = ProfileConfig.from_dict(data)
     imported_profile.name = final_name
 
-    cfg.add_or_update_profile(imported_profile, set_active=True)
+    # A controller ip comes in the query string, since the body is the preset itself
+    ip = str(request.query.get("ip", "")).strip()
+    cfg.add_or_update_profile(imported_profile, set_active=not ip)
+    if ip:
+        cfg.set_device_profile(ip, final_name)
     save_preset_file(imported_profile, presets_dir=presets_dir)
 
     if not save_app_config(cfg, config_path):
         raise PersistenceError("Failed to persist configuration")
 
-    request.app["current_app_config"] = cfg
-    if engine:
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-
+    _apply(request, cfg)
     logger.info(f"Successfully imported preset '{final_name}'")
-    return web.json_response({
-        "status": "ok",
-        "active_profile": cfg.active_profile,
-        "presets": [p.name for p in cfg.profiles],
-        "profile": cfg.profile.to_dict()
-    })
+    return web.json_response(_preset_state(cfg, ip))

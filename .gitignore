@@ -14,8 +14,9 @@ dist/
 __pycache__/
 *.pyc
 
-# Ignore system/log files
+# Ignore system/log files (incl. rotated autoglow.log.1 ... .3)
 *.log
+*.log.*
 
 # Runtime data
 backups/
@@ -23,13 +24,25 @@ scratch/
 config.json.*
 .venv/
 
+# User data written at runtime. Shipping these would overwrite a user's flows and profiles on update;
+# game_flows.json starts from defaults/game_flows.json and presets/ is regenerated from config.json.
+/game_flows.json
+/game_flows.json.*
+/presets/
+
 # Chrome extension signing key (defines this installation's extension ID)
 chrome_extension.key
 
 # Agent metadata & skills (kept out of the repository)
 .agents/
 AGENTS.md
+CLAUDE.md
+.mcp.json
+.playwright-mcp/
 docs/superpowers/
 
 # Tool caches
 .ruff_cache/
+
+# Local copies of old releases kept for reference
+old autoglow version/

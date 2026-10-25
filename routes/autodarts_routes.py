@@ -13,9 +13,9 @@ from aiohttp import web, WSMsgType
 
 from core.autodarts_client import AutodartsClient
 from core.autodarts_bridge import (
-    AutodartsBridgeClient, CLOUD_API_ON_HOLD, CLOUD_API_HOLD_MESSAGE, generate_bridge_key
+    AutodartsBridgeClient, CLOUD_API_ON_HOLD, CLOUD_API_HOLD_MESSAGE
 )
-from core.security import BRIDGE_KEY_SETTING, BRIDGE_WS_PATH
+from core.security import BRIDGE_WS_PATH
 from core.storage import load_app_config, save_app_config
 from core.version import __version__
 
@@ -420,28 +420,14 @@ async def handle_ws_autodarts_bridge(request: web.Request) -> web.StreamResponse
 
 
 async def handle_get_autodarts_bridge(request: web.Request) -> web.Response:
-    """Pairing key, extension folder and live status for the setup panel."""
+    """Extension folder and live status for the setup panel."""
     engine = request.app.get("engine")
     client = engine.autodarts if engine else None
-    cfg = request.app.get("current_app_config") or load_app_config(request.app.get("config_path", "config.json"))
     return web.json_response({
         "status": "ok",
         "cloud_on_hold": CLOUD_API_ON_HOLD,
         "active": isinstance(client, AutodartsBridgeClient),
-        "pairing_key": cfg.extra.get(BRIDGE_KEY_SETTING, ""),
         "extension_dir": EXTENSION_DIR,
         "ws_path": BRIDGE_WS_PATH,
         "bridge": client.snapshot() if isinstance(client, AutodartsBridgeClient) else None
     })
-
-
-async def handle_regenerate_bridge_key(request: web.Request) -> web.Response:
-    """Issue a new pairing key; extensions on other computers must be re-paired afterwards."""
-    config_path = request.app.get("config_path", "config.json")
-    cfg = request.app.get("current_app_config") or load_app_config(config_path)
-    cfg.extra[BRIDGE_KEY_SETTING] = generate_bridge_key()
-    if not save_app_config(cfg, config_path):
-        return web.json_response({"status": "error", "message": "Failed to persist configuration to disk"}, status=500)
-    request.app["current_app_config"] = cfg
-    logger.info("Extension bridge pairing key regenerated.")
-    return web.json_response({"status": "ok", "pairing_key": cfg.extra[BRIDGE_KEY_SETTING]})

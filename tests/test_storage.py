@@ -41,6 +41,13 @@ class TestStorageAndAppConfig(unittest.TestCase):
         self.assertIsNotNone(cfg.profile)
         self.assertIn("180", cfg.profile.events)
 
+    def test_fresh_config_has_no_controller_after_restart(self):
+        # A new install must not invent a controller address on its own
+        self.assertTrue(save_app_config(AppConfig(), self.config_path))
+        cfg = load_app_config(self.config_path)
+        self.assertEqual(cfg.devices, [])
+        self.assertEqual(cfg.active_ips, [])
+
     def test_legacy_ai_keys_load_and_are_dropped(self):
         # The AI Copilot was removed; configs written before that must still load and shed its keys on save
         with open(self.config_path, "w") as f:

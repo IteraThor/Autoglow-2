@@ -309,7 +309,7 @@ class SegmentConfig:
 class DeviceConfig:
     id: str = "default_device"
     name: str = "Main Dartboard WLED"
-    ip: str = "192.168.2.214"
+    ip: str = ""
     udp_port: int = 21324
     rgb_count: int = 45
     pwm_index: Optional[int] = 45
@@ -756,8 +756,10 @@ class AppConfig:
     profile: ProfileConfig = field(default_factory=ProfileConfig.get_default_profile)
     profiles: List[ProfileConfig] = field(default_factory=list)
     active_profile: str = "Default"
+    # Controller IP -> profile name it uses; controllers not listed use active_profile
+    device_profiles: Dict[str, str] = field(default_factory=dict)
     global_brightness: int = 200
-    wifi_ip: str = "192.168.2.214"
+    wifi_ip: str = ""
     autodarts_user: str = ""
     autodarts_password: str = ""
     autodarts_board_id: str = ""
@@ -770,9 +772,6 @@ class AppConfig:
     idle_power_off_enabled: bool = True
     idle_power_off_minutes: int = 30
     idle_dimming_brightness: int = 50
-    standby_board_offline_enabled: bool = False
-    standby_board_offline_id: str = ""
-    standby_board_offline_delay_seconds: int = 10
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -798,6 +797,28 @@ class AppConfig:
             if p.name == name:
                 return p
         return None
+
+    def profile_name_for(self, ip: Optional[str]) -> str:
+        """Name of the profile a controller uses (its own choice, else the shared active profile)."""
+        name = self.device_profiles.get(ip) if ip else None
+        return name if name and self.get_profile(name) else self.active_profile
+
+    def profile_for(self, ip: Optional[str]) -> ProfileConfig:
+        return self.get_profile(self.profile_name_for(ip)) or self.profile
+
+    def set_device_profile(self, ip: str, name: str) -> bool:
+        if not ip or not self.get_profile(name):
+            return False
+        self.device_profiles[ip] = name
+        return True
+
+    def rename_profile_refs(self, old_name: str, new_name: str) -> None:
+        for ip, name in self.device_profiles.items():
+            if name == old_name:
+                self.device_profiles[ip] = new_name
+
+    def drop_profile_refs(self, name: str) -> None:
+        self.device_profiles = {ip: n for ip, n in self.device_profiles.items() if n != name}
 
     def set_active_profile(self, name: str) -> bool:
         target = self.get_profile(name)
@@ -853,6 +874,7 @@ class AppConfig:
             "devices": [d.to_dict() for d in self.devices],
             "profiles": [p.to_dict() for p in self.profiles],
             "active_profile": self.active_profile,
+            "device_profiles": dict(self.device_profiles),
             "profile": self.profile.to_dict(),
             "global_brightness": self.global_brightness,
             "wifi_ip": self.devices[0].ip if self.devices else self.wifi_ip,
@@ -867,10 +889,7 @@ class AppConfig:
             "inactivity_timeout_minutes": self.inactivity_timeout_minutes,
             "idle_power_off_enabled": self.idle_power_off_enabled,
             "idle_dimming_brightness": self.idle_dimming_brightness,
-            "idle_power_off_minutes": self.idle_power_off_minutes,
-            "standby_board_offline_enabled": self.standby_board_offline_enabled,
-            "standby_board_offline_id": self.standby_board_offline_id,
-            "standby_board_offline_delay_seconds": self.standby_board_offline_delay_seconds
+            "idle_power_off_minutes": self.idle_power_off_minutes
         }
         if self.extra:
             for k, v in self.extra.items():
@@ -923,13 +942,22 @@ class AppConfig:
             active_match = profiles[0]
             active_profile_name = active_match.name
 
+        profile_names = {p.name for p in profiles}
+        raw_device_profiles = data.get("device_profiles")
+        device_profiles = {
+            str(ip).strip(): str(name)
+            for ip, name in (raw_device_profiles.items() if isinstance(raw_device_profiles, dict) else [])
+            if str(ip).strip() and str(name) in profile_names
+        }
+
         return cls(
             devices=devices,
             profiles=profiles,
             active_profile=active_profile_name,
+            device_profiles=device_profiles,
             profile=active_match,
             global_brightness=_safe_int(data.get("global_brightness"), 200),
-            wifi_ip=devices[0].ip if devices else str(data.get("wifi_ip", "192.168.2.214")),
+            wifi_ip=devices[0].ip if devices else str(data.get("wifi_ip", "")),
             autodarts_user=str(data.get("autodarts_user", "")),
             autodarts_password=str(data.get("autodarts_password", "")),
             autodarts_board_id=str(data.get("autodarts_board_id", "")),
@@ -942,17 +970,13 @@ class AppConfig:
             idle_power_off_enabled=bool(data.get("idle_power_off_enabled", True)),
             idle_power_off_minutes=max(1, _safe_int(data.get("idle_power_off_minutes"), 30)),
             idle_dimming_brightness=max(0, min(255, _safe_int(data.get("idle_dimming_brightness"), 50))),
-            standby_board_offline_enabled=bool(data.get("standby_board_offline_enabled", False)),
-            standby_board_offline_id=str(data.get("standby_board_offline_id", "")),
-            standby_board_offline_delay_seconds=max(0, min(300, _safe_int(data.get("standby_board_offline_delay_seconds"), 10))),
             extra={k: v for k, v in data.items() if k not in [
-                "devices", "profiles", "active_profile", "profile", "global_brightness", "wifi_ip",
+                "devices", "profiles", "active_profile", "device_profiles", "profile", "global_brightness", "wifi_ip",
                 "autodarts_user", "autodarts_password", "autodarts_board_id",
                 "ai_key", "gemini_api_key", "game_mode_spotlight_brightness", "lighting_mode", "auto_connect_udp_on_game_start",
                 "disconnect_udp_on_match_end",
                 "inactivity_timeout_enabled", "inactivity_timeout_minutes",
                 "idle_power_off_enabled", "idle_power_off_minutes", "idle_dimming_brightness",
-                "standby_board_offline_enabled", "standby_board_offline_id", "standby_board_offline_delay_seconds",
                 "device", "status"  # response-only keys echoed back by the UI
             ]}
         )

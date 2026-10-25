@@ -8,9 +8,10 @@ import asyncio
 import logging
 import urllib.request
 from aiohttp import web
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from core.models import ProtocolMode
+from core.wled_driver import WLEDDriver
 from core.storage import load_app_config
 
 logger = logging.getLogger("autoglow.routes.power")
@@ -71,20 +72,43 @@ def _resolve_power_ips(request: web.Request, engine) -> list:
     return cfg.active_ips or list(engine.drivers.keys())
 
 
+async def _requested_ip(request: web.Request) -> Optional[str]:
+    """Controller IP from an optional JSON body {"ip": ...}; None targets every controller."""
+    if not request.can_read_body:
+        return None
+    try:
+        body = await request.json()
+    except Exception:
+        return None
+    ip = body.get("ip") if isinstance(body, dict) else None
+    return ip.strip() if isinstance(ip, str) and ip.strip() else None
+
+
+def _unknown_controller(ip: str) -> web.Response:
+    return web.json_response({"status": "error", "message": f"No controller at {ip}."}, status=404)
+
+
 async def handle_test_inactivity_dim(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     if engine:
+        ip = await _requested_ip(request)
+        if ip and ip not in engine.drivers:
+            return _unknown_controller(ip)
+        drivers = [engine.drivers[ip]] if ip else list(engine.drivers.values())
         dim_bri = engine.app_config.idle_dimming_brightness if engine.app_config else 50
-        engine.is_board_dimmed = True
-        engine.current_illumination = dim_bri
-        was_udp = any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in engine.drivers.values())
+        # A single controller is a manual override; the engine-wide power state stays as it is
+        if not ip:
+            engine.is_board_dimmed = True
+            engine.current_illumination = dim_bri
+        was_udp = any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in drivers)
         verified = True
-        for drv in engine.drivers.values():
+        for drv in drivers:
             verified = await drv.transition_to_http_mode(restore_preset_id=1) and verified
             verified = await drv.set_board_light(dim_bri) and verified
-        if was_udp:
+        if was_udp and not ip:
             await engine._broadcast_telemetry({"type": "protocol_state", "mode": "http"})
-        await engine._broadcast_telemetry({"type": "power_state", "state": "dimmed"})
+        if not ip:
+            await engine._broadcast_telemetry({"type": "power_state", "state": "dimmed"})
         if verified:
             return web.json_response({"status": "ok", "verified": True, "message": "Inactivity dimming executed (Idle Preset 1 restored)."})
         return web.json_response({"status": "warning", "verified": False, "message": "Dimming sent, but not every controller confirmed the new state."})
@@ -96,18 +120,23 @@ async def handle_test_power_off(request: web.Request) -> web.Response:
     if not engine:
         return web.json_response({"status": "error", "message": "Engine is not initialized."}, status=500)
 
-    engine.is_board_off = True
-    engine.is_board_dimmed = True
-    engine.current_illumination = 0
-    was_udp = any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in engine.drivers.values())
-    for drv in engine.drivers.values():
+    ip = await _requested_ip(request)
+    if ip and ip not in engine.drivers:
+        return _unknown_controller(ip)
+    drivers = [engine.drivers[ip]] if ip else list(engine.drivers.values())
+    if not ip:
+        engine.is_board_off = True
+        engine.is_board_dimmed = True
+        engine.current_illumination = 0
+    was_udp = any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in drivers)
+    for drv in drivers:
         if drv.protocol_mode == ProtocolMode.ACTIVE_UDP:
             await drv.transition_to_http_mode()
         await drv.set_board_light(0)
-    if was_udp:
+    if was_udp and not ip:
         await engine._broadcast_telemetry({"type": "protocol_state", "mode": "http"})
 
-    ips = _resolve_power_ips(request, engine)
+    ips = [ip] if ip else _resolve_power_ips(request, engine)
 
     loop = asyncio.get_running_loop()
     results = []
@@ -116,7 +145,8 @@ async def handle_test_power_off(request: web.Request) -> web.Response:
         results.append(res)
 
     all_ok = all(r.get("success", False) for r in results) if results else True
-    await engine._broadcast_telemetry({"type": "power_state", "state": "off"})
+    if not ip:
+        await engine._broadcast_telemetry({"type": "power_state", "state": "off"})
 
     if all_ok:
         return web.json_response({
@@ -139,15 +169,33 @@ async def handle_test_wake(request: web.Request) -> web.Response:
     if not engine:
         return web.json_response({"status": "error", "message": "Engine is not initialized."}, status=500)
 
-    ips = _resolve_power_ips(request, engine)
+    ip = await _requested_ip(request)
+    if ip and ip not in engine.drivers:
+        return _unknown_controller(ip)
+    ips = [ip] if ip else _resolve_power_ips(request, engine)
+    drivers = [engine.drivers[ip]] if ip else list(engine.drivers.values())
 
     loop = asyncio.get_running_loop()
     results = []
-    for ip in ips:
-        res = await loop.run_in_executor(None, _sync_set_wled_power, ip, True)
+    for target in ips:
+        res = await loop.run_in_executor(None, _sync_set_wled_power, target, True)
         results.append(res)
 
-    await engine.wake_up()
+    if ip:
+        # Restore Idle Preset 1 on this controller only; engine.wake_up() would touch every controller
+        await drivers[0].transition_to_http_mode(restore_preset_id=1)
+    else:
+        await engine.wake_up()
+        engine.current_illumination = 255
+
+    # Wake means full brightness: master bri (RGB strip) after the preset loads, then the light strip
+    for target in ips:
+        try:
+            await loop.run_in_executor(None, WLEDDriver.preview_wled_state, target, {"on": True, "bri": 255})
+        except Exception:
+            logger.exception(f"Error setting full brightness on {target}")
+    for drv in drivers:
+        await drv.set_board_light(255)
 
     all_ok = all(r.get("success", False) for r in results) if results else True
     if all_ok:

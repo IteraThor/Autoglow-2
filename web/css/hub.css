@@ -1,58 +1,85 @@
 /**
- * AutoGlow 2 - Operational Hub
- * Live status tiles, match panel, quick actions and controller health cards.
+ * AutoGlow 2 - Hub (true size)
+ * First-run checklist, now playing and controller health with a profile and light actions per controller.
  */
 
-.hub-header {
+.hub-page {
+  max-width: 1080px;
+}
+
+/* Checklist */
+.hub-steps {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  list-style: none;
 }
 
-.hub-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
+.hub-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.hub-meta {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+.hub-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font: 600 var(--fs-xs) var(--font-ui);
+}
+
+.hub-step[data-done="true"] .hub-step-mark {
+  border-color: var(--status-success);
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--status-success);
+}
+
+.hub-step[data-done="true"] .hub-step-label {
   color: var(--text-muted);
 }
 
-#tab-dashboard .metrics-grid {
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+a.hub-step-label {
+  color: var(--accent-primary);
+  font-weight: 500;
+  text-decoration: none;
 }
 
-.metric-box .metric-val .dot {
-  width: 8px;
-  height: 8px;
-  align-self: center;
+a.hub-step-label:hover {
+  text-decoration: underline;
 }
 
-.metric-hint {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
+/* Now playing + lights */
+.hub-match-state {
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: var(--bg-card);
   color: var(--text-secondary);
-  min-height: 15px;
+  font: 500 var(--fs-xs) var(--font-ui);
 }
 
-.hub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-  align-items: stretch;
+.hub-match-state[data-live="true"] {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--status-success);
 }
 
-.hub-kv {
+.hub-kv,
+.hub-kv-row {
   display: grid;
   grid-template-columns: 110px 1fr;
-  gap: 6px 12px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  gap: var(--space-2) var(--space-3);
+}
+
+.hub-kv-row {
+  grid-column: 1 / -1;
+}
+
+.hub-kv-row[hidden] {
+  display: none;
 }
 
 .hub-kv dt {
@@ -61,161 +88,102 @@
 
 .hub-kv dd {
   color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.hub-profile {
+  width: 160px;
+  max-width: 100%;
+  font-weight: 600;
+}
+
+.hub-player + .hub-player::before {
+  content: " vs ";
+  color: var(--text-muted);
+}
+
+.hub-player.is-active {
+  color: var(--status-success);
+  font-weight: 600;
+}
+
+/* Controllers */
+.hub-devices {
+  display: flex;
+  flex-direction: column;
+}
+
+.hub-device + .hub-device {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hub-device-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.hub-device-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hub-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.hub-device-state {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 
-.hub-actions .btn-ide {
-  height: 32px;
-  justify-content: center;
-}
-
-.hub-actions-note {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.hub-devices {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.hub-device {
-  background: var(--bg-card);
+.hub-device-playing {
+  padding: 1px 8px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
-.hub-device-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.hub-device-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 12.5px;
-}
-
-.hub-device-name .dot {
-  width: 7px;
-  height: 7px;
-}
-
-.hub-device-ip {
-  font-family: var(--font-mono);
-  font-size: 11px;
+.hub-device-playing[data-playing="effects"] {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.12);
   color: var(--accent-primary);
-  text-decoration: none;
 }
 
-.hub-device-ip:hover {
-  text-decoration: underline;
-}
-
-.hub-device-stats {
+.hub-device-actions {
   display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.hub-device-stats b {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.hub-seg-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.hub-seg {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 1px 6px;
-}
-
-.hub-seg.is-off {
-  color: var(--text-muted);
-  text-decoration: line-through;
+  gap: var(--space-2);
 }
 
 .hub-warnings {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 11px;
+  margin: 0 0 var(--space-2) 20px;
   color: var(--status-warning);
-}
-
-.hub-warnings li::before {
-  content: "! ";
-  font-family: var(--font-mono);
-  font-weight: 700;
+  font-size: var(--fs-sm);
 }
 
 .hub-empty {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  padding: 6px 0;
+  color: var(--text-secondary);
 }
 
 .hub-empty a {
   color: var(--accent-primary);
 }
 
-.hub-pill {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
+@media (max-width: 560px) {
+  .hub-profile {
+    flex: 1;
+  }
 
-.hub-pill.is-udp {
-  color: var(--status-info);
-  border-color: rgba(56, 189, 248, 0.4);
-}
+  .hub-device-actions {
+    flex-basis: 100%;
+  }
 
-.hub-pill.is-warn {
-  color: var(--status-warning);
-  border-color: rgba(245, 158, 11, 0.4);
-}
-
-@media (max-width: 720px) {
-  .hub-actions {
-    grid-template-columns: 1fr;
+  .hub-device-actions .ui-btn {
+    flex: 1;
   }
 }

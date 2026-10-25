@@ -11,7 +11,15 @@ echo.
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python is not installed or not in PATH.
-    echo Please install Python 3.9+ from https://www.python.org/ and check "Add Python to PATH".
+    echo Please install Python 3.10+ from https://www.python.org/ and check "Add Python to PATH".
+    pause
+    exit /b 1
+)
+python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
+if %errorlevel% neq 0 (
+    echo [ERROR] AutoGlow needs Python 3.10 or newer. Found:
+    python --version
+    echo Please install a current Python from https://www.python.org/ and run setup.bat again.
     pause
     exit /b 1
 )

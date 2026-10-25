@@ -113,6 +113,28 @@ class TestFlowFileLocation(unittest.TestCase):
             self.assertIn("new location", f.read())
         self.assertTrue(os.path.exists(os.path.join(self.temp_dir, "game_flows.json")))
 
+    def test_missing_flow_file_starts_from_shipped_template(self):
+        self.assertEqual(GameFlowStorageManager()._template, game_flow.DEFAULT_FLOW_TEMPLATE)
+        target = os.path.join(self.temp_dir, "game_flows.json")
+        mgr = GameFlowStorageManager(target)
+        mgr._template = game_flow.DEFAULT_FLOW_TEMPLATE
+        idle = next(p for p in mgr.get().phases if p.id == "idle")
+        self.assertEqual(idle.effect.wled_effect_name, "Aurora")  # the template's idle look, not the built-in one
+        self.assertTrue(os.path.exists(target))
+
+    def test_existing_flow_file_is_never_replaced_by_template(self):
+        target = os.path.join(self.temp_dir, "game_flows.json")
+        own = create_default_game_flow()
+        own.name = "My own flow"
+        GameFlowStorageManager(target).save(own)
+        mgr = GameFlowStorageManager(target)
+        mgr._template = game_flow.DEFAULT_FLOW_TEMPLATE
+        self.assertEqual(mgr.get().name, "My own flow")
+
+    def test_shipped_template_is_not_the_user_file(self):
+        self.assertNotEqual(os.path.abspath(game_flow.DEFAULT_FLOW_TEMPLATE), os.path.abspath(DEFAULT_FLOW_PATH))
+        self.assertTrue(os.path.isfile(game_flow.DEFAULT_FLOW_TEMPLATE))
+
 
 class TestEngineFlowLookups(unittest.IsolatedAsyncioTestCase):
 

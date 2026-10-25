@@ -28,12 +28,10 @@
   --z-dialog: 1000;
   --z-toast: 1100;
 
-  /* Views built before the redesign were drawn for a 1.35x page zoom. A rebuilt page gets the
-     true-size class and drops out of the selector below; .legacy-scale wraps old parts inside it. */
+  /* Old modals and .legacy-scale parts were drawn for a 1.35x zoom. Tab panes now render at true size. */
   --legacy-zoom: 1.35;
 }
 
-.tab-pane:not(.true-size),
 .legacy-scale,
 .modal-card,
 .flow-modal-content {

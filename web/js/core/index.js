@@ -3,21 +3,23 @@
 
 import { api, ApiError } from './api.js';
 import { connection } from './connection.js';
-import { confirmDialog, promptDialog } from './dialog.js';
+import { choiceDialog, confirmDialog, promptDialog } from './dialog.js';
 import { esc, h, showFieldError, clearFieldError } from './dom.js';
 import { router } from './router.js';
 import { appStore } from './store.js';
 import { toast } from './toast.js';
 import { initModeSwitch, setLightingMode } from '../components/mode-switch.js';
 import { initShell } from '../components/shell.js';
-import { initStatusPills } from '../components/status-pills.js';
 import { initControllers } from '../features/controllers.js';
+import { initHub } from '../features/hub.js';
+import { initSettings } from '../features/settings.js';
 
 Object.assign(window, {
   api,
   ApiError,
   toast,
   confirmDialog,
+  choiceDialog,
   promptDialog,
   appStore,
   connection,
@@ -28,5 +30,6 @@ Object.assign(window, {
 
 initShell();
 initModeSwitch();
-initStatusPills();
 initControllers();
+initHub();
+initSettings();

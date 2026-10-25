@@ -2,16 +2,15 @@
 // Keeps a WebSocket open to the local AutoGlow server and relays game data from one
 // play.autodarts.com tab (the oldest open one, so two tabs never double-fire events).
 
-const DEFAULT_SETTINGS = { serverUrl: 'http://localhost:8080', pairingKey: '' };
-const BRIDGE_PATH = '/ws/autodarts-bridge';
+// AutoGlow only accepts the extension from Chrome on the same computer, on its default port
+const SERVER_URL = 'http://localhost:8080';
+const BRIDGE_URL = 'ws://localhost:8080/ws/autodarts-bridge';
 const PING_MS = 20000;
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 const QUEUE_LIMIT = 50;
 const QUEUE_MAX_AGE_MS = 5000; // Older game data would light the board for something already over
 
-let settings = { ...DEFAULT_SETTINGS };
-let settingsLoaded = false;
 let socket = null;
 let socketOpen = false;
 let lastError = '';
@@ -26,29 +25,12 @@ let primaryTabId = null;
 // -----------------------------------------------------------------------------
 // AutoGlow connection
 // -----------------------------------------------------------------------------
-function bridgeUrl() {
-  const base = new URL(settings.serverUrl || DEFAULT_SETTINGS.serverUrl);
-  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
-  base.pathname = BRIDGE_PATH;
-  base.search = settings.pairingKey ? `?key=${encodeURIComponent(settings.pairingKey)}` : '';
-  return base.toString();
-}
-
 function connect() {
-  if (socket || !settingsLoaded) return;
+  if (socket) return;
   clearTimeout(reconnectTimer);
   reconnectTimer = null;
 
-  let url;
-  try {
-    url = bridgeUrl();
-  } catch {
-    lastError = 'Invalid AutoGlow address';
-    updateBadge();
-    return;
-  }
-
-  const ws = new WebSocket(url);
+  const ws = new WebSocket(BRIDGE_URL);
   socket = ws;
 
   ws.onopen = () => {
@@ -70,7 +52,7 @@ function connect() {
     if (socket !== ws) return;
     if (!socketOpen) {
       lastError = ev.code === 1006
-        ? 'AutoGlow not reachable (is it running? is the pairing key correct?)'
+        ? 'AutoGlow not reachable (is it running?)'
         : `Connection closed (${ev.code})`;
     }
     socket = null;
@@ -180,8 +162,7 @@ function updateBadge() {
 function status() {
   const tab = primaryTabId !== null ? tabs.get(primaryTabId) : null;
   return {
-    serverUrl: settings.serverUrl,
-    hasPairingKey: !!settings.pairingKey,
+    serverUrl: SERVER_URL,
     connected: socketOpen,
     connecting: !!socket && !socketOpen,
     lastError,
@@ -197,24 +178,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     connect();
     sendResponse(status());
   } else if (msg && msg.type === 'reconnect') {
-    // Sent by the popup after saving new settings
-    loadSettings().then(() => {
-      reconnectNow();
-      sendResponse(status());
-    });
-    return true;
+    // Sent by the popup's Reconnect button
+    reconnectNow();
+    sendResponse(status());
   }
 });
 
 // -----------------------------------------------------------------------------
 // Startup: stay connected in the background whenever Chrome is running
 // -----------------------------------------------------------------------------
-async function loadSettings() {
-  const stored = await chrome.storage.local.get(DEFAULT_SETTINGS);
-  settings = { ...DEFAULT_SETTINGS, ...stored };
-  settingsLoaded = true;
-}
-
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('autoglow-keepalive', { periodInMinutes: 1 });
 });
@@ -225,7 +197,5 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'autoglow-keepalive') connect();
 });
 
-loadSettings().then(() => {
-  updateBadge();
-  connect();
-});
+updateBadge();
+connect();

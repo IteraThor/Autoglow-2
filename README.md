@@ -14,7 +14,7 @@ Real-time smart lighting orchestration for Autodarts boards using WLED controlle
 
 #### Steps
 1. **Download & Extract:**
-   * Download the latest release `.zip` from the [Releases](https://github.com/IteraThor/Autoglow-2/releases) page.
+   * Download the latest release `.zip` from the [Releases](https://github.com/IteraThor/Autoglow-2/releases) page, or on the [repository page](https://github.com/IteraThor/Autoglow-2) click **Code › Download ZIP**.
    * Extract the archive to a folder of your choice.
 
 2. **First-Time Setup:**
@@ -41,9 +41,9 @@ Real-time smart lighting orchestration for Autodarts boards using WLED controlle
    sudo bash setup.sh
    ```
    * Installs required system packages (`git`, `python3-venv`, build tools).
-   * Grants USB device access (adds user to `dialout` group).
    * Creates a virtual environment and installs Python dependencies.
    * Configures and starts **`autoglow.service`** via systemd for automatic background startup.
+   * Installs the AutoGlow Bridge Chrome extension (see section 3).
 
 3. **Access the Web Interface:**
    * Open **`http://localhost:8080`** (or **`http://autoglow.local:8080`**) in your web browser.
@@ -59,26 +59,50 @@ Real-time smart lighting orchestration for Autodarts boards using WLED controlle
 ### 3. Install the AutoGlow Bridge Chrome Extension
 AutoGlow gets live game events (throws, takeouts, leg and match wins) from the **AutoGlow Bridge** extension in the `chrome_extension/` folder.
 
-**Linux:** `setup.sh` installs it automatically in Google Chrome and Chromium through a browser policy (`/etc/opt/chrome/policies/managed/autoglow.json` and `/etc/chromium/policies/managed/autoglow.json`). Restart the browser once after setup. Chrome then shows "Managed by your organization" and lists the extension as installed by policy. To remove it, delete those two files.
+**Chrome must run on the same computer as AutoGlow.** AutoGlow only accepts the extension from its own machine, at `http://localhost:8080`. If AutoGlow runs on a Raspberry Pi or another PC, open play.autodarts.com in a browser on that machine.
+
+**Linux:** `setup.sh` installs the extension automatically through a browser policy. It writes `autoglow.json` into `/etc/opt/chrome/policies/managed/` (Google Chrome) and `/etc/chromium/policies/managed/` (Chromium). It also writes into `/etc/chromium-browser/policies/managed/` (Ubuntu's Chromium), `/etc/brave/policies/managed/` (Brave) and `/etc/opt/edge/policies/managed/` (Edge) when those browsers are installed. Restart the browser once after setup. It then shows "Managed by your organization" and lists the extension as installed by policy. To remove it, delete those `autoglow.json` files. Browsers installed as a Flatpak don't read these policies: use the manual install below.
 
 **Windows / manual install:**
 
 1. Open `chrome://extensions` and switch on **Developer mode** (top right).
 2. Click **Load unpacked** and select the `chrome_extension` folder inside your AutoGlow folder.
-3. Pin the extension and open **https://play.autodarts.com**. The icon shows **ON** while AutoGlow receives the game. The **Autodarts** page in AutoGlow shows the link status too.
+3. Pin the extension and open **https://play.autodarts.com**. The icon shows **ON** while AutoGlow receives the game. The **Setup › Autodarts** page in AutoGlow shows the link status too.
 
 The extension only reads the board and match data that the Autodarts page already receives. It never sends anything to Autodarts and never reads your login. Chrome has to stay open with a play.autodarts.com tab while you play.
-
-**AutoGlow on another computer** (e.g. a Raspberry Pi): click the extension icon, enter the AutoGlow address (e.g. `http://192.168.1.50:8080`) and the **pairing key** from AutoGlow's Autodarts page. Connections from the same computer need no key.
 
 > The previous direct Autodarts login (email/password and device link) is on hold until Autodarts approves it. The code is still in place and can be switched back on with `CLOUD_API_ON_HOLD` in `core/autodarts_bridge.py`.
 
 ---
 
+## Updating
+Your settings and lighting stay in place: `config.json`, `game_flows.json`, `presets/` and `backups/` are not part of a release, so an update never overwrites them. Files that older versions shipped and this one removed are deleted automatically the first time the new version starts.
+
+* **Linux (git):** `git pull`, then `sudo bash setup.sh` (updates the Python packages and the extension, and restarts the service).
+* **Windows (ZIP):** stop AutoGlow (close its window), extract the new release over your AutoGlow folder, run **`setup.bat`**, then start **`run_autoglow.bat`**.
+
+### Updating from AutoGlow 2.1
+Version 2.2 is a redesign. The AI Copilot, statistics and the **Updates & Backups** page are gone, so updates are installed by hand as described above. Your controllers, profiles and game flows carry over. The old AI Copilot key in `config.json` is no longer used and is removed the next time settings are saved.
+
+* **2.1 installed with `git clone`:** 2.1 kept `game_flows.json` and `presets/Default.json` in git. AutoGlow changes both files while it runs, so `git pull` refuses to update ("Your local changes ... would be overwritten"). Do this once:
+  ```bash
+  cd Autoglow-2
+  cp game_flows.json ../game_flows.backup.json
+  git checkout -- game_flows.json presets/Default.json
+  git pull
+  cp ../game_flows.backup.json game_flows.json
+  sudo bash setup.sh
+  ```
+  `presets/` is recreated from `config.json` when AutoGlow starts. After this one-time step, plain `git pull` works again.
+* **2.1 updated with its in-app "Upload update ZIP":** this works, but 2.1 does not restart itself after the update. Restart AutoGlow afterwards: on Linux run `sudo bash setup.sh` (this also installs the Chrome extension), on Windows close the AutoGlow window and start `run_autoglow.bat`. Until then, the old version is still running behind the new pages.
+
+---
+
 ## Configuration & Ports
-* **Default Web Port:** `8080` (can be overridden via the `AUTOGLOW_PORT` environment variable).
+* **Default Web Port:** `8080` (can be overridden via the `AUTOGLOW_PORT` environment variable). The Chrome extension always connects to port 8080, so a different port disconnects it.
 * **Custom Config Path:** Set `AUTOGLOW_CONFIG` to point to a custom `config.json` location if needed.
 * **Application Logs:** Written locally to `autoglow.log` (with automatic log rotation).
+* **Game flows:** Stored in `game_flows.json`. A new install starts from `defaults/game_flows.json`.
 
 ## Access PIN (recommended)
 By default anyone on your network can open the AutoGlow UI and change settings. Set an access PIN under **Settings → Access PIN** to require it in every browser (sessions last 30 days and end immediately when the PIN changes).
@@ -87,17 +111,5 @@ Passwords, tokens and API keys are never sent to the browser, and requests from 
 
 **Forgot the PIN?** Stop AutoGlow, delete the `access_pin_hash` entry from `config.json`, and start it again.
 
-## Operational Hub
-The start page (`/hub`) shows the live lighting engine, stream and power state, the current Autodarts match, and a health card for every WLED controller (power, brightness, live-override lock and segment bounds, read back from `/json/state`). Controllers are not polled while the UDP stream is active.
-
----
-
-## Development
-```bash
-python dev.py setup   # create venv + install runtime and dev dependencies
-python dev.py check   # ruff lint + full unit test suite (same as CI)
-python dev.py run     # start the server
-```
-CI (`.github/workflows/ci.yml`) runs lint and tests on Python 3.10, 3.12 and 3.14 for every push and pull request.
-
-Tests never touch the production `config.json` or `game_flows.json`. Use `AUTOGLOW_CONFIG` to point a dev server at a scratch config, but note that startup also writes every profile into `presets/`.
+## Hub
+The start page (`/hub`) shows the first-run checklist until setup is done, what is playing now (lighting engine, players, last event, idle countdown), and a card for every WLED controller with its health, active profile and **Wake / Dim / Off** buttons. Controllers are not polled while the UDP stream is active.

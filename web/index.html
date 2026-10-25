@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/theme.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/shell.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/pages.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/layout.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/components.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p6">
-  <link rel="stylesheet" href="/css/hub.css?v=2.2-p6">
+  <link rel="stylesheet" href="/css/theme.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/shell.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/pages.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/layout.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/components.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/hub.css?v=2.2-p16">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,24 +20,12 @@
   <div class="app-shell">
 
     <header class="app-header">
-      <a href="/hub" data-link class="brand" aria-label="AutoGlow home">
+      <a href="/hub" data-link class="brand" aria-label="AutoGlow 2 beta home">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-        <span>AutoGlow</span>
+        <span>AutoGlow 2</span>
+        <span class="brand-tag">beta</span>
       </a>
 
-      <!-- What the engine plays. Changing it is confirmed by the server before the switch moves. -->
-      <div class="mode-switch" id="modeSwitch" role="group" aria-label="Playing mode">
-        <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span>Event Matrix</span>
-        </button>
-        <button type="button" class="mode-option" data-mode="flow" aria-pressed="false">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
-          <span>Flow Matrix</span>
-        </button>
-      </div>
-
-      <div class="status-pills" id="statusPills" aria-label="Status"></div>
     </header>
 
     <div class="app-body">
@@ -54,10 +42,6 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span>Lighting</span>
         </a>
-        <a href="/power" data-link data-view="power" class="rail-item">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <span>Power</span>
-        </a>
         <a href="/settings" data-link data-view="settings" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Settings</span>
@@ -71,86 +55,31 @@
       <div class="tab-container">
         
         <!-- TAB 1: OPERATIONAL STATUS HUB -->
-        <section id="tab-dashboard" class="tab-pane">
-          <div class="hub-header">
-            <span class="hub-title">Operational Hub</span>
-            <span class="hub-meta" id="hubMeta">Loading status...</span>
+        <section id="tab-dashboard" class="tab-pane true-size hub-page">
+          <!-- First-run steps; hidden once everything is done (web/js/features/hub.js) -->
+          <div class="card" id="hubChecklist" hidden></div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2 class="card-title">Now playing</h2>
+              <span class="hub-match-state" id="hubMatchState">No match</span>
+            </div>
+            <dl class="hub-kv">
+              <dt>Lighting engine</dt><dd><a href="/lighting" data-link id="hubEngine">&mdash;</a></dd>
+              <dt>Players</dt><dd id="hubMatchPlayers">&mdash;</dd>
+              <div class="hub-kv-row" id="hubIdleRow" hidden><dt>Idle mode in</dt><dd id="hubIdleIn">&mdash;</dd></div>
+              <dt>Last event</dt><dd id="hubMatchLast">&mdash;</dd>
+              <div class="hub-kv-row" id="hubPhaseRow" hidden><dt>Flow phase</dt><dd id="hubMatchPhase">idle</dd></div>
+            </dl>
           </div>
 
-          <!-- Status tiles: populated by hub.js -->
-          <div class="metrics-grid">
-            <div class="metric-box">
-              <span class="metric-label">Lighting Engine</span>
-              <span class="metric-val" id="hubEngineVal">&mdash;</span>
-              <span class="metric-hint" id="hubEngineHint"></span>
+          <div class="card">
+            <div class="card-head">
+              <h2 class="card-title">Controllers</h2>
+              <a class="card-link" href="/setup/controllers" data-link>Manage</a>
             </div>
-            <div class="metric-box">
-              <span class="metric-label">Live Stream</span>
-              <span class="metric-val" id="hubStreamVal">&mdash;</span>
-              <span class="metric-hint" id="hubStreamHint"></span>
-            </div>
-            <div class="metric-box">
-              <span class="metric-label">Board Power</span>
-              <span class="metric-val" id="hubPowerVal">&mdash;</span>
-              <span class="metric-hint" id="hubPowerHint"></span>
-            </div>
-            <div class="metric-box">
-              <span class="metric-label">Autodarts</span>
-              <span class="metric-val" id="hubAutodartsVal">&mdash;</span>
-              <span class="metric-hint" id="hubAutodartsHint"></span>
-            </div>
-          </div>
-
-          <div class="hub-grid">
-            <div class="ide-panel">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-                  <span>Live Match</span>
-                </span>
-                <span class="hub-pill" id="hubMatchPill">Standby</span>
-              </div>
-              <div class="panel-body">
-                <dl class="hub-kv">
-                  <dt>Players</dt><dd id="hubMatchPlayers">None</dd>
-                  <dt>Last event</dt><dd id="hubMatchLast">Standby</dd>
-                  <dt>Previous</dt><dd id="hubMatchPrev">&mdash;</dd>
-                  <dt>Flow phase</dt><dd id="hubMatchPhase">idle</dd>
-                </dl>
-              </div>
-            </div>
-
-            <div class="ide-panel">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                  <span>Quick Actions</span>
-                </span>
-              </div>
-              <div class="panel-body">
-                <div class="hub-actions">
-                  <button class="btn-ide btn-ide-primary" id="hubBtnStream" onclick="hubToggleStream()">Connect UDP</button>
-                  <button class="btn-ide" onclick="hubRunAction('wake')">Wake Board</button>
-                  <button class="btn-ide" onclick="hubRunAction('dim')">Dim Now</button>
-                  <button class="btn-ide btn-ide-danger" onclick="hubRunAction('off')">Lights Off</button>
-                </div>
-                <p class="hub-actions-note">Actions apply to every enabled controller and are confirmed by reading back <code>/json/state</code>. Check the physical LEDs match.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="ide-panel">
-            <div class="panel-header">
-              <span class="panel-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/></svg>
-                <span>Controllers</span>
-              </span>
-              <button class="btn-ide" onclick="refreshHub(true)" style="font-size: 10.5px; padding: 2px 9px;">Refresh</button>
-            </div>
-            <div class="panel-body">
-              <div class="hub-devices" id="hubDevices">
-                <div class="hub-empty">Checking controllers...</div>
-              </div>
+            <div class="hub-devices" id="hubDevices">
+              <div class="hub-empty">Checking controllers…</div>
             </div>
           </div>
         </section>
@@ -164,16 +93,38 @@
               <button type="submit" class="ui-btn ui-btn-primary">Add</button>
             </form>
             <button type="button" class="ui-btn" id="btnScanNetwork">Scan network</button>
-            <!-- USB/Adalight serial control: placeholder until it is built -->
-            <button type="button" class="ui-btn" id="btnScanSerial" disabled title="USB/Adalight serial control — coming soon">USB</button>
           </div>
 
           <div class="ctl-scan" id="scanResults" hidden></div>
           <div class="ctl-list" id="controllerList"></div>
 
-          <!-- Outputs & segments editor (web/js/devices.js), drawn at the legacy scale for now -->
+          <!-- Per-controller setup (web/js/devices.js): outputs & segments, and idle lighting (power.js).
+               Both panels are drawn at the legacy scale for now. -->
           <aside class="drawer" id="controllerDrawer" aria-label="Edit controller" hidden>
-            <div class="drawer-body legacy-scale" id="controllerDrawerBody"></div>
+            <div class="drawer-tabs" role="tablist" aria-label="Controller setup">
+              <button type="button" class="drawer-tab" role="tab" id="drawerTabLayout" aria-controls="controllerDrawerBody" aria-selected="true" data-drawer-tab="layout">LEDs &amp; segments</button>
+              <button type="button" class="drawer-tab" role="tab" id="drawerTabIdle" aria-controls="controllerIdlePanel" aria-selected="false" data-drawer-tab="idle">Idle lighting</button>
+              <button type="button" class="ui-btn ui-btn-sm ui-btn-quiet drawer-close" id="drawerClose" aria-label="Close" title="Close">✕</button>
+            </div>
+            <div class="drawer-body legacy-scale" id="controllerDrawerBody" role="tabpanel" aria-labelledby="drawerTabLayout"></div>
+
+            <!-- Idle lighting: what the controller shows when no game is running (WLED boot preset 1) -->
+            <div class="drawer-body legacy-scale idle-panel" id="controllerIdlePanel" role="tabpanel" aria-labelledby="drawerTabIdle" hidden>
+              <p class="idle-panel-intro">What this controller shows when no game is running. It is saved on the controller as WLED preset 1 and also plays when the controller starts up.</p>
+              <div class="idle-seg-grid" id="idleSegmentsListContainer">
+                <!-- Populated dynamically by renderIdleSegmentsList() -->
+              </div>
+              <div class="idle-panel-actions">
+                <button class="btn-ide" id="btnPreviewIdlePreset" onclick="previewIdlePreset()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <span>Live Preview</span>
+                </button>
+                <button class="btn-ide btn-ide-primary" id="btnSaveIdlePreset" onclick="saveIdlePreset()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  <span>Save idle lighting</span>
+                </button>
+              </div>
+            </div>
           </aside>
         </section>
 
@@ -224,7 +175,7 @@
                 </span>
               </div>
               <div class="panel-body" style="flex: 1; display: flex; flex-direction: column; gap: 8px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">
-                <span style="color: var(--text-muted);">Linux: <code>setup.sh</code> installs the extension automatically (restart Chrome once). Otherwise:</span>
+                <span style="color: var(--text-muted);">Use Chrome on this computer: AutoGlow only accepts the extension from the machine it runs on. Linux: <code>setup.sh</code> installs the extension automatically (restart Chrome once). Otherwise:</span>
                 <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;">
                   <li>In Chrome, open <code>chrome://extensions</code> and switch on <strong>Developer mode</strong>.</li>
                   <li>Click <strong>Load unpacked</strong> and select this folder:
@@ -235,14 +186,6 @@
                   </li>
                   <li>Open <strong>play.autodarts.com</strong> and play as usual. The toolbar icon shows <strong>ON</strong> while AutoGlow receives the game.</li>
                 </ol>
-                <div style="border-top: 1px solid var(--border-subtle); padding-top: 8px; display: flex; flex-direction: column; gap: 4px;">
-                  <span style="color: var(--text-muted);">Chrome on another computer? In the extension popup enter <code id="bridgeServerAddress">this address</code> and the pairing key:</span>
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <code id="bridgePairingKey" style="flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 11px;">&mdash;</code>
-                    <button class="btn-ide" onclick="copyBridgeValue('bridgePairingKey', 'Pairing key')" style="font-size: 10.5px; padding: 3px 8px;">Copy</button>
-                    <button class="btn-ide" onclick="regenerateBridgeKey()" style="font-size: 10.5px; padding: 3px 8px;" title="Paired browsers on other computers must enter the new key">New key</button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -372,26 +315,8 @@
 
           </div>
 
-          <!-- Bottom Row: Dartboards & Live Match Status -->
-          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: stretch;">
-            <!-- Half Width: Dartboards -->
-            <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                  <span>Dartboards</span>
-                </span>
-                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);" id="boardsCountBadge">0 Boards</span>
-              </div>
-              <div class="panel-body" style="flex: 1;">
-                <div id="boardsContainer" style="display: flex; flex-direction: column; gap: 8px;">
-                  <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px; padding: 6px 0;">
-                    No cloud account connected.
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          <!-- Bottom Row: Live Match Status -->
+          <div style="display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch;">
             <!-- Right Half: Live Match Status -->
             <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
               <div class="panel-header">
@@ -511,66 +436,35 @@
         </section>
 
 
-        <!-- TAB 5: POWER & IDLE MODE -->
-        <section id="tab-power" class="tab-pane">
+        <!-- TAB 5: SETTINGS (lighting engine, inactivity & standby timers, access PIN) -->
+        <section id="tab-settings" class="tab-pane">
+
+          <!-- Lighting engine: decides what plays; the Lighting page shows the matching workspace -->
+          <div class="ide-panel">
+            <div class="panel-header">
+              <span class="panel-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Lighting Engine</span>
+              </span>
+            </div>
+            <div class="panel-body" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="mode-switch" style="align-self: flex-start;" id="modeSwitch" role="group" aria-label="Lighting engine">
+                <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix</span></button>
+                <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-secondary);">Chooses what plays during a game. The Lighting page opens the matching workspace.</div>
+            </div>
+          </div>
+
           
-          <!-- Landing View: Select a WLED Controller -->
-          <div id="powerDeviceLanding" class="ide-panel" style="display: none; margin-bottom: 16px;">
-            <div class="panel-header">
-              <span class="panel-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                <span>Select Controller</span>
-              </span>
-            </div>
-            <div id="powerDeviceLandingContent" style="padding: 0;">
-              <!-- Populated dynamically by renderPowerDeviceLanding() -->
-            </div>
-          </div>
-
-          <!-- Config Area: Idle & Ambient Lighting (WLED Boot Preset 1) -->
-          <div id="powerDeviceConfigArea" class="ide-panel" style="margin-bottom: 16px; overflow: visible;">
-            <div class="panel-header">
-              <span class="panel-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                <span>Idle &amp; Ambient Lighting (Boot Preset 1)</span>
-              </span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span id="powerConfigDeviceBadge" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); background: var(--bg-surface); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-subtle); display: none;"></span>
-                <button class="btn-ide" onclick="backToPowerLanding()" style="font-size: 11px; padding: 2px 8px;">Change Controller</button>
-              </div>
-            </div>
-            
-            <div class="panel-body" style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; overflow: visible;">
-              
-              <!-- Dynamic Multi-Segment Cards Grid -->
-              <div id="idleSegmentsListContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; overflow: visible;">
-                <!-- Populated dynamically by renderIdleSegmentsList() -->
-              </div>
-
-              <!-- Action Buttons Row -->
-              <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; border-top: 1px solid var(--border-subtle); padding-top: 10px; margin-top: 2px;">
-                <button class="btn-ide" id="btnPreviewIdlePreset" onclick="previewIdlePreset()" style="font-weight: 600; padding: 5px 14px; font-size: 11.5px;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <span>Live Preview</span>
-                </button>
-                <button class="btn-ide btn-ide-primary" id="btnSaveIdlePreset" onclick="saveIdlePreset()" style="font-weight: 600; padding: 5px 16px; font-size: 11.5px;">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  <span>Save as Boot Preset 1</span>
-                </button>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- Global Inactivity Timers (Shown only on main Power & Idle landing) -->
-          <div id="powerGlobalTimersArea">
+          <!-- Inactivity & standby timers (all controllers) -->
+          <div id="powerGlobalTimersArea" style="margin-bottom: 16px;">
             <div class="ide-panel" style="margin-bottom: 0;">
               <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
                 <span class="panel-title">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--status-warning)" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                   <span>Inactivity &amp; Standby Timers</span>
                 </span>
-                <button class="btn-ide btn-ide-primary" onclick="savePowerConfig()" style="font-weight: 600; font-size: 11px; padding: 3px 14px;">Save Timers</button>
               </div>
               <div class="panel-body" style="display: flex; flex-direction: column; gap: 12px;">
                 
@@ -583,7 +477,7 @@
                     </label>
                     <div class="power-setting-info" style="margin: 0;">
                       <span class="power-setting-title">Inactivity Timeout</span>
-                      <span class="power-setting-desc">Minutes without throws before releasing UDP mode and restoring Idle Preset 1.</span>
+                      <span class="power-setting-desc">Minutes without throws before releasing UDP mode and going back to each controller's idle lighting.</span>
                     </div>
                   </div>
                   <div id="inactivityControlsGroup" class="power-setting-controls" style="display: flex; align-items: center; gap: 8px;">
@@ -603,7 +497,7 @@
                     </label>
                     <div class="power-setting-info" style="margin: 0;">
                       <span class="power-setting-title">Inactivity Timeout: on Match End</span>
-                      <span class="power-setting-desc">Automatically release UDP stream and restore Idle Preset 1 when a match finishes or is aborted.</span>
+                      <span class="power-setting-desc">Automatically release UDP stream and go back to the idle lighting when a match finishes or is aborted.</span>
                     </div>
                   </div>
                 </div>
@@ -635,118 +529,14 @@
                   </div>
                 </div>
 
-                <!-- Auto-Off on Board Offline (Strict Board + Grace Period) -->
-                <div class="power-setting-row" id="boardOfflineStandbyRow" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px;">
-                    <label class="switch" title="Enable / Disable Auto-Off Timeout on Board Offline" style="margin: 0; flex-shrink: 0;">
-                      <input type="checkbox" id="standbyBoardOfflineToggle" onchange="handleBoardOfflineToggleChange()">
-                      <span class="switch-slider"></span>
-                    </label>
-                    <div class="power-setting-info" style="margin: 0;">
-                      <span class="power-setting-title">Auto-Off Timeout: on Board Offline</span>
-                      <span class="power-setting-desc">Automatically turn off WLED devices when selected dartboard powers off &mdash; automatic wakeup on power-on. <span style="color: #f59e0b; font-weight: 500;">Experimental: might cause issues.</span></span>
-                    </div>
-                  </div>
-                  <div id="boardOfflineControlsGroup" class="power-setting-controls" style="display: flex; align-items: center; gap: 8px;">
-                    <select id="standbyBoardOfflineSelect" class="input-text" style="height: 26px; font-size: 11px; padding: 0 8px; min-width: 140px;" onchange="handleBoardOfflineSelectChange()">
-                      <option value="">No board selected</option>
-                    </select>
-                    <div style="display: flex; align-items: center; gap: 4px;" title="Offline grace period / delay in seconds before power-off">
-                      <input type="number" class="input-text" id="standbyBoardOfflineDelayInput" value="10" min="0" max="300" style="width: 50px; height: 26px; padding: 0 6px; box-sizing: border-box; font-size: 11px;" onchange="handleBoardOfflineDelayChange()" oninput="handleBoardOfflineDelayChange()">
-                      <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">sec</span>
-                    </div>
-                  </div>
-                </div>
 
               </div>
             </div>
           </div>
 
-        </section>
-
-        <!-- TAB 6: SETTINGS (UPDATES & BACKUPS) -->
-        <section id="tab-settings" class="tab-pane">
-          
-          <!-- Two Column Grid: Update Channel on Left, Backup Manager on Right -->
+          <!-- Security settings -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start;">
             
-            <!-- Left Panel: Software Update -->
-            <div class="ide-panel" style="margin-bottom: 0;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  <span>System Update</span>
-                </span>
-                <span class="version-tag" style="font-size: 10px;">v2.1 Beta</span>
-              </div>
-              <div class="panel-body" style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-family: var(--font-mono); font-size: 11.5px;">
-                  <span style="color: var(--text-muted);">Current Version</span>
-                  <strong style="color: var(--accent-primary);">v2.1 Beta</strong>
-                </div>
-
-                <!-- Hidden file input -->
-                <input type="file" id="zipUpdateFileInput" accept=".zip,application/zip" style="display: none;" onchange="handleZipFileSelected(this)">
-
-                <!-- Compact Drop Zone / Upload Area -->
-                <div id="zipDropZone" onclick="triggerZipSelect()" ondragover="handleZipDragOver(event)" ondragleave="handleZipDragLeave(event)" ondrop="handleZipDrop(event)" style="border: 1px dashed rgba(var(--accent-rgb), 0.35); border-radius: var(--radius-sm); padding: 10px 14px; cursor: pointer; transition: all 0.2s ease; background: rgba(var(--accent-rgb), 0.02); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span style="font-size: 11.5px; color: var(--text-secondary);">Select or drop update package (.zip)</span>
-                  </div>
-                  <button class="btn-ide" type="button" style="font-size: 10.5px; padding: 3px 9px; pointer-events: none;">Browse</button>
-                </div>
-
-                <!-- Selected File Card (hidden until file chosen) -->
-                <div id="selectedZipCard" style="display: none; flex-direction: column; gap: 8px; background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.35);">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                      <div style="width: 26px; height: 26px; border-radius: 4px; background: rgba(var(--accent-rgb), 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                      </div>
-                      <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <div id="selectedZipName" style="font-size: 11.5px; font-weight: 600; color: var(--text-primary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis;">release.zip</div>
-                        <div id="selectedZipSize" style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono);">0.0 KB</div>
-                      </div>
-                    </div>
-                    <button class="btn-ide" onclick="clearSelectedZip(event)" style="font-size: 10px; padding: 2px 6px; color: var(--status-danger); border-color: rgba(239, 68, 68, 0.3);" title="Remove selected file">✕</button>
-                  </div>
-
-                  <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 10.5px; color: var(--text-secondary); padding-top: 4px; border-top: 1px solid var(--border-subtle);">
-                    <input type="checkbox" id="chkAutoBackupPreUpdate" checked style="accent-color: var(--accent-primary);">
-                    <span>Auto-backup before update</span>
-                  </label>
-                </div>
-
-                <!-- Update Status/Progress Box -->
-                <div id="zipUpdateStatusBox" style="display: none; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 11px; font-family: var(--font-mono);"></div>
-
-                <!-- Action Button -->
-                <button class="btn-ide btn-ide-primary" onclick="applyZipUpdate()" id="btnApplyZipUpdate" style="display: none; height: 32px; justify-content: center; font-weight: 600; font-size: 11px; width: 100%;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  <span>Install Update &amp; Reload</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Right Panel: Snapshot & Backup Manager -->
-            <div class="ide-panel" style="margin-bottom: 0;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--status-success)" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  <span>System Backups</span>
-                </span>
-                <button class="btn-ide btn-ide-primary" onclick="promptCreateBackup()" style="font-size: 10.5px; padding: 2px 9px; font-weight: 600;">
-                  <span>+ Backup</span>
-                </button>
-              </div>
-              <div class="panel-body" style="display: flex; flex-direction: column; gap: 8px;">
-                <div id="backupsListContainer" style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; padding: 10px 0;">Loading backup snapshots...</div>
-                </div>
-              </div>
-            </div>
-
             <!-- Access PIN Panel -->
             <div class="ide-panel" style="margin-bottom: 0;">
               <div class="panel-header">
@@ -771,16 +561,22 @@
                   </div>
                   <div class="input-group">
                     <label class="input-label" for="pinConfirmInput">Confirm</label>
-                    <input type="password" inputmode="numeric" autocomplete="new-password" id="pinConfirmInput" class="input-text" maxlength="32" onkeydown="if(event.key==='Enter'){event.preventDefault();savePinSettings(false);}">
+                    <input type="password" inputmode="numeric" autocomplete="new-password" id="pinConfirmInput" class="input-text" maxlength="32" onkeydown="if(event.key==='Enter'){event.preventDefault();settingsPage.save();}">
                   </div>
                 </div>
                 <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                  <button class="btn-ide btn-ide-danger" id="btnRemovePin" onclick="savePinSettings(true)" style="display: none;">Remove PIN</button>
-                  <button class="btn-ide btn-ide-primary" onclick="savePinSettings(false)">Save PIN</button>
+                  <button class="btn-ide btn-ide-danger" id="btnRemovePin" type="button" aria-pressed="false" style="display: none;">Remove PIN</button>
                 </div>
               </div>
             </div>
 
+          </div>
+
+          <!-- One save for everything on this page -->
+          <div class="settings-savebar" id="settingsSaveBar">
+            <span class="settings-savebar-note" id="settingsSaveNote" aria-live="polite">No unsaved changes</span>
+            <button class="btn-ide" id="btnSettingsDiscard" type="button" disabled>Discard</button>
+            <button class="btn-ide btn-ide-primary" id="btnSettingsSave" type="button" disabled>Save</button>
           </div>
 
         </section>
@@ -1210,19 +1006,17 @@
   </div>
 
   <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
-  <script type="module" src="/js/core/index.js?v=2.2-p6"></script>
-  <script defer src="/js/auth.js?v=2.2-p6"></script>
-  <script defer src="/js/state.js?v=2.2-p6"></script>
-  <script defer src="/js/utils.js?v=2.2-p6"></script>
-  <script defer src="/js/devices.js?v=2.2-p6"></script>
-  <script defer src="/js/autodarts.js?v=2.2-p6"></script>
-  <script defer src="/js/matrix.js?v=2.2-p6"></script>
-  <script defer src="/js/power.js?v=2.2-p6"></script>
-  <script defer src="/js/simulator.js?v=2.2-p6"></script>
-  <script defer src="/js/flow_planner.js?v=2.2-p6"></script>
-  <script defer src="/js/system.js?v=2.2-p6"></script>
-  <script defer src="/js/hub.js?v=2.2-p6"></script>
-  <script defer src="/app.js?v=2.2-p6"></script>
+  <script type="module" src="/js/core/index.js?v=2.2-p16"></script>
+  <script defer src="/js/auth.js?v=2.2-p16"></script>
+  <script defer src="/js/state.js?v=2.2-p16"></script>
+  <script defer src="/js/utils.js?v=2.2-p16"></script>
+  <script defer src="/js/devices.js?v=2.2-p16"></script>
+  <script defer src="/js/autodarts.js?v=2.2-p16"></script>
+  <script defer src="/js/matrix.js?v=2.2-p16"></script>
+  <script defer src="/js/power.js?v=2.2-p16"></script>
+  <script defer src="/js/simulator.js?v=2.2-p16"></script>
+  <script defer src="/js/flow_planner.js?v=2.2-p16"></script>
+  <script defer src="/app.js?v=2.2-p16"></script>
 
 </body>
 </html>

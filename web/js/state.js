@@ -22,7 +22,7 @@ var selectedMatrixDeviceIp = (typeof localStorage !== 'undefined' ? localStorage
 var selectedMatrixSegmentId = null;
 
 var idlePresetState = {
-  ip: (typeof localStorage !== 'undefined' ? localStorage.getItem('autoglow_selected_power_device') : null) || null,
+  ip: null,
   loaded: false,
   presetId: 1,
   name: 'AutoGlow Default',

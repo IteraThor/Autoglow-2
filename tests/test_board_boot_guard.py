@@ -28,9 +28,6 @@ class TestBoardBootGuard(unittest.TestCase):
             profile=ProfileConfig.get_default_profile(),
             auto_connect_udp_on_game_start=True,
             disconnect_udp_on_match_end=True,
-            standby_board_offline_enabled=True,
-            standby_board_offline_id="board-uuid-1",
-            standby_board_offline_delay_seconds=10
         )
 
     def test_boot_signals_outside_active_match_do_not_emit_throw(self):
@@ -110,7 +107,6 @@ class TestBoardBootGuard(unittest.TestCase):
                 autodarts_client=mock_autodarts
             )
             engine.is_board_off = True
-            engine._board_offline_standby_active = True
 
             with patch("core.wled_driver.WLEDDriver.preview_wled_state") as mock_preview:
                 await engine.wake_up(mode=ProtocolMode.IDLE_HTTP)

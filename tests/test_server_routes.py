@@ -122,6 +122,22 @@ class TestServerRoutes(AioHTTPTestCase):
         self.assertEqual(dev.hw_ins[1]["order"], 1)
 
     @unittest_run_loop
+    async def test_wled_setup_preview_writes_nothing_to_config(self):
+        payload = {"ip": "192.168.2.215", "hw_ins": [{"pin": [16], "type": 22, "start": 0, "len": 45}], "state": {"on": True}}
+        with unittest.mock.patch("core.wled_driver.WLEDDriver.apply_setup_preview") as preview:
+            resp = await self.client.request("POST", "/api/wled/setup-preview", json=payload)
+            self.assertEqual(resp.status, 200)
+            preview.assert_called_once_with("192.168.2.215", payload["hw_ins"], payload["state"])
+        self.assertFalse(any(d.ip == "192.168.2.215" for d in self.app["current_app_config"].devices))
+
+        resp = await self.client.request("POST", "/api/wled/setup-preview", json={"ip": "192.168.2.215", "hw_ins": "bad"})
+        self.assertEqual(resp.status, 400)
+
+        with unittest.mock.patch("core.wled_driver.WLEDDriver.apply_setup_preview", side_effect=OSError("timed out")):
+            resp = await self.client.request("POST", "/api/wled/setup-preview", json={"ip": "192.168.2.215", "state": {"on": True}})
+            self.assertEqual(resp.status, 502)
+
+    @unittest_run_loop
     async def test_post_config_with_none_pwm_index(self):
         payload = {
             "devices": [

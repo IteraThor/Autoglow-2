@@ -1,68 +1,6 @@
-// AutoGlow 2 - Power & Idle Mode / Preset 1 Configurator Module
+// AutoGlow 2 - Power timers, and the idle lighting editor shown in each controller's drawer (Setup › Controllers)
 
-function selectPowerDevice(ip) {
-  idlePresetState.ip = ip;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('autoglow_selected_power_device', ip);
-  }
-  
-  const select = document.getElementById('idleDeviceSelect');
-  if (select) select.value = ip;
-
-  renderPowerTab();
-}
-
-function renderPowerDeviceLanding() {
-  const content = document.getElementById('powerDeviceLandingContent');
-  if (!content) return;
-
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  if (devicesList.length === 0) {
-    content.innerHTML = `
-      <div style="padding: 30px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-        <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        </div>
-        <strong style="color: var(--text-primary); font-size: 14px;">No controllers yet</strong>
-        <p style="color: var(--text-secondary); font-size: 12px; max-width: 360px; margin: 0; line-height: 1.5;">
-          Add a WLED controller in Setup first.
-        </p>
-        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Open Setup</button>
-      </div>
-    `;
-    return;
-  }
-
-  content.innerHTML = `
-    <div style="padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 240px)); gap: 10px;">
-      ${devicesList.map(dev => {
-        const ip = dev.ip || '';
-        const name = dev.name || 'WLED Controller';
-        const cached = lastFetchedLiveDeviceData[ip];
-        const isOnline = cached ? (cached.status === 'ok' && cached.online) : null;
-        const dotClass = isOnline === true ? 'dot dot-green' : (isOnline === false ? 'dot dot-gray' : 'dot');
-
-        return `
-          <div class="card-device-select" onclick="selectPowerDevice('${escapeJsString(ip)}')">
-            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-              <span class="${dotClass}" style="width: 8px; height: 8px; flex-shrink: 0;"></span>
-              <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
-                <strong style="color: var(--text-primary); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(name)}</strong>
-                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);">${escapeHtml(ip)}</span>
-              </div>
-            </div>
-            <button class="btn-ide" style="font-size: 11px; padding: 4px 10px; pointer-events: none; flex-shrink: 0;">
-              Configure &rarr;
-            </button>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// --- Idle & Ambient Preset (WLED Boot Preset 1) Configurator ---
+// --- Idle lighting (saved on the controller as WLED preset 1, which is also its boot preset) ---
 let wledEffectsCache = [];
 
 async function fetchWledEffects(ip) {
@@ -77,18 +15,6 @@ async function fetchWledEffects(ip) {
     console.debug('Failed to fetch WLED effects:', err);
   }
   return wledEffectsCache;
-}
-
-async function populateIdleDeviceSelect() {
-  const select = document.getElementById('idleDeviceSelect');
-  if (!select) return;
-  const devices = Array.isArray(appState.devices) ? appState.devices : [];
-  if (devices.length === 0) {
-    select.innerHTML = '<option value="">No WLED Devices</option>';
-    return;
-  }
-  const currentVal = select.value;
-  select.innerHTML = devices.map(d => `<option value="${d.ip}" ${d.ip === (currentVal || idlePresetState.ip || devices[0].ip) ? 'selected' : ''}>${escapeHtml(d.name || d.ip)} (${d.ip})</option>`).join('');
 }
 
 async function loadIdlePresetForSelectedDevice(targetIp) {
@@ -126,17 +52,18 @@ async function loadIdlePresetForSelectedDevice(targetIp) {
     return;
   }
 
-  // Show quick connecting placeholder if status unknown
-  if (!cached && container) {
+  // Placeholder while loading, so another controller's cards never show here
+  if (container) {
     container.innerHTML = `
       <div style="grid-column: 1 / -1; padding: 36px 20px; text-align: center; color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">
-        Checking controller status (${escapeHtml(ip)})...
+        Loading idle lighting (${escapeHtml(ip)})...
       </div>
     `;
   }
 
   // Verify live online status using cached/in-flight singleton
   const pingData = await pingDeviceCached(ip);
+  if (idlePresetState.ip !== ip) return;
   const isOnline = pingData && pingData.status === 'ok' && pingData.online === true;
 
   if (!isOnline) {
@@ -146,12 +73,6 @@ async function loadIdlePresetForSelectedDevice(targetIp) {
 
   if (btnPreview) btnPreview.style.display = '';
   if (btnSave) btnSave.style.display = '';
-
-  const badge = document.getElementById('powerConfigDeviceBadge');
-  if (badge) {
-    badge.textContent = `${devName} (${ip})`;
-    badge.style.display = 'inline-block';
-  }
 
   // 1. Fetch WLED effects catalog
   await fetchWledEffects(ip);
@@ -172,6 +93,8 @@ async function loadIdlePresetForSelectedDevice(targetIp) {
   } catch (err) {
     console.debug('Failed to fetch preset from device, using hardware segments:', err);
   }
+
+  if (idlePresetState.ip !== ip) return;
 
   // 4. Build idlePresetState.segments matching all configured segments
   idlePresetState.segments = hwSegments.map((hwMatch, idx) => {
@@ -349,15 +272,12 @@ function renderEffectColorsHtml(segIdx, fxId) {
   }).join('');
 }
 
-function backToPowerLanding() {
+// The drawer closed or switched controllers: forget the loaded preset so the next open reloads it
+function resetIdleLighting() {
   idlePresetState.ip = null;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('autoglow_selected_power_device');
-  }
-  const badge = document.getElementById('powerConfigDeviceBadge');
-  if (badge) badge.style.display = 'none';
+  idlePresetState.loaded = false;
+  idlePresetState.segments = [];
   closeAllEffectDropdowns();
-  renderPowerTab();
 }
 
 function renderSearchableEffectSelect(segIdx, selectedFxId) {
@@ -798,7 +718,7 @@ async function updateIdlePreviewLive() {
 
 async function saveIdlePreset() {
   if (!idlePresetState.ip) {
-    showToast('No WLED device selected.', 'error');
+    showToast('No controller selected.', 'error');
     return;
   }
 
@@ -844,7 +764,7 @@ async function saveIdlePreset() {
     });
     const data = await res.json();
     if (data.status === 'ok') {
-      showToast('Saved as WLED Boot Preset 1 successfully.', 'success');
+      showToast('Idle lighting saved on the controller.', 'success');
     } else {
       showToast(`Save failed: ${data.message}`, 'error');
     }
@@ -920,165 +840,46 @@ function handleStandbyTimeoutChange() {
 }
 
 function renderPowerTab() {
-  const landing = document.getElementById('powerDeviceLanding');
-  const configArea = document.getElementById('powerDeviceConfigArea');
-  const timersArea = document.getElementById('powerGlobalTimersArea');
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  if (!idlePresetState.ip || !devicesList.find(d => d.ip === idlePresetState.ip)) {
-    // Show device selection landing & global timers on parent menu
-    if (landing) landing.style.display = 'block';
-    if (timersArea) timersArea.style.display = 'block';
-    if (configArea) configArea.style.display = 'none';
-    renderPowerDeviceLanding();
-  } else {
-    // Show device-specific configurator (hide landing & global timers)
-    if (landing) landing.style.display = 'none';
-    if (timersArea) timersArea.style.display = 'none';
-    if (configArea) configArea.style.display = 'block';
-    loadIdlePresetForSelectedDevice();
-  }
-
   const inactivityEnabled = appState.inactivity_timeout_enabled ?? true;
   const inactivityMin = appState.inactivity_timeout_minutes ?? 5;
   const idlePowerOffEnabled = appState.idle_power_off_enabled ?? true;
   const idlePowerOffMin = appState.idle_power_off_minutes ?? 30;
   const disconnectUdpOnMatchEnd = appState.disconnect_udp_on_match_end ?? false;
-  const boardOfflineEnabled = appState.standby_board_offline_enabled ?? false;
-  const boardOfflineId = appState.standby_board_offline_id ?? '';
-  const boardOfflineDelay = appState.standby_board_offline_delay_seconds ?? 10;
 
   const inactToggle = document.getElementById('inactivityTimeoutEnabledToggle');
   const inactMinInp = document.getElementById('inactivityTimeoutMinInput');
   const standbyToggle = document.getElementById('idlePowerOffEnabledToggle');
   const standbyMinInp = document.getElementById('idlePowerOffMinInput');
   const matchEndToggle = document.getElementById('disconnectUdpOnMatchEndToggle');
-  const boardOfflineToggle = document.getElementById('standbyBoardOfflineToggle');
-  const boardOfflineDelayInp = document.getElementById('standbyBoardOfflineDelayInput');
 
   if (inactToggle) inactToggle.checked = inactivityEnabled;
   if (inactMinInp) inactMinInp.value = inactivityMin;
   if (standbyToggle) standbyToggle.checked = idlePowerOffEnabled;
   if (standbyMinInp) standbyMinInp.value = idlePowerOffMin;
   if (matchEndToggle) matchEndToggle.checked = disconnectUdpOnMatchEnd;
-  if (boardOfflineToggle) boardOfflineToggle.checked = boardOfflineEnabled;
-  if (boardOfflineDelayInp) boardOfflineDelayInp.value = boardOfflineDelay;
 
-  populateBoardOfflineSelect();
   handleInactivityToggleChange();
   handleStandbyToggleChange();
   handleMatchEndDisconnectToggleChange();
-  handleBoardOfflineToggleChange();
   handleInactivityTimeoutChange();
 }
 
-async function populateBoardOfflineSelect() {
-  const select = document.getElementById('standbyBoardOfflineSelect');
-  if (!select) return;
-
-  let boards = [];
-  try {
-    const res = await fetch('/api/autodarts/status');
-    const data = await res.json();
-    if (data && data.status === 'ok' && data.board && Array.isArray(data.board.boards)) {
-      boards = data.board.boards;
-    }
-  } catch (e) {
-    console.error('Could not fetch boards for power dropdown:', e);
-  }
-
-  const currentSelectedId = appState.standby_board_offline_id || (boards.length > 0 ? boards[0].id : '');
-
-  if (boards.length === 0) {
-    select.innerHTML = `<option value="">No boards detected</option>`;
-    return;
-  }
-
-  select.innerHTML = boards.map(b => {
-    const bId = b.id || '';
-    const bName = b.name || 'Dartboard';
-    const isSel = (bId === currentSelectedId);
-    return `<option value="${escapeHtml(bId)}" ${isSel ? 'selected' : ''}>${escapeHtml(bName)}</option>`;
-  }).join('');
-
-  if (!appState.standby_board_offline_id && boards.length > 0) {
-    appState.standby_board_offline_id = boards[0].id;
-  }
+// The timer values as currently entered on the Settings page (validated, not yet saved)
+function readPowerDraft() {
+  const val = id => document.getElementById(id);
+  let inactivityMin = Math.max(1, parseInt(val('inactivityTimeoutMinInput')?.value, 10) || 5);
+  let idlePowerOffMin = Math.max(1, parseInt(val('idlePowerOffMinInput')?.value, 10) || 30);
+  // Rule: Inactivity cannot exceed Standby
+  if (inactivityMin > idlePowerOffMin) idlePowerOffMin = inactivityMin;
+  return {
+    inactivity_timeout_enabled: val('inactivityTimeoutEnabledToggle') ? val('inactivityTimeoutEnabledToggle').checked : true,
+    inactivity_timeout_minutes: inactivityMin,
+    idle_power_off_enabled: val('idlePowerOffEnabledToggle') ? val('idlePowerOffEnabledToggle').checked : true,
+    idle_power_off_minutes: idlePowerOffMin,
+    disconnect_udp_on_match_end: val('disconnectUdpOnMatchEndToggle') ? val('disconnectUdpOnMatchEndToggle').checked : false
+  };
 }
-
-function handleBoardOfflineToggleChange() {
-  const toggle = document.getElementById('standbyBoardOfflineToggle');
-  const controls = document.getElementById('boardOfflineControlsGroup');
-  const isEnabled = toggle ? toggle.checked : false;
-
-  if (controls) {
-    controls.style.opacity = isEnabled ? '1' : '0.4';
-    controls.style.pointerEvents = isEnabled ? 'auto' : 'none';
-  }
-  appState.standby_board_offline_enabled = isEnabled;
-}
-
-function handleBoardOfflineSelectChange() {
-  const select = document.getElementById('standbyBoardOfflineSelect');
-  if (select) {
-    appState.standby_board_offline_id = select.value;
-  }
-}
-
-function handleBoardOfflineDelayChange() {
-  const delayInp = document.getElementById('standbyBoardOfflineDelayInput');
-  if (delayInp) {
-    let val = parseInt(delayInp.value, 10);
-    if (isNaN(val) || val < 0) val = 0;
-    if (val > 300) val = 300;
-    appState.standby_board_offline_delay_seconds = val;
-  }
-}
-
-async function savePowerConfig() {
-  const inactToggle = document.getElementById('inactivityTimeoutEnabledToggle');
-  const standbyToggle = document.getElementById('idlePowerOffEnabledToggle');
-  const inactMinInp = document.getElementById('inactivityTimeoutMinInput');
-  const standbyMinInp = document.getElementById('idlePowerOffMinInput');
-  const matchEndToggle = document.getElementById('disconnectUdpOnMatchEndToggle');
-  const boardOfflineToggle = document.getElementById('standbyBoardOfflineToggle');
-  const boardOfflineSelect = document.getElementById('standbyBoardOfflineSelect');
-  const boardOfflineDelayInp = document.getElementById('standbyBoardOfflineDelayInput');
-
-  const inactivityEnabled = inactToggle ? inactToggle.checked : true;
-  const idlePowerOffEnabled = standbyToggle ? standbyToggle.checked : true;
-  const disconnectUdpOnMatchEnd = matchEndToggle ? matchEndToggle.checked : false;
-  const boardOfflineEnabled = boardOfflineToggle ? boardOfflineToggle.checked : false;
-  const boardOfflineId = boardOfflineSelect ? boardOfflineSelect.value : '';
-  const boardOfflineDelay = Math.max(0, Math.min(300, parseInt(boardOfflineDelayInp?.value, 10) || 10));
-
-  let inactivityMin = parseInt(inactMinInp?.value, 10) || 5;
-  let idlePowerOffMin = parseInt(standbyMinInp?.value, 10) || 30;
-
-  inactivityMin = Math.max(1, inactivityMin);
-  idlePowerOffMin = Math.max(1, idlePowerOffMin);
-
-  // Enforce rule: Inactivity cannot exceed Standby
-  if (inactivityMin > idlePowerOffMin) {
-    idlePowerOffMin = inactivityMin;
-    if (standbyMinInp) standbyMinInp.value = idlePowerOffMin;
-  }
-
-  appState.auto_connect_udp_on_game_start = true;
-  appState.inactivity_timeout_enabled = inactivityEnabled;
-  appState.inactivity_timeout_minutes = inactivityMin;
-  appState.idle_power_off_enabled = idlePowerOffEnabled;
-  appState.idle_power_off_minutes = idlePowerOffMin;
-  appState.disconnect_udp_on_match_end = disconnectUdpOnMatchEnd;
-  appState.standby_board_offline_enabled = boardOfflineEnabled;
-  appState.standby_board_offline_id = boardOfflineId;
-  appState.standby_board_offline_delay_seconds = boardOfflineDelay;
-
-  const ok = await saveAllConfig();
-  if (ok) {
-    showToast('Inactivity & Standby Timers saved successfully.', 'success');
-  }
-}
+window.readPowerDraft = readPowerDraft;
 
 async function testInactivityDim() {
   try {
@@ -1129,8 +930,6 @@ async function testWakeBoard() {
 }
 
 if (typeof window !== "undefined") {
-  window.selectPowerDevice = selectPowerDevice;
-  window.renderPowerDeviceLanding = renderPowerDeviceLanding;
   window.loadIdlePresetForSelectedDevice = loadIdlePresetForSelectedDevice;
   window.renderIdleSegmentsList = renderIdleSegmentsList;
   window.saveIdlePreset = saveIdlePreset;
@@ -1140,16 +939,12 @@ if (typeof window !== "undefined") {
   window.handleInactivityToggleChange = handleInactivityToggleChange;
   window.handleStandbyToggleChange = handleStandbyToggleChange;
   window.handleMatchEndDisconnectToggleChange = handleMatchEndDisconnectToggleChange;
-  window.handleBoardOfflineToggleChange = handleBoardOfflineToggleChange;
-  window.handleBoardOfflineSelectChange = handleBoardOfflineSelectChange;
-  window.handleBoardOfflineDelayChange = handleBoardOfflineDelayChange;
-  window.populateBoardOfflineSelect = populateBoardOfflineSelect;
   window.handleInactivityTimeoutChange = handleInactivityTimeoutChange;
   window.handleStandbyTimeoutChange = handleStandbyTimeoutChange;
   window.testInactivityDim = testInactivityDim;
   window.testPowerOff = testPowerOff;
   window.testWakeBoard = testWakeBoard;
-  window.backToPowerLanding = backToPowerLanding;
+  window.resetIdleLighting = resetIdleLighting;
   window.toggleEffectSearchDropdown = toggleEffectSearchDropdown;
   window.filterEffectList = filterEffectList;
   window.selectEffectFromSearch = selectEffectFromSearch;

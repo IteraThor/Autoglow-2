@@ -13,7 +13,7 @@ from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
 
 from core import security
 from core import autodarts_bridge
-from core.autodarts_bridge import AutodartsBridgeClient, ensure_bridge_key
+from core.autodarts_bridge import AutodartsBridgeClient
 from core.engine import AutoGlowEngine
 from core.models import AppConfig, DartEventType, DeviceConfig
 from routes import register_routes
@@ -107,13 +107,6 @@ class TestBridgeIngest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.1)
         self.assertEqual(self.client._active_match_id, "m1")
 
-    def test_ensure_bridge_key_only_creates_once(self):
-        cfg = AppConfig()
-        self.assertTrue(ensure_bridge_key(cfg))
-        key = cfg.extra[security.BRIDGE_KEY_SETTING]
-        self.assertFalse(ensure_bridge_key(cfg))
-        self.assertEqual(cfg.extra[security.BRIDGE_KEY_SETTING], key)
-
 
 class TestBridgeRoutes(AioHTTPTestCase):
 
@@ -130,7 +123,6 @@ class TestBridgeRoutes(AioHTTPTestCase):
         app = web.Application(middlewares=[security.security_middleware])
         register_routes(app, "web")
         cfg = AppConfig()
-        cfg.extra[security.BRIDGE_KEY_SETTING] = "pair-key-123"
         self.bridge = AutodartsBridgeClient()
         app["config_path"] = self.config_path
         app["engine"] = AutoGlowEngine(DeviceConfig(ip=""), autodarts_client=self.bridge)
@@ -163,35 +155,28 @@ class TestBridgeRoutes(AioHTTPTestCase):
         self.assertEqual(resp.status, 403)
 
     @unittest_run_loop
-    async def test_remote_connection_needs_pairing_key(self):
+    async def test_remote_connection_rejected(self):
         with patch.object(security, "_is_loopback", return_value=False):
             resp = await self.client.get("/ws/autodarts-bridge", headers=EXT_ORIGIN)
             self.assertEqual(resp.status, 403)
-            ws = await self.client.ws_connect("/ws/autodarts-bridge?key=pair-key-123", headers=EXT_ORIGIN)
-            self.assertEqual((await ws.receive_json())["type"], "welcome")
-            await ws.close()
+            # An old extension build still appends its pairing key; that no longer opens the bridge
+            resp = await self.client.get("/ws/autodarts-bridge?key=anything", headers=EXT_ORIGIN)
+            self.assertEqual(resp.status, 403)
 
     @unittest_run_loop
-    async def test_bridge_info_and_key_rotation(self):
+    async def test_bridge_info(self):
         data = await (await self.client.get("/api/autodarts/bridge")).json()
         self.assertTrue(data["active"])
-        self.assertEqual(data["pairing_key"], "pair-key-123")
+        self.assertNotIn("pairing_key", data)
         self.assertTrue(data["extension_dir"].endswith("chrome_extension"))
-
-        data = await (await self.client.post("/api/autodarts/bridge/key")).json()
-        self.assertNotEqual(data["pairing_key"], "pair-key-123")
-
-    @unittest_run_loop
-    async def test_pairing_key_not_exposed_by_config(self):
-        text = await (await self.client.get("/api/config")).text()
-        self.assertNotIn("pair-key-123", text)
+        resp = await self.client.post("/api/autodarts/bridge/key")
+        self.assertIn(resp.status, (404, 405))
 
     @unittest_run_loop
-    async def test_config_reset_keeps_bridge_and_key(self):
+    async def test_config_reset_keeps_bridge(self):
         resp = await self.client.post("/api/config/reset")
         self.assertEqual(resp.status, 200)
         self.assertIs(self.app["engine"].autodarts, self.bridge)
-        self.assertEqual(self.app["current_app_config"].extra[security.BRIDGE_KEY_SETTING], "pair-key-123")
 
 
 if __name__ == "__main__":

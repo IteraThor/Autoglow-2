@@ -13,14 +13,15 @@ function activatePane(targetId) {
   if (targetId === 'tab-devices') renderDevicesTab();
   if (targetId === 'tab-autodarts') renderAutodartsTab();
   if (targetId === 'tab-effects') renderEffectsTable();
-  if (targetId === 'tab-power') renderPowerTab();
   if (targetId === 'tab-simulator') {
     if (window.renderSimulatorTab) renderSimulatorTab();
     if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
   }
   if (targetId === 'tab-settings') {
-    renderSettingsTab();
+    renderPowerTab();
     if (typeof refreshPinSettings === 'function') refreshPinSettings();
+    // Anything left unsaved from an earlier visit is dropped
+    if (window.settingsPage) window.settingsPage.reset();
   }
 }
 window.activatePane = activatePane;
@@ -45,10 +46,6 @@ async function loadConfig() {
       if (selectedMatrixDeviceIp && !devicesList.find(d => d.ip === selectedMatrixDeviceIp)) {
         selectedMatrixDeviceIp = null;
         if (typeof localStorage !== 'undefined') localStorage.removeItem('autoglow_selected_matrix_device');
-      }
-      if (idlePresetState.ip && !devicesList.find(d => d.ip === idlePresetState.ip)) {
-        idlePresetState.ip = null;
-        if (typeof localStorage !== 'undefined') localStorage.removeItem('autoglow_selected_power_device');
       }
 
       renderDashboard();
@@ -84,7 +81,7 @@ async function loadConfig() {
   }
 }
 
-async function saveAllConfig() {
+async function saveAllConfig({ quiet = false } = {}) {
   try {
     const res = await fetch('/api/config', {
       method: 'POST',
@@ -93,7 +90,7 @@ async function saveAllConfig() {
     });
     const data = await res.json();
     if (data.status === 'ok') {
-      showToast('Configuration saved successfully.', 'success');
+      if (!quiet) showToast('Configuration saved successfully.', 'success');
       return true;
     } else {
       showToast(`Save failed: ${data.message}`, 'error');

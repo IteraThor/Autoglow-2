@@ -10,13 +10,11 @@ it; that code stays in AutodartsClient and is re-enabled by setting CLOUD_API_ON
 import asyncio
 import logging
 import re
-import secrets
 import time
 from typing import Any, Dict, List, Optional
 
 from core.autodarts_client import AutodartsClient
 from core.models import DartEvent, DartEventType
-from core.security import BRIDGE_KEY_SETTING
 
 logger = logging.getLogger("autoglow.autodarts_bridge")
 
@@ -35,18 +33,6 @@ SOURCE_LOST_GRACE_SECONDS = 60.0
 _BOARDS_LIST_RE = re.compile(r"/bs/v\d+/boards/?$")
 _BOARD_ITEM_RE = re.compile(r"/bs/v\d+/boards/([^/?#]+)/?$")
 _MATCH_ITEM_RE = re.compile(r"/(?:gs|as)/v\d+/matches/([^/?#]+)/?$")
-
-
-def generate_bridge_key() -> str:
-    return secrets.token_urlsafe(18)
-
-
-def ensure_bridge_key(cfg) -> bool:
-    """Create the pairing key for remote extension connections if the config has none. Returns True if added."""
-    if cfg.extra.get(BRIDGE_KEY_SETTING):
-        return False
-    cfg.extra[BRIDGE_KEY_SETTING] = generate_bridge_key()
-    return True
 
 
 class AutodartsBridgeClient(AutodartsClient):

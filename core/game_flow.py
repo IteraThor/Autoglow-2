@@ -19,6 +19,9 @@ logger = logging.getLogger("autoglow.game_flow")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_FLOW_PATH = os.path.join(PROJECT_ROOT, "game_flows.json")
+# Shipped starting flow. game_flows.json itself is user data and is not part of a release,
+# so unpacking an update over an existing install never replaces the user's flows.
+DEFAULT_FLOW_TEMPLATE = os.path.join(PROJECT_ROOT, "defaults", "game_flows.json")
 
 
 @dataclass
@@ -339,8 +342,10 @@ class GameFlowStorageManager:
     """
 
     def __init__(self, filepath: Optional[str] = None):
+        self._template: Optional[str] = None
         if filepath is None:
             filepath = DEFAULT_FLOW_PATH
+            self._template = DEFAULT_FLOW_TEMPLATE
             _adopt_flow_file_from_cwd(filepath)
         self.filepath = os.path.abspath(filepath)
         self.bak_filepath = self.filepath + ".bak"
@@ -394,10 +399,19 @@ class GameFlowStorageManager:
         """The master flow as a shared, read-only cache entry (created and saved on first use)."""
         data = self._read_raw()
         if not data:
-            flow = create_default_game_flow()
+            flow = self._starting_flow()
             self.save(flow)
             return flow
         return self._cached_flow(("",), data)
+
+    def _starting_flow(self) -> GameFlow:
+        if self._template and os.path.isfile(self._template):
+            try:
+                with open(self._template, "r", encoding="utf-8") as f:
+                    return GameFlow.from_dict(json.load(f))
+            except Exception as e:
+                logger.warning(f"Could not read the default flow {self._template}: {e}")
+        return create_default_game_flow()
 
     def get_for_segment(self, ip: Optional[str] = None, seg_id: Optional[Any] = None) -> GameFlow:
         """

@@ -146,11 +146,27 @@ function getDeviceSegments(ip) {
   });
 }
 
+// Controller IP -> profile it uses, from the last /api/matrix/presets response
+let devicePresetMap = {};
+
 // Select a controller (landing card or header picker) and show its event table
-function selectMatrixDevice(ip) {
+async function selectMatrixDevice(ip) {
   if (selectedMatrixDeviceIp && selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined) {
     EVENT_DEFS.forEach(def => updateEventConfig(def.key));
     for (let i = 1; i <= 10; i++) updatePlayerSlotConfig(i);
+  }
+  // Each controller uses its own profile: unsaved edits would be replaced when the other one loads
+  const targetPreset = devicePresetMap[ip];
+  if (matrixDirty && targetPreset && targetPreset !== appState.active_profile) {
+    const ok = await window.confirmDialog({
+      title: 'Save changes first?',
+      body: `You have unsaved changes in '${appState.active_profile}'. This controller uses '${targetPreset}', so they would be lost.`,
+      confirmLabel: 'Save and switch'
+    });
+    if (!ok || !await saveEffectsProfile()) {
+      renderMatrixDevicePicker();
+      return;
+    }
   }
   selectedMatrixDeviceIp = ip;
   if (typeof localStorage !== 'undefined') {
@@ -1393,12 +1409,21 @@ async function renderPresetDropdown() {
   let active = appState.active_profile || 'Default';
 
   try {
-    const res = await fetch('/api/matrix/presets');
+    const query = selectedMatrixDeviceIp ? `?ip=${encodeURIComponent(selectedMatrixDeviceIp)}` : '';
+    const res = await fetch(`/api/matrix/presets${query}`);
     const data = await res.json();
     if (data.status === 'ok') {
       presets = data.presets || [];
+      devicePresetMap = data.device_profiles || {};
       active = data.active_profile || 'Default';
-      appState.active_profile = active;
+      // Load the selected controller's profile when it differs from the one being edited
+      if (data.profile && active !== appState.active_profile && !matrixDirty) {
+        appState.active_profile = active;
+        appState.profile = data.profile;
+        renderEffectsTable();
+        return;
+      }
+      if (!matrixDirty) appState.active_profile = active;
     }
   } catch (e) {
     console.warn('[AutoGlow] Could not fetch matrix presets:', e);
@@ -1449,7 +1474,7 @@ async function executePresetSwitch(targetName) {
     const res = await fetch('/api/matrix/presets/select', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: targetName })
+      body: JSON.stringify({ name: targetName, ip: selectedMatrixDeviceIp })
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -1534,7 +1559,8 @@ async function submitNewPreset() {
       body: JSON.stringify({
         name: name,
         profile: profileData,
-        set_active: true
+        set_active: true,
+        ip: selectedMatrixDeviceIp
       })
     });
     const data = await res.json();
@@ -1588,7 +1614,7 @@ async function submitRenamePreset() {
     const res = await fetch('/api/matrix/presets/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ old_name: oldName, new_name: newName })
+      body: JSON.stringify({ old_name: oldName, new_name: newName, ip: selectedMatrixDeviceIp })
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -1622,7 +1648,7 @@ async function submitDeletePreset() {
     const res = await fetch('/api/matrix/presets', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: target })
+      body: JSON.stringify({ name: target, ip: selectedMatrixDeviceIp })
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -1694,7 +1720,8 @@ async function handlePresetFileImport(event) {
       return;
     }
 
-    const res = await fetch('/api/matrix/presets/import', {
+    const query = selectedMatrixDeviceIp ? `?ip=${encodeURIComponent(selectedMatrixDeviceIp)}` : '';
+    const res = await fetch(`/api/matrix/presets/import${query}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -1731,7 +1758,8 @@ async function saveEffectsProfile() {
       body: JSON.stringify({
         name: currentPresetName,
         profile: appState.profile,
-        set_active: true
+        set_active: true,
+        ip: selectedMatrixDeviceIp
       })
     });
     const data = await res.json();
@@ -1904,6 +1932,7 @@ if (typeof window !== "undefined") {
   window.setMatrixDirty = setMatrixDirty;
   window.renderPresetDropdown = renderPresetDropdown;
   window.onPresetSelected = onPresetSelected;
+  window.getMatrixDeviceIp = () => selectedMatrixDeviceIp;
   window.promptNewPreset = promptNewPreset;
   window.submitNewPreset = submitNewPreset;
   window.promptRenamePreset = promptRenamePreset;

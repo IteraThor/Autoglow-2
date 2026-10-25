@@ -2,7 +2,6 @@
 
 import { h } from '../core/dom.js';
 import { appStore } from '../core/store.js';
-import { MODE_LABELS, setLightingMode } from './mode-switch.js';
 
 function renderRail(route) {
   document.querySelectorAll('#appRail [data-view]').forEach(link => {
@@ -11,44 +10,31 @@ function renderRail(route) {
   });
 }
 
-function renderViewBar(route, playingMode) {
+function renderViewBar(route) {
   const bar = document.getElementById('viewBar');
   if (!bar) return;
   bar.replaceChildren();
-  bar.hidden = !route.view.subs;
-  if (!route.view.subs) return;
-
-  const tabs = h('nav', { class: 'view-tabs', 'aria-label': route.view.label },
-    route.view.subs.map(sub => h('a', {
+  // Lighting has no tabs: the engine is chosen in Settings
+  const subs = route.view.id === 'lighting' ? null : route.view.subs;
+  bar.hidden = !subs;
+  if (!subs) return;
+  bar.append(h('nav', { class: 'view-tabs', 'aria-label': route.view.label },
+    subs.map(sub => h('a', {
       class: 'view-tab',
       href: `${route.view.path}/${sub.id}`,
       'data-link': true,
       'aria-current': sub.id === route.sub.id ? 'page' : null
-    },
-    sub.label,
-    sub.mode && sub.mode === playingMode && h('span', { class: 'playing-badge' }, 'Playing')
-    ))
-  );
-  bar.append(tabs);
-
-  const notPlaying = route.sub.mode && playingMode && route.sub.mode !== playingMode;
-  if (notPlaying) {
-    bar.append(h('div', { class: 'not-playing-banner', role: 'status' },
-      h('span', { class: 'not-playing-text' }, `Not playing · ${MODE_LABELS[playingMode]} is active`),
-      h('button', { class: 'ui-btn ui-btn-primary ui-btn-sm', type: 'button', onclick: () => setLightingMode(route.sub.mode) }, 'Play this')
-    ));
-  }
-  document.querySelector('.main-content')?.toggleAttribute('data-not-playing', !!notPlaying);
+    }, sub.label))
+  ));
 }
 
 function render() {
-  const { route, lightingMode } = appStore.get();
+  const { route } = appStore.get();
   if (!route) return;
   renderRail(route);
-  renderViewBar(route, lightingMode);
+  renderViewBar(route);
 }
 
 export function initShell() {
   appStore.subscribe(s => s.route, render);
-  appStore.subscribe(s => s.lightingMode, render);
 }

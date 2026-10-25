@@ -24,7 +24,7 @@ class TestWLEDDriverAndModels(unittest.IsolatedAsyncioTestCase):
         
         # Test DeviceConfig defaults
         dev = DeviceConfig()
-        self.assertEqual(dev.ip, "192.168.2.214")
+        self.assertEqual(dev.ip, "")
         self.assertEqual(dev.rgb_count, 45)
         self.assertEqual(dev.pwm_index, 45)
         self.assertEqual(dev.udp_port, 21324)
@@ -84,7 +84,8 @@ class TestWLEDDriverAndModels(unittest.IsolatedAsyncioTestCase):
         }).encode("utf-8")
         mock_readback_resp.__enter__.return_value = mock_readback_resp
 
-        with patch("urllib.request.urlopen", side_effect=[mock_cfg_resp, mock_existing_seg_resp, mock_state_resp, mock_readback_resp]) as mock_open:
+        with patch("urllib.request.urlopen", side_effect=[mock_cfg_resp, mock_existing_seg_resp, mock_state_resp, mock_state_resp, mock_readback_resp]) as mock_open, \
+             patch("core.wled_driver.time.sleep"):
             result = WLEDDriver.apply_wled_mutations(
                 ip="192.168.1.100",
                 name="Updated-Name",
@@ -98,6 +99,46 @@ class TestWLEDDriverAndModels(unittest.IsolatedAsyncioTestCase):
             req_sent = cfg_call_args[0][0]
             sent_cfg = json.loads(req_sent.data.decode("utf-8"))
             self.assertEqual(sent_cfg["hw"]["led"]["ins"][0]["order"], 0)
+            # New outputs: the state is sent again after the bus rebuild, without saving the preset twice
+            first_state = json.loads(mock_open.call_args_list[2][0][0].data.decode())
+            resend = json.loads(mock_open.call_args_list[3][0][0].data.decode())
+            self.assertEqual(first_state["psave"], 1)
+            self.assertNotIn("psave", resend)
+            self.assertEqual(resend["seg"], first_state["seg"])
+
+    def test_apply_setup_preview_is_not_saved(self):
+        def resp(body=b"{}"):
+            r = MagicMock()
+            r.read.return_value = body
+            r.__enter__.return_value = r
+            return r
+
+        hw = [{"pin": [16], "type": 22, "start": 0, "len": 45, "order": 0},
+              {"pin": [26], "type": 41, "start": 45, "len": 1, "order": 0}]
+        state = {"on": True, "seg": [{"id": 0, "n": "LED Ring", "start": 0, "stop": 45}]}
+        with patch("urllib.request.urlopen", side_effect=[resp(), resp(b'{"seg": [{}, {}, {}]}'), resp(), resp()]) as mock_open, \
+             patch("core.wled_driver.time.sleep"):
+            WLEDDriver.apply_setup_preview("192.168.1.100", hw, state)
+
+        sent_cfg = json.loads(mock_open.call_args_list[0][0][0].data.decode())
+        self.assertEqual(set(sent_cfg), {"hw"})  # boot preset and live settings stay untouched
+        self.assertEqual(sent_cfg["hw"]["led"]["ins"][1]["rgbwm"], 4)
+        sent_state = json.loads(mock_open.call_args_list[2][0][0].data.decode())
+        # New outputs: the state goes out again after WLED's bus rebuild
+        self.assertEqual(mock_open.call_args_list[3][0][0].data, mock_open.call_args_list[2][0][0].data)
+        self.assertNotIn("psave", sent_state)
+        # Segments 1 and 2 from the old layout are removed
+        self.assertIn({"id": 1, "stop": 0}, sent_state["seg"])
+        self.assertIn({"id": 2, "stop": 0}, sent_state["seg"])
+
+    def test_apply_setup_preview_without_outputs_only_sets_state(self):
+        r = MagicMock()
+        r.read.return_value = b"{}"
+        r.__enter__.return_value = r
+        with patch("urllib.request.urlopen", return_value=r) as mock_open:
+            WLEDDriver.apply_setup_preview("192.168.1.100", None, {"on": False})
+        self.assertEqual(mock_open.call_count, 1)
+        self.assertTrue(mock_open.call_args[0][0].full_url.endswith("/json/state"))
 
     def test_drgb_packet_creation(self):
         driver = WLEDDriver(DeviceConfig())
@@ -151,6 +192,24 @@ class TestWLEDDriverAndModels(unittest.IsolatedAsyncioTestCase):
         # Clean stop
         await driver.stop_effect()
         self.assertIsNone(driver._master_broadcast_task)
+        driver.close()
+
+    async def test_is_playing_effects(self):
+        driver = WLEDDriver(DeviceConfig(ip="127.0.0.1", rgb_count=10))
+        driver._sock = MagicMock()
+        self.assertFalse(driver.is_playing_effects)
+
+        driver._protocol_mode = ProtocolMode.ACTIVE_UDP
+        await driver.play_effect(EffectConfig(animation=AnimationType.CHASE, duration=0.2))
+        self.assertTrue(driver.is_playing_effects)
+
+        await asyncio.sleep(0.3)  # the transient expires with no baseline behind it
+        self.assertFalse(driver.is_playing_effects)
+
+        await driver.play_effect(EffectConfig(animation=AnimationType.SOLID, duration=0.0))
+        self.assertTrue(driver.is_playing_effects)
+        await driver.stop_effect()
+        self.assertFalse(driver.is_playing_effects)
         driver.close()
 
     async def test_pwm_spotlight_preserved_during_rgb_effect(self):

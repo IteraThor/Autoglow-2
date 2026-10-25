@@ -282,14 +282,36 @@ async def handle_preview_wled_state(request: web.Request) -> web.Response:
         raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
 
 
+async def handle_wled_setup_preview(request: web.Request) -> web.Response:
+    """Light tests of the setup guide: a temporary LED layout and state, nothing saved."""
+    engine = request.app.get("engine")
+    data = await read_json(request)
+    ip = str(data.get("ip", "")).strip()
+    if not ip:
+        raise ValidationError("No IP specified", field="ip")
+    hw_ins = data.get("hw_ins")
+    if hw_ins is not None and (not isinstance(hw_ins, list) or not all(isinstance(h, dict) for h in hw_ins)):
+        raise ValidationError("hw_ins must be a list of LED outputs", field="hw_ins")
+    state = data.get("state")
+    if state is not None and not isinstance(state, dict):
+        raise ValidationError("state must be an object", field="state")
+
+    # WLED ignores HTTP state while it receives a live UDP stream
+    if engine and hasattr(engine, "driver") and engine.driver.protocol_mode == ProtocolMode.ACTIVE_UDP:
+        await engine.set_protocol_mode(ProtocolMode.IDLE_HTTP)
+
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, WLEDDriver.apply_setup_preview, ip, hw_ins, state)
+    except Exception as e:
+        logger.warning(f"Setup preview failed on WLED {ip}: {e}")
+        raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
+    return web.json_response({"status": "ok"})
+
+
 async def handle_scan_network(request: web.Request) -> web.Response:
     devices = await DiscoveryService.scan_network()
     return web.json_response({"status": "ok", "devices": devices})
-
-
-async def handle_scan_serial(request: web.Request) -> web.Response:
-    ports = await DiscoveryService.scan_serial()
-    return web.json_response({"status": "ok", "ports": ports})
 
 
 async def handle_test_effect(request: web.Request) -> web.Response:
@@ -307,7 +329,7 @@ async def handle_test_effect(request: web.Request) -> web.Response:
     cfg = request.app.get("current_app_config") or load_app_config(config_path)
 
     if not evt_data and event_key:
-        found_effect = cfg.profile.get_effect(event_key, ip=target_ip, seg_id=segment_id)
+        found_effect = cfg.profile_for(target_ip).get_effect(event_key, ip=target_ip, seg_id=segment_id)
         if found_effect:
             effect = EffectConfig(
                 animation=found_effect.animation,
@@ -358,11 +380,11 @@ async def handle_test_effect(request: web.Request) -> web.Response:
         if ch and ch.get("last_active_color"):
             prev_color = ch["last_active_color"]
         else:
-            p1 = cfg.profile.get_player_slot(1)
+            p1 = cfg.profile_for(target_ip).get_player_slot(1)
             if p1 and p1.effect and p1.effect.color_primary and p1.effect.color_primary.to_tuple() != (0, 0, 0):
                 prev_color = p1.effect.color_primary
             else:
-                th = cfg.profile.get_effect("throw", ip=target_ip, seg_id=segment_id)
+                th = cfg.profile_for(target_ip).get_effect("throw", ip=target_ip, seg_id=segment_id)
                 if th and th.color_primary and th.color_primary.to_tuple() != (0, 0, 0):
                     prev_color = th.color_primary
                 else:

@@ -21,6 +21,11 @@ def main():
     print("      AutoGlow 2 Universal Launcher")
     print("=" * 50)
 
+    if sys.version_info < (3, 10):
+        print(f"[ERROR] AutoGlow needs Python 3.10 or newer (this is {sys.version.split()[0]}).")
+        input("\nPress Enter to exit...")
+        return 1
+
     # 1. Create Virtual Environment if not present
     if not venv_python.exists():
         print("--> Creating isolated Python virtual environment...")

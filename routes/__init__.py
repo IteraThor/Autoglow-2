@@ -17,23 +17,18 @@ from routes.profile_routes import (
 from routes.wled_routes import (
     handle_ping_device, handle_wled_update, handle_get_wled_preset,
     handle_save_wled_preset, handle_get_wled_effects, handle_preview_wled_state,
-    handle_scan_network, handle_scan_serial, handle_test_effect, handle_test_light,
+    handle_wled_setup_preview, handle_scan_network, handle_test_effect, handle_test_light,
     handle_get_protocol_mode, handle_post_protocol_mode
 )
 from routes.autodarts_routes import (
     handle_autodarts_login, handle_get_autodarts_boards,
     handle_get_autodarts_status, handle_autodarts_logout,
     handle_autodarts_device_code, handle_autodarts_device_poll,
-    handle_ws_autodarts_bridge, handle_get_autodarts_bridge, handle_regenerate_bridge_key
+    handle_ws_autodarts_bridge, handle_get_autodarts_bridge
 )
 from core.security import BRIDGE_WS_PATH
 from routes.power_routes import (
     handle_test_inactivity_dim, handle_test_power_off, handle_test_wake
-)
-from routes.system_routes import (
-    handle_list_backups, handle_create_backup, handle_restore_backup,
-    handle_delete_backup, handle_download_backup, handle_update_check,
-    handle_update_apply, handle_update_zip
 )
 from routes.telemetry_routes import handle_ws_telemetry
 from routes.simulator_routes import (
@@ -41,7 +36,7 @@ from routes.simulator_routes import (
     handle_simulator_test_effect, handle_simulator_cable_offset
 )
 from routes.flow_routes import register_flow_routes
-from routes.hub_routes import handle_hub_status, handle_status
+from routes.hub_routes import handle_hub_status, handle_status, handle_setup_checklist
 from routes.extension_routes import (
     UPDATE_XML_PATH, CRX_PATH, handle_extension_update_xml, handle_extension_crx
 )
@@ -82,6 +77,7 @@ def register_routes(app: web.Application, web_dir: str):
     # Operational Hub
     app.router.add_get("/api/hub/status", handle_hub_status)
     app.router.add_get("/api/status", handle_status)
+    app.router.add_get("/api/setup/checklist", handle_setup_checklist)
 
     # Config Routes
     app.router.add_get("/api/config", handle_get_config)
@@ -104,8 +100,8 @@ def register_routes(app: web.Application, web_dir: str):
     app.router.add_post("/api/wled/preset", handle_save_wled_preset)
     app.router.add_get("/api/wled/effects", handle_get_wled_effects)
     app.router.add_post("/api/wled/preview", handle_preview_wled_state)
+    app.router.add_post("/api/wled/setup-preview", handle_wled_setup_preview)
     app.router.add_get("/api/scan/network", handle_scan_network)
-    app.router.add_get("/api/scan/serial", handle_scan_serial)
     app.router.add_get("/api/protocol/mode", handle_get_protocol_mode)
     app.router.add_post("/api/protocol/mode", handle_post_protocol_mode)
     app.router.add_post("/api/test/effect", handle_test_effect)
@@ -124,22 +120,11 @@ def register_routes(app: web.Application, web_dir: str):
     app.router.add_post("/api/autodarts/device/code", handle_autodarts_device_code)
     app.router.add_post("/api/autodarts/device/poll", handle_autodarts_device_poll)
     app.router.add_get("/api/autodarts/bridge", handle_get_autodarts_bridge)
-    app.router.add_post("/api/autodarts/bridge/key", handle_regenerate_bridge_key)
     app.router.add_get(BRIDGE_WS_PATH, handle_ws_autodarts_bridge)
 
     # Chrome extension auto-install (ExtensionInstallForcelist policy)
     app.router.add_get(UPDATE_XML_PATH, handle_extension_update_xml)
     app.router.add_get(CRX_PATH, handle_extension_crx)
-
-    # System & Backup Routes
-    app.router.add_get("/api/system/backups", handle_list_backups)
-    app.router.add_post("/api/system/backup/create", handle_create_backup)
-    app.router.add_post("/api/system/backup/restore", handle_restore_backup)
-    app.router.add_post("/api/system/backup/delete", handle_delete_backup)
-    app.router.add_get("/api/system/backup/download", handle_download_backup)
-    app.router.add_get("/api/system/update_check", handle_update_check)
-    app.router.add_post("/api/system/update_apply", handle_update_apply)
-    app.router.add_post("/api/system/update_zip", handle_update_zip)
 
     # Live WebSocket Telemetry
     app.router.add_get("/ws/telemetry", handle_ws_telemetry)

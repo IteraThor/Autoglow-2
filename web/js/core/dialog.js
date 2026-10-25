@@ -74,3 +74,27 @@ export async function promptDialog({ title, body = '', value = '', placeholder =
     return text;
   });
 }
+
+// Three-way choice. choices: [{ value, label, primary?, danger? }]. Resolves the chosen value, or null when dismissed with Esc.
+export function choiceDialog({ title, body = '', choices }) {
+  return new Promise(resolve => {
+    let result = null;
+    const buttons = choices.map(choice => h('button', {
+      class: `ui-btn ${choice.danger ? 'ui-btn-danger' : choice.primary ? 'ui-btn-primary' : ''}`.trim(),
+      type: 'button',
+      onclick: () => { result = choice.value; dialog.close(); }
+    }, choice.label));
+    const dialog = h('dialog', { class: 'ui-dialog', 'aria-label': title },
+      h('div', { class: 'ui-dialog-form' },
+        h('div', { class: 'ui-dialog-title' }, title),
+        body && h('div', { class: 'ui-dialog-body' }, body),
+        h('div', { class: 'ui-dialog-actions' }, ...buttons)));
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      resolve(result);
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+    buttons.find((_, i) => choices[i].primary)?.focus();
+  });
+}

@@ -6,6 +6,7 @@ import { api } from '../core/api.js';
 import { confirmDialog } from '../core/dialog.js';
 import { h, showFieldError, clearFieldError } from '../core/dom.js';
 import { toast } from '../core/toast.js';
+import { runControllerSetup } from './controller-setup.js';
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const HOSTNAME = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
@@ -42,14 +43,14 @@ export function deviceFromLive(ip, live) {
   return dev;
 }
 
-// One line describing the controller's LED layout, e.g. "45 LEDs · PWM white · 3 segments"
+// One line describing the controller's LED layout, e.g. "45 RGB LEDs · light strip · 3 segments"
 export function layoutSummary(live) {
   const buses = Array.isArray(live?.hw_ins) ? live.hw_ins : [];
   const segments = Array.isArray(live?.segments) ? live.segments : [];
   const leds = buses.filter(b => !isPwmBus(b)).reduce((sum, b) => sum + (Number(b.len) || 0), 0);
   const parts = [];
-  if (leds) parts.push(`${leds} LEDs`);
-  if (buses.some(isPwmBus)) parts.push('PWM white');
+  if (leds) parts.push(`${leds} RGB LEDs`);
+  if (buses.some(isPwmBus)) parts.push('light strip');
   if (segments.length) parts.push(`${segments.length} segment${segments.length === 1 ? '' : 's'}`);
   return parts.join(' · ') || 'No LED outputs configured';
 }
@@ -93,17 +94,71 @@ async function addController(ip, button, input = null) {
     }
     if (!live?.online && !await confirmDialog({
       title: 'Controller not reachable',
-      body: `${ip} did not answer. Add it anyway?`,
+      body: `${ip} did not answer. Add it anyway? You can run the setup guide once it is online.`,
       confirmLabel: 'Add anyway'
     })) return;
 
+    // Reachable controllers go through the setup guide; offline ones are added as they are
+    const setup = live?.online ? await runControllerSetup(ip, live) : null;
+    if (live?.online && !setup) return;
+
     const dev = deviceFromLive(ip, live);
+    if (setup?.name) dev.name = setup.name;
     if (live) window.lastFetchedLiveDeviceData[ip] = live;
-    if (await saveDevices([...devices(), dev], `${dev.name} added`) && input) input.value = '';
+    const applying = Boolean(setup?.hw_ins);
+    if (await saveDevices([...devices(), dev], applying ? null : `${dev.name} added`)) {
+      if (input) input.value = '';
+      removeScanResult(ip);
+      if (applying) await applySetup(ip, setup, `${dev.name} added and set up`);
+    }
   } finally {
     button?.removeAttribute('aria-busy');
     if (button) button.disabled = false;
   }
+}
+
+// Write the guide's answers to the controller and to AutoGlow's config
+async function applySetup(ip, setup, successMessage) {
+  const dev = devices().find(d => d.ip === ip);
+  try {
+    const result = await api.post('/api/wled/update', {
+      ip,
+      name: setup.name,
+      udp_port: dev?.udp_port || 21324,
+      hw_ins: setup.hw_ins,
+      // Full master brightness, so the light strip's 100% really is 100%
+      state: { on: true, bri: 255, seg: setup.seg }
+    }, { timeout: 15000 });
+    delete window.lastFetchedLiveDeviceData[ip];
+    await window.loadConfig();
+    if (result.hardware_applied) toast.success(successMessage);
+    else toast.warning('Saved in AutoGlow, but the controller did not take the new layout. Run the setup again once it is reachable.');
+  } catch (err) {
+    toast.error(err, { onRetry: () => applySetup(ip, setup, successMessage) });
+  }
+}
+
+async function rerunSetup(dev, button) {
+  button.disabled = true;
+  try {
+    const live = await window.pingDeviceCached(dev.ip, true);
+    if (!live?.online) {
+      toast.warning(`${dev.name || dev.ip} is offline`);
+      return;
+    }
+    window.lastFetchedLiveDeviceData[dev.ip] = live;
+    const setup = await runControllerSetup(dev.ip, { ...live, name: dev.name || live.name });
+    if (setup?.hw_ins) await applySetup(dev.ip, setup, `${setup.name} set up`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function removeScanResult(ip) {
+  const host = document.getElementById('scanResults');
+  if (!host) return;
+  host.querySelector(`.ctl-scan-row[data-ip="${CSS.escape(ip)}"]`)?.remove();
+  if (!host.querySelector('.ctl-scan-row')) host.hidden = true;
 }
 
 async function removeController(dev) {
@@ -130,18 +185,16 @@ async function scanNetwork(button) {
   button.disabled = true;
   try {
     const data = await api.get('/api/scan/network', { timeout: 30000 });
-    const found = Array.isArray(data.devices) ? data.devices : [];
+    const known = new Set(devices().map(d => d.ip));
+    const found = (Array.isArray(data.devices) ? data.devices : []).filter(d => !known.has(d.ip));
     if (!found.length) {
-      host.replaceChildren(h('div', { class: 'ctl-scan-status' }, 'No WLED controllers found. Add one by IP instead.'));
+      host.replaceChildren(h('div', { class: 'ctl-scan-status' }, 'No new WLED controllers found. Add one by IP instead.'));
       return;
     }
-    const known = new Set(devices().map(d => d.ip));
-    host.replaceChildren(...found.map(d => h('div', { class: 'ctl-scan-row' },
+    host.replaceChildren(...found.map(d => h('div', { class: 'ctl-scan-row', dataset: { ip: d.ip } },
       h('span', { class: 'ctl-name' }, d.name || 'WLED Controller'),
       h('span', { class: 'ctl-ip' }, d.ip),
-      known.has(d.ip)
-        ? h('span', { class: 'ctl-scan-added' }, 'Added')
-        : h('button', { class: 'ui-btn ui-btn-sm ui-btn-primary', type: 'button', onclick: event => addController(d.ip, event.currentTarget) }, 'Add')
+      h('button', { class: 'ui-btn ui-btn-sm ui-btn-primary', type: 'button', onclick: event => addController(d.ip, event.currentTarget) }, 'Add')
     )));
   } catch (err) {
     host.hidden = true;
@@ -163,6 +216,13 @@ function controllerRow(dev) {
     title: enabled ? null : 'Enable the controller to edit it',
     onclick: () => window.startInlineDeviceEdit(dev.ip)
   }, editing ? 'Editing' : 'Edit');
+  const setupBtn = h('button', {
+    class: 'ui-btn ui-btn-sm',
+    type: 'button',
+    disabled: !enabled,
+    title: 'Answer a few questions and let AutoGlow configure the LEDs',
+    onclick: event => rerunSetup(dev, event.currentTarget)
+  }, 'Set up');
 
   const row = h('div', { class: 'ctl-row', dataset: { ip: dev.ip }, 'aria-current': editing ? 'true' : null },
     dot,
@@ -177,6 +237,7 @@ function controllerRow(dev) {
       h('input', { type: 'checkbox', checked: enabled, 'aria-label': `${dev.name || dev.ip} enabled`, onchange: event => setControllerEnabled(dev.ip, event.target.checked) }),
       h('span', { class: 'switch-slider' })
     ),
+    setupBtn,
     editBtn,
     h('button', { class: 'ui-btn ui-btn-sm ui-btn-quiet', type: 'button', 'aria-label': `Remove ${dev.name || dev.ip}`, title: 'Remove', onclick: () => removeController(dev) }, '✕')
   );
@@ -189,6 +250,7 @@ function controllerRow(dev) {
       summary.textContent = online ? layoutSummary(live) : 'Offline';
       editBtn.disabled = !online;
       editBtn.title = online ? '' : 'The controller is offline';
+      setupBtn.disabled = !online;
     }).catch(() => {
       dot.dataset.tone = 'error';
       summary.textContent = 'Offline';
@@ -223,4 +285,13 @@ export function initControllers() {
   });
   const scanBtn = document.getElementById('btnScanNetwork');
   scanBtn?.addEventListener('click', () => scanNetwork(scanBtn));
+
+  // Drawer tabs: LEDs & segments / Idle lighting
+  document.querySelectorAll('#controllerDrawer [data-drawer-tab]').forEach(tab => {
+    tab.addEventListener('click', () => window.setControllerDrawerTab(tab.dataset.drawerTab));
+  });
+  document.getElementById('drawerClose')?.addEventListener('click', () => {
+    const ip = window.getEditingControllerIp?.();
+    if (ip) window.cancelInlineEdit(ip);
+  });
 }

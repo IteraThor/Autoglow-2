@@ -9,7 +9,7 @@ from aiohttp import web
 from core.errors import PersistenceError, ValidationError, read_json
 from core.models import AppConfig, DeviceConfig
 from core.storage import load_app_config, save_app_config
-from core.security import redact_config_dict, restore_redacted_secrets, PIN_HASH_KEY, BRIDGE_KEY_SETTING
+from core.security import redact_config_dict, restore_redacted_secrets, PIN_HASH_KEY
 from core.autodarts_bridge import AutodartsBridgeClient
 
 logger = logging.getLogger("autoglow.routes.config")
@@ -40,6 +40,9 @@ async def handle_post_config(request: web.Request) -> web.Response:
     cfg.extra.pop(PIN_HASH_KEY, None)
     if existing_cfg:
         restore_redacted_secrets(cfg, existing_cfg)
+        # Profile choices are made on the Hub / Lighting pages; a settings save that omits them keeps them
+        if "device_profiles" not in data:
+            cfg.device_profiles = {ip: n for ip, n in existing_cfg.device_profiles.items() if cfg.get_profile(n)}
         if not cfg.autodarts_user and existing_cfg.autodarts_user:
             cfg.autodarts_user = existing_cfg.autodarts_user
         if not cfg.autodarts_board_id and existing_cfg.autodarts_board_id:
@@ -100,9 +103,6 @@ async def handle_reset_config(request: web.Request) -> web.Response:
     existing_cfg = request.app.get("current_app_config") or load_app_config(config_path)
     if existing_cfg and existing_cfg.extra.get(PIN_HASH_KEY):
         empty_cfg.extra[PIN_HASH_KEY] = existing_cfg.extra[PIN_HASH_KEY]
-    # Keep the extension pairing key too, so paired browsers keep relaying game data
-    if existing_cfg and existing_cfg.extra.get(BRIDGE_KEY_SETTING):
-        empty_cfg.extra[BRIDGE_KEY_SETTING] = existing_cfg.extra[BRIDGE_KEY_SETTING]
     if not save_app_config(empty_cfg, config_path):
         logger.error(f"Failed to reset configuration on disk: {config_path}")
         raise PersistenceError("Failed to reset configuration on disk")

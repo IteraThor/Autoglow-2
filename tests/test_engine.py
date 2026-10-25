@@ -4,7 +4,7 @@ Unit and Integration Tests for AutoGlowEngine
 
 import unittest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from core.models import (
     DeviceConfig, SegmentConfig, ProfileConfig, DartEvent, DartEventType,
@@ -393,36 +393,6 @@ class TestAutoGlowEngine(unittest.IsolatedAsyncioTestCase):
         with patch("core.engine.WLEDDriver.preview_wled_state") as mock_preview:
             await engine.wake_up()
             mock_preview.assert_called_once_with("192.168.1.60", {"on": True, "lor": 0, "ps": 1})
-
-    async def test_active_match_guards_against_offline_board_shutdown(self):
-        """Verify that an active match suppresses offline board standby shutdown."""
-        from core.models import AppConfig
-        dev = DeviceConfig(ip="127.0.0.1", rgb_count=45)
-        app_cfg = AppConfig(
-            devices=[dev],
-            standby_board_offline_enabled=True,
-            standby_board_offline_id="offline-board-id",
-            standby_board_offline_delay_seconds=0
-        )
-        engine = AutoGlowEngine(dev, app_config=app_cfg)
-        engine.autodarts = MagicMock()
-        engine.autodarts._active_match_id = "live-match-uuid-123"
-        engine.autodarts.is_board_online.return_value = False
-        engine.is_board_off = False
-        engine._board_offline_start_time = 100.0
-
-        # Run single iteration logic of offline check
-        board_off_enabled = bool(engine.app_config.standby_board_offline_enabled)
-        target_board_id = str(engine.app_config.standby_board_offline_id or "").strip()
-        has_active_match = getattr(engine.autodarts, "_active_match_id", None) is not None
-
-        if board_off_enabled and target_board_id and engine.autodarts:
-            if has_active_match:
-                if engine._board_offline_start_time is not None:
-                    engine._board_offline_start_time = None
-
-        self.assertIsNone(engine._board_offline_start_time)
-        self.assertFalse(engine.is_board_off)
 
     async def test_disabled_event_in_device_matrix_does_not_trigger_global_fallback(self):
         """

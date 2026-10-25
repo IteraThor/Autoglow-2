@@ -72,8 +72,6 @@ class AutoGlowEngine:
         self.last_activity_time = time.time()
         self.is_board_dimmed = False
         self.is_board_off = False
-        self._board_offline_start_time: Optional[float] = None
-        self._board_offline_standby_active: bool = False
         self.current_illumination = self.device_config.default_pwm_brightness if self.device_config else 200
         self.last_event_name: str = "Standby"
         self.previous_event_name: str = "—"
@@ -123,6 +121,12 @@ class AutoGlowEngine:
             self.drivers[clean_ip] = drv
             return drv
         return None
+
+    def _profile_for(self, ip: str) -> ProfileConfig:
+        """Profile a controller uses; controllers without their own choice use the engine-wide profile."""
+        cfg = self.app_config
+        name = getattr(cfg, "device_profiles", {}).get(ip) if cfg else None
+        return (cfg.get_profile(name) if name else None) or self.profile
 
     def _active_devices(self) -> list:
         """Enabled devices with an IP, falling back to the primary device config."""
@@ -365,11 +369,11 @@ class AutoGlowEngine:
         for dev in self._active_devices():
             if dev.segments:
                 for seg in dev.segments:
-                    seg_eff = self.profile.get_effect(event_key, ip=dev.ip, seg_id=_seg_id(seg), hw_key=_seg_attr(seg, "hw_key"))
+                    seg_eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=_seg_id(seg), hw_key=_seg_attr(seg, "hw_key"))
                     if seg_eff and seg_eff.enabled and seg_eff.duration > 0:
                         max_dur = max(max_dur, seg_eff.duration)
             else:
-                eff = self.profile.get_effect(event_key, ip=dev.ip, seg_id=None)
+                eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=None)
                 if eff and eff.enabled and eff.duration > 0:
                     max_dur = max(max_dur, eff.duration)
 
@@ -557,7 +561,7 @@ class AutoGlowEngine:
                                 seg_hw_key = f"{pin_clean}_{type_clean}_{seg_start}"
 
                         if event.event_type == DartEventType.THROW:
-                            seg_eff = self.profile.resolve_player_effect(
+                            seg_eff = self._profile_for(dev.ip).resolve_player_effect(
                                 player_name=event.player_name,
                                 player_index=event.player_index,
                                 match_players=match_players,
@@ -566,7 +570,7 @@ class AutoGlowEngine:
                                 hw_key=seg_hw_key
                             )
                         else:
-                            seg_eff = self.profile.get_effect(event_key, ip=dev.ip, seg_id=seg_id, hw_key=seg_hw_key)
+                            seg_eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=seg_id, hw_key=seg_hw_key)
 
                         if seg_eff and seg_eff.enabled:
                             logger.info(f"Dispatching effect '{seg_eff.animation.value}' on {dev.name} ({dev.ip}) Segment #{seg_id} for '{self.last_event_name}'")
@@ -574,7 +578,7 @@ class AutoGlowEngine:
                             dispatched_any = True
                 else:
                     if event.event_type == DartEventType.THROW:
-                        eff = self.profile.resolve_player_effect(
+                        eff = self._profile_for(dev.ip).resolve_player_effect(
                             player_name=event.player_name,
                             player_index=event.player_index,
                             match_players=match_players,
@@ -582,7 +586,7 @@ class AutoGlowEngine:
                             seg_id=0
                         )
                     else:
-                        eff = self.profile.get_effect(event_key, ip=dev.ip, seg_id=None)
+                        eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=None)
 
                     if eff and eff.enabled:
                         logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) for '{self.last_event_name}'")
@@ -820,43 +824,6 @@ class AutoGlowEngine:
                 off_enabled = self.app_config.idle_power_off_enabled if self.app_config else True
                 dim_limit = (self.app_config.inactivity_timeout_minutes if self.app_config else 5) * 60
                 off_limit = (self.app_config.idle_power_off_minutes if self.app_config else 30) * 60
-
-                # -------------------------------------------------------------
-                # Check Standby on Board Offline (with Grace Period)
-                # -------------------------------------------------------------
-                board_off_enabled = bool(self.app_config.standby_board_offline_enabled) if self.app_config else False
-                target_board_id = str(self.app_config.standby_board_offline_id or "").strip() if self.app_config else ""
-                offline_delay = max(0, int(self.app_config.standby_board_offline_delay_seconds if self.app_config else 10))
-
-                if board_off_enabled and target_board_id and self.autodarts:
-                    # Guard: If an active match is in progress on any board, do not shut off lights
-                    has_active_match = getattr(self.autodarts, "_active_match_id", None) is not None
-                    if has_active_match:
-                        if self._board_offline_start_time is not None:
-                            self._board_offline_start_time = None
-                    else:
-                        is_online = self.autodarts.is_board_online(target_board_id)
-
-                        if not is_online:
-                            if self._board_offline_start_time is None:
-                                self._board_offline_start_time = time.time()
-                                logger.info(f"Target dartboard '{target_board_id}' detected offline. Grace period timer started ({offline_delay}s).")
-                            else:
-                                offline_elapsed = time.time() - self._board_offline_start_time
-                                if offline_elapsed >= offline_delay and not self.is_board_off:
-                                    logger.info(f"Target dartboard '{target_board_id}' has been offline for {int(offline_elapsed)}s (>= {offline_delay}s). Turning all controllers and board light OFF.")
-                                    self._board_offline_standby_active = True
-                                    await self._power_off_all()
-                        else:
-                            # Board is online
-                            if self._board_offline_start_time is not None:
-                                logger.info(f"Target dartboard '{target_board_id}' reconnected/online within grace period. Cancelled offline shutdown.")
-                                self._board_offline_start_time = None
-
-                            if self.is_board_off and self._board_offline_standby_active:
-                                logger.info(f"Target dartboard '{target_board_id}' is back online! Restoring active illumination & Idle Preset 1.")
-                                self._board_offline_standby_active = False
-                                await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
 
                 # Check Standby OFF (e.g. 30 min)
                 if off_enabled and idle_duration >= off_limit and not self.is_board_off:
