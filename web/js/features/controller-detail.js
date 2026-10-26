@@ -1,5 +1,5 @@
 // AutoGlow 2 - Setup › Controllers › <controller>
-// One page per controller: general settings, LEDs & outputs, idle lighting and game profile.
+// One page per controller: name and on/off in the header, then LEDs & outputs, idle lighting and game profile.
 // Everything is a draft until the save bar's Save; leaving with unsaved changes asks first.
 
 import { api } from '../core/api.js';
@@ -17,11 +17,12 @@ import {
 import { confirmLeave } from './lighting-guard.js';
 
 const SECTIONS = [
-  { id: 'general', label: 'General' },
-  { id: 'leds', label: 'LEDs & outputs' },
-  { id: 'idle', label: 'Idle lighting' },
-  { id: 'profile', label: 'Game profile' }
+  { id: 'leds', label: 'LEDs & outputs', lead: 'What is wired to the controller. To change it, run the guided setup.' },
+  { id: 'idle', label: 'Idle lighting', lead: 'Shown when no game is running and at start-up. Changes show on the lights right away.' },
+  { id: 'profile', label: 'Game profile', lead: 'The effects each segment plays during a game.' }
 ];
+// Names of the unsaved parts in the save bar
+const PART_LABELS = { general: 'name & status', leds: 'LEDs & outputs', idle: 'idle lighting', profile: 'game profile' };
 
 // PWM / white segments are driven by brightness and play no matrix effects, so they get no profile
 const isPwmSegment = seg => /pwm|white/i.test(`${seg.type || ''} ${seg.name || ''}`);
@@ -63,9 +64,9 @@ function numberInput(value, attrs) {
 }
 
 function section(id, title, lead, ...body) {
-  return h('section', { class: 'card detail-section', id: `ctl-sec-${id}`, 'aria-labelledby': `ctl-sec-${id}-title` },
+  return h('section', { class: 'card detail-section', id: `ctl-sec-${id}`, dataset: { section: id }, 'aria-labelledby': `ctl-sec-${id}-title` },
     h('div', { class: 'detail-section-head' },
-      h('h2', { class: 'card-title', id: `ctl-sec-${id}-title` }, title),
+      h('h2', { class: 'card-title', id: `ctl-sec-${id}-title` }, title, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
       lead && h('p', { class: 'detail-lead' }, lead)),
     h('div', { class: 'detail-section-body' }, ...body));
 }
@@ -74,42 +75,39 @@ function notice(text, action) {
   return h('div', { class: 'detail-notice' }, h('span', {}, text), action);
 }
 
-// --- General ----------------------------------------------------------------
+// --- Header: name (edited in place) and on/off ------------------------------
 
-function renderGeneral(body) {
-  const { general, dev } = page;
+function buildHeaderControls() {
   const name = h('input', {
-    type: 'text', class: 'ui-input', value: general.name, maxlength: 32, spellcheck: 'false',
+    type: 'text', class: 'detail-name', maxlength: 32, spellcheck: 'false', 'aria-label': 'Controller name',
+    title: 'Rename. Also changes the name shown in WLED.',
     oninput: () => {
       const clean = cleanName(name.value);
       if (clean !== name.value) {
         name.value = clean;
         toast.warning('Controller names can use letters, digits, spaces, _ and - only.');
       }
-      general.name = clean;
+      page.general.name = clean;
       sync();
     }
   });
   const enabled = h('input', {
-    type: 'checkbox', checked: general.enabled, 'aria-label': 'AutoGlow controls this controller',
+    type: 'checkbox',
     onchange: () => {
-      general.enabled = enabled.checked;
+      page.general.enabled = enabled.checked;
       sync();
     }
   });
-  body.replaceChildren(
-    field('Name', name, page.online ? 'Also shown as the controller\'s name in WLED.' : null),
-    h('div', { class: 'form-field form-toggle' },
-      h('div', {},
-        h('span', { class: 'form-label' }, 'Use this controller'),
-        h('span', { class: 'form-hint' }, 'When off, AutoGlow leaves it alone: no game effects, no idle lighting.')),
-      h('label', { class: 'switch' }, enabled, h('span', { class: 'switch-slider' }))),
-    h('div', { class: 'form-field' },
-      h('span', { class: 'form-label' }, 'Address'),
-      h('span', { class: 'form-static' },
-        h('a', { href: `http://${dev.ip}`, target: '_blank', rel: 'noopener noreferrer' }, `${dev.ip} ↗`),
-        h('span', { class: 'form-hint' }, ' opens the WLED web interface')))
-  );
+  page.nameInput = name;
+  page.enabledInput = enabled;
+  page.enabledToggle = h('label', { class: 'detail-toggle', title: 'When off, AutoGlow leaves the controller alone: no game effects, no idle lighting.' },
+    h('span', {}, 'Use this controller'),
+    h('span', { class: 'switch' }, enabled, h('span', { class: 'switch-slider' })));
+}
+
+function renderGeneral() {
+  page.nameInput.value = page.general.name;
+  page.enabledInput.checked = page.general.enabled;
 }
 
 // --- LEDs & outputs ---------------------------------------------------------
@@ -130,10 +128,51 @@ function stripBar(layout) {
     }));
 }
 
+// Read-only view of the layout. The guided setup is the normal way to change it; the editor is for experts.
+function renderLedSummary(body) {
+  const { layout } = page;
+  const typeLabel = hw => OUTPUT_TYPES.find(t => t.value === hw.type)?.label || `WLED type ${hw.type}`;
+  const order = hw => COLOR_ORDERS.find(o => o.value === hw.order)?.label;
+  body.replaceChildren(
+    stripBar(layout),
+    h('ul', { class: 'led-summary' }, layout.outputs.map((hw, busIdx) => {
+      const pwm = isPwmOutput(hw);
+      const segs = layout.segments.filter(s => s.busIdx === busIdx);
+      return h('li', {},
+        h('div', { class: 'led-summary-output' },
+          h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
+          h('strong', {}, typeLabel(hw)),
+          h('span', {}, [`GPIO ${pinOf(hw)}`, !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · '))),
+        h('div', { class: 'led-summary-segs' }, segs.map(seg => h('span', { class: 'led-summary-seg' },
+          `#${seg.id} ${seg.name}`, !pwm && h('span', {}, ` · LEDs ${seg.start + 1}–${seg.stop}`)))));
+    })),
+    h('div', { class: 'led-summary-actions' },
+      h('button', {
+        type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: runGuidedSetup,
+        title: 'Answer a few questions and let AutoGlow configure the LEDs'
+      }, 'Run guided setup'),
+      h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…')));
+}
+
+async function openLedEditor() {
+  const ok = await confirmDialog({
+    title: 'Edit the LED layout manually?',
+    body: 'This is for people who know their wiring. A wrong GPIO pin, LED count or type can stop the LEDs from working until it is fixed. The guided setup is the safe way to change the layout.',
+    confirmLabel: 'Edit manually'
+  });
+  if (!ok || !page) return;
+  page.ledsAdvanced = true;
+  renderLeds(page.bodies.leds);
+}
+
 function renderLeds(body) {
   const { layout } = page;
   if (!layout) {
     body.replaceChildren(offlineNotice('to edit its LEDs'));
+    return;
+  }
+  if (!page.ledsAdvanced) {
+    renderLedSummary(body);
     return;
   }
   const redraw = () => {
@@ -154,31 +193,35 @@ function renderLeds(body) {
       onchange: () => { hw.pin = Number(pin.value) || 0; redraw(); }
     });
 
+    const segName = seg => {
+      const input = h('input', {
+        type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
+        oninput: () => {
+          seg.name = cleanName(input.value);
+          if (seg.name !== input.value) input.value = seg.name;
+          sync();
+        }
+      });
+      return input;
+    };
+
+    // A light strip is one channel with one segment: only its name can change, next to the output's fields
     const head = h('div', { class: 'output-head' },
       h('div', { class: 'output-title' },
         h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
         h('strong', {}, `Output ${busIdx + 1}`)),
-      h('div', { class: 'output-fields' },
-        field('Type', select(types, hw.type, { onchange: e => { setOutputType(layout, busIdx, e.target.value); redraw(); } })),
-        field('GPIO pin', pin),
-        !pwm && field('Color order', select(COLOR_ORDERS, hw.order, { onchange: e => { hw.order = Number(e.target.value); sync(); } })),
-        !pwm && field('LEDs', numberInput(hw.len, { min: 1, max: 1500, onchange: e => { setOutputLength(layout, busIdx, e.target.value); redraw(); } }))),
+      field('Type', select(types, hw.type, { onchange: e => { setOutputType(layout, busIdx, e.target.value); redraw(); } })),
+      field('GPIO', pin),
+      !pwm && field('Order', select(COLOR_ORDERS, hw.order, { 'aria-label': 'Color order', onchange: e => { hw.order = Number(e.target.value); sync(); } })),
+      !pwm && field('LEDs', numberInput(hw.len, { min: 1, max: 1500, onchange: e => { setOutputLength(layout, busIdx, e.target.value); redraw(); } })),
+      pwm && own[0] && h('div', { class: 'output-pwm-name' }, field(`Segment #${own[0].seg.id} name`, segName(own[0].seg))),
       isLast && h('button', {
         type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet output-remove',
         onclick: () => { removeLastOutput(layout); redraw(); }
       }, 'Remove output'));
 
-    const rows = own.map(({ seg, segIdx }) => {
-      const nameInput = h('input', {
-        type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
-        oninput: () => {
-          seg.name = cleanName(nameInput.value);
-          if (seg.name !== nameInput.value) nameInput.value = seg.name;
-          sync();
-        }
-      });
-      // A light strip is one channel with one segment: only its name can change
-      if (pwm) return field(`Segment #${seg.id}`, nameInput, 'Covers the whole light strip.');
+    const rows = pwm ? [] : own.map(({ seg, segIdx }) => {
+      const nameInput = segName(seg);
       const removable = own.length > 1;
       const first = numberInput(seg.start + 1, { min: 1, 'aria-label': 'First LED' });
       const last = numberInput(seg.stop, { min: 1, 'aria-label': 'Last LED' });
@@ -205,7 +248,7 @@ function renderLeds(body) {
     return h('div', { class: 'output-card', dataset: { kind: pwm ? 'pwm' : 'rgb' } },
       head,
       dupes.has(pinOf(hw)) && h('p', { class: 'form-error' }, `GPIO ${pinOf(hw)} is used by another output. Each output needs its own pin.`),
-      pwm ? rows : h('table', { class: 'seg-table' },
+      !pwm && h('table', { class: 'seg-table' },
         h('thead', {}, h('tr', {},
           h('th', {}, ''), h('th', {}, 'Segment'), h('th', {}, 'First LED'), h('th', {}, 'Last LED'), h('th', {}, 'Count'), h('th', {}, 'Offset'),
           h('th', {}, ''))),
@@ -213,7 +256,15 @@ function renderLeds(body) {
       !pwm && h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => { addSegment(layout, busIdx); redraw(); } }, '+ Add segment'));
   });
 
+  // Closing is only possible without unsaved layout changes (sync() keeps it up to date)
+  page.closeEditorBtn = h('button', {
+    type: 'button', class: 'ui-btn ui-btn-sm', title: 'Back to the summary. Save or discard changes first.',
+    onclick: () => { page.ledsAdvanced = false; renderLeds(body); }
+  }, 'Close editor');
   body.replaceChildren(
+    h('div', { class: 'led-editor-note' },
+      h('span', {}, 'Manual editing. Nothing changes on the controller until you save.'),
+      page.closeEditorBtn),
     stripBar(layout),
     ...outputCards,
     h('div', { class: 'detail-row-actions' },
@@ -293,41 +344,29 @@ function offlineNotice(what) {
 function renderHead() {
   const { dev, live, online } = page;
   const tone = dev.enabled === false ? 'off' : online === null ? 'pending' : online ? 'ok' : 'error';
-  const status = dev.enabled === false ? 'Disabled' : online === null ? 'Checking…' : online ? 'Online' : 'Offline';
-  const meta = [h('span', { class: 'ctl-ip' }, dev.ip)];
-  if (online) {
-    meta.push(h('span', {}, layoutSummary(live)));
-    if (live.version) meta.push(h('span', {}, `WLED ${live.version}`));
-  }
-  page.head.replaceChildren(
-    h('div', { class: 'detail-title' },
-      h('span', { class: 'status-dot', dataset: { tone } }),
-      h('h1', {}, dev.name || 'WLED Controller'),
-      h('span', { class: 'status-pill', dataset: { tone } }, status)),
-    h('div', { class: 'detail-meta' }, meta),
-    h('div', { class: 'detail-actions' },
-      h('button', {
-        type: 'button', class: 'ui-btn', disabled: !online,
-        title: online ? 'Answer a few questions and let AutoGlow configure the LEDs' : 'The controller must be online',
-        onclick: runGuidedSetup
-      }, 'Run guided setup')));
+  page.dot.dataset.tone = tone;
+  page.pill.dataset.tone = tone;
+  page.pill.textContent = dev.enabled === false ? 'Disabled' : online === null ? 'Checking…' : online ? 'Online' : 'Offline';
+  page.meta.replaceChildren(
+    h('a', { class: 'ctl-ip', href: `http://${dev.ip}`, target: '_blank', rel: 'noopener noreferrer', title: 'Open the WLED web interface' }, `${dev.ip} ↗`),
+    online && h('span', {}, layoutSummary(live)),
+    online && live.version && h('span', {}, `WLED ${live.version}`));
 }
 
-// Mark dirty sections, lock what depends on the saved LED layout, show or hide the save bar
+// Mark dirty parts, lock what depends on the saved LED layout, show or hide the save bar
 function sync() {
   if (!page) return;
   const parts = dirtyParts();
   const ledsDirty = parts.includes('leds');
-  page.nav.querySelectorAll('[data-section]').forEach(btn => {
-    btn.toggleAttribute('data-dirty', parts.includes(btn.dataset.section));
-  });
+  if (page.closeEditorBtn) page.closeEditorBtn.disabled = ledsDirty;
+  for (const s of SECTIONS) page.sections[s.id].toggleAttribute('data-dirty', parts.includes(s.id));
+  page.head.toggleAttribute('data-dirty', parts.includes('general'));
   for (const id of ['idle', 'profile']) {
     page.sections[id].classList.toggle('is-locked', ledsDirty);
     page.sections[id].querySelector('.detail-section-body').inert = ledsDirty;
   }
   page.saveBar.hidden = parts.length === 0;
-  const labels = SECTIONS.filter(s => parts.includes(s.id)).map(s => s.label);
-  page.saveNote.textContent = `Unsaved changes: ${labels.join(', ')}`;
+  page.saveNote.textContent = `Unsaved changes: ${parts.map(p => PART_LABELS[p]).join(', ')}`;
   page.saveBtn.disabled = page.saving;
   page.discardBtn.disabled = page.saving;
 }
@@ -382,9 +421,10 @@ function discard() {
   if (!page) return;
   page.general = JSON.parse(page.savedGeneral);
   if (page.layout) page.layout = JSON.parse(page.savedLayout);
+  page.ledsAdvanced = false;
   if (page.profiles) page.profiles = JSON.parse(page.savedProfiles);
   page.idle?.discard();
-  renderGeneral(page.bodies.general);
+  renderGeneral();
   renderLeds(page.bodies.leds);
   renderProfile(page.bodies.profile);
   sync();
@@ -464,44 +504,38 @@ export async function openDetail(ip, { force = false } = {}) {
     saving: false, sections: {}, bodies: {}
   };
 
-  page.head = h('header', { class: 'detail-head' });
-  page.nav = h('nav', { class: 'detail-nav', 'aria-label': 'Controller sections' },
-    SECTIONS.map(s => h('button', {
-      type: 'button', class: 'detail-nav-item', dataset: { section: s.id },
-      onclick: () => page.sections[s.id].scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, s.label)));
-  const leads = {
-    general: null,
-    leds: 'What is wired to the controller. Segments are the parts of a strip that can light up on their own.',
-    idle: 'What the controller shows when no game is running. Changes show on the lights right away; Save stores them on the controller, where they also play at start-up.',
-    profile: 'The set of effects each segment plays during a game.'
-  };
+  buildHeaderControls();
+  page.dot = h('span', { class: 'status-dot' });
+  page.pill = h('span', { class: 'status-pill' });
+  page.meta = h('div', { class: 'detail-meta' });
+  page.head = h('header', { class: 'detail-head' },
+    h('div', { class: 'detail-title' }, page.dot, page.nameInput, page.pill, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
+    h('div', { class: 'detail-actions' },
+      page.enabledToggle,
+      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', title: 'AutoGlow stops using it. The controller keeps its own settings.', onclick: removeThis }, 'Remove')),
+    page.meta);
+
   for (const s of SECTIONS) {
     page.bodies[s.id] = h('div');
-    page.sections[s.id] = section(s.id, s.label, leads[s.id], page.bodies[s.id]);
+    page.sections[s.id] = section(s.id, s.label, s.lead, page.bodies[s.id]);
   }
   page.saveNote = h('span', { class: 'savebar-note' });
-  page.discardBtn = h('button', { type: 'button', class: 'ui-btn', onclick: discard }, 'Discard');
-  page.saveBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: save }, 'Save changes');
+  page.discardBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: discard }, 'Discard');
+  page.saveBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: save }, 'Save changes');
   page.saveBar = h('div', { class: 'savebar', role: 'region', 'aria-label': 'Unsaved changes', hidden: true },
     page.saveNote, page.discardBtn, page.saveBtn);
 
+  // Wide screens: LEDs on the left, idle lighting and profile on the right
   host.replaceChildren(
     h('a', { class: 'detail-back', href: '/setup/controllers', 'data-link': true }, '← Controllers'),
     page.head,
     h('div', { class: 'detail-grid' },
-      page.nav,
-      h('div', { class: 'detail-sections' },
-        ...SECTIONS.map(s => page.sections[s.id]),
-        h('section', { class: 'card detail-danger' },
-          h('div', {},
-            h('h2', { class: 'card-title' }, 'Remove controller'),
-            h('p', { class: 'detail-lead' }, 'AutoGlow stops using it. The controller keeps its own settings.')),
-          h('button', { type: 'button', class: 'ui-btn ui-btn-danger', onclick: removeThis }, 'Remove')))),
+      page.sections.leds,
+      h('div', { class: 'detail-side' }, page.sections.idle, page.sections.profile)),
     page.saveBar);
 
   renderHead();
-  renderGeneral(page.bodies.general);
+  renderGeneral();
   renderLeds(page.bodies.leds);
   renderIdle(page.bodies.idle);
   renderProfile(page.bodies.profile);
@@ -530,7 +564,7 @@ export async function openDetail(ip, { force = false } = {}) {
     }
   }
   renderHead();
-  renderGeneral(page.bodies.general);
+  renderGeneral();
   renderLeds(page.bodies.leds);
   renderIdle(page.bodies.idle);
   renderProfile(page.bodies.profile);
