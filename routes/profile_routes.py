@@ -33,6 +33,10 @@ def _preset_state(cfg, ip: str, with_profile: bool = True) -> dict:
         "active_profile": cfg.profile_name_for(ip),
         "presets": [p.name for p in cfg.profiles],
         "device_profiles": {d.ip: cfg.profile_name_for(d.ip) for d in cfg.devices if d.ip},
+        "segment_profiles": {
+            d.ip: {str(seg.id): cfg.profile_name_for(d.ip, seg.id) for seg in d.segments}
+            for d in cfg.devices if d.ip and d.segments
+        },
     }
     if with_profile:
         out["profile"] = cfg.profile_for(ip).to_dict()
@@ -58,11 +62,19 @@ async def handle_get_presets(request: web.Request) -> web.Response:
         save_app_config(cfg, config_path)
 
     ip = _target_ip(request)
-    return web.json_response(_preset_state(cfg, ip, with_profile=bool(ip)))
+    out = _preset_state(cfg, ip, with_profile=bool(ip))
+    name = request.query.get("name", "").strip()
+    if name:
+        # The editor opens a profile by name; no controller is involved
+        found = cfg.get_profile(name)
+        if not found:
+            raise NotFound(f"Preset '{name}' not found")
+        out["profile"] = found.to_dict()
+    return web.json_response(out)
 
 
 async def handle_select_preset(request: web.Request) -> web.Response:
-    """Switch the preset a controller uses (or the shared default) and immediately sync the engine."""
+    """Switch the preset a segment or controller uses (or the shared default) and immediately sync the engine."""
     config_path = request.app.get("config_path", "config.json")
     cfg = load_app_config(config_path)
 
@@ -73,7 +85,11 @@ async def handle_select_preset(request: web.Request) -> web.Response:
         raise ValidationError("Preset name is required", field="name")
 
     ip = _target_ip(request, data)
-    found = cfg.set_device_profile(ip, target_name) if ip else cfg.set_active_profile(target_name)
+    segment_id = data.get("segment_id")
+    if ip and segment_id is not None:
+        found = cfg.set_segment_profile(ip, segment_id, target_name)
+    else:
+        found = cfg.set_device_profile(ip, target_name) if ip else cfg.set_active_profile(target_name)
     if not found:
         raise NotFound(f"Preset '{target_name}' not found")
 
@@ -126,7 +142,12 @@ async def handle_save_preset(request: web.Request) -> web.Response:
 
     _apply(request, cfg)
     logger.info(f"Saved Event Matrix preset '{preset_name}' (active={set_active})")
-    return web.json_response(_preset_state(cfg, ip))
+    out = _preset_state(cfg, ip)
+    if not ip:
+        # The editor works on a profile by name, whichever controllers use it
+        out["active_profile"] = new_profile.name
+        out["profile"] = new_profile.to_dict()
+    return web.json_response(out)
 
 
 async def handle_rename_preset(request: web.Request) -> web.Response:
@@ -289,7 +310,7 @@ async def handle_import_preset(request: web.Request) -> web.Response:
 
     # A controller ip comes in the query string, since the body is the preset itself
     ip = str(request.query.get("ip", "")).strip()
-    cfg.add_or_update_profile(imported_profile, set_active=not ip)
+    cfg.add_or_update_profile(imported_profile, set_active=False)
     if ip:
         cfg.set_device_profile(ip, final_name)
     save_preset_file(imported_profile, presets_dir=presets_dir)
@@ -299,4 +320,8 @@ async def handle_import_preset(request: web.Request) -> web.Response:
 
     _apply(request, cfg)
     logger.info(f"Successfully imported preset '{final_name}'")
-    return web.json_response(_preset_state(cfg, ip))
+    out = _preset_state(cfg, ip)
+    if not ip:
+        out["active_profile"] = final_name
+        out["profile"] = imported_profile.to_dict()
+    return web.json_response(out)

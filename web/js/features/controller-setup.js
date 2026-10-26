@@ -79,10 +79,16 @@ export function buildOutputs(plan) {
   return outputs;
 }
 
-// WLED segments: the RGB strip's zones, then the light strip as its own segment
-export function buildSegments(plan, zones = plan.zones) {
+// How many LEDs after a zone's first LED its effects start (WLED's segment offset "of")
+export function zoneOffset(plan, zone, range) {
+  return (plan.offsets[zone] || 0) % (range.stop - range.start);
+}
+
+// WLED segments: the RGB strip's zones, then the light strip as its own segment. Only the saved layout
+// and the idle preview carry the zone offsets; the light tests use none, so their LED numbers are the strip's own.
+export function buildSegments(plan, zones = plan.zones, { offsets = false } = {}) {
   const ranges = zoneRanges(plan.count, zones);
-  const segs = ranges.map((r, i) => ({ id: i, n: ranges.length === 1 ? 'RGB Strip' : `RGB zone ${i + 1}`, start: r.start, stop: r.stop, on: true, frz: false }));
+  const segs = ranges.map((r, i) => ({ id: i, n: ranges.length === 1 ? 'RGB Strip' : `RGB zone ${i + 1}`, start: r.start, stop: r.stop, of: offsets ? zoneOffset(plan, i, r) : 0, on: true, frz: false }));
   if (hasLightStrip(plan)) segs.push({ id: segs.length, n: LIGHT_SEGMENT, start: plan.count, stop: plan.count + 1, on: true, frz: false });
   return segs;
 }
@@ -101,7 +107,7 @@ const percentToBri = percent => Math.round((percent / 100) * 255);
 export function idleSegments(plan) {
   const { look: lookId, color, bri, lightBri } = plan.idle;
   const look = IDLE_LOOKS.find(l => l.id === lookId) || IDLE_LOOKS[0];
-  return buildSegments(plan).map(s => {
+  return buildSegments(plan, plan.zones, { offsets: true }).map(s => {
     if (s.n === LIGHT_SEGMENT) {
       return lightBri > 0 ? { ...s, bri: percentToBri(lightBri), fx: 0, col: [[255, 255, 255], [0, 0, 0]] } : { ...s, on: false };
     }
@@ -127,6 +133,7 @@ function planFromLive(ip, live) {
   const buses = Array.isArray(live?.hw_ins) ? live.hw_ins : [];
   const stripBus = buses.find(b => !isPwmBus(b)) || null;
   const lightBus = buses.find(isPwmBus) || null;
+  const firstSeg = Array.isArray(live?.state?.seg) ? live.state.seg[0] : null;
   return {
     ip,
     name: live?.name || 'WLED Controller',
@@ -138,6 +145,8 @@ function planFromLive(ip, live) {
     lightStrip: Boolean(lightBus),
     lightPin: firstPin(lightBus) ?? '',
     zones: 1,
+    // Per zone, the start of its effects as an offset from its first LED; the guide starts with one zone
+    offsets: [Math.max(0, Number(firstSeg?.of) || 0)],
     // Defaults match what the guide saved before it asked: Rainbow, everything at 100%
     idle: { look: 'rainbow', color: '#00ff9d', bri: 100, lightBri: 100 },
     stripBus,
@@ -151,15 +160,18 @@ function svg(tag, attrs) {
   return el;
 }
 
-// The RGB strip as a bar from LED 1 to the last LED, colored by zone
+// The RGB strip as a bar from LED 1 to the last LED, colored by zone, with a white mark where each zone's effects start
 function stripPreview(plan) {
   const width = 400;
   const gap = 3;
-  const root = svg('svg', { class: 'setup-strip', viewBox: `0 0 ${width} 18`, role: 'img', 'aria-label': `RGB strip of ${plan.count} LEDs in ${plan.zones} zone${plan.zones === 1 ? '' : 's'}` });
+  const root = svg('svg', { class: 'setup-strip', id: 'setupStripPreview', viewBox: `0 0 ${width} 18`, role: 'img', 'aria-label': `RGB strip of ${plan.count} LEDs in ${plan.zones} zone${plan.zones === 1 ? '' : 's'}` });
   zoneRanges(plan.count, plan.zones).forEach((range, zone) => {
     const x = (range.start / plan.count) * width;
     const w = ((range.stop - range.start) / plan.count) * width;
-    root.append(svg('rect', { x, y: 2, width: Math.max(1, w - gap), height: 14, rx: 3, fill: ZONE_COLORS[zone % ZONE_COLORS.length] }));
+    const first = range.start + zoneOffset(plan, zone, range);
+    root.append(
+      svg('rect', { x, y: 2, width: Math.max(1, w - gap), height: 14, rx: 3, fill: ZONE_COLORS[zone % ZONE_COLORS.length] }),
+      svg('rect', { x: (first / plan.count) * width, y: 0, width: Math.max(3, width / plan.count - 1), height: 18, rx: 1, fill: '#ffffff', stroke: '#000000', 'stroke-width': 0.75 }));
   });
   return root;
 }
@@ -266,8 +278,9 @@ export function runControllerSetup(ip, live) {
     async function close(result) {
       if (dialog.dataset.closing) return;
       dialog.dataset.closing = 'true';
-      // A queued idle preview must not land after the restore below
+      // A queued idle preview or start LED test must not land after the restore below
       clearTimeout(idleTimer);
+      clearTimeout(startTimer);
       if (!result && touched) {
         cancelBtn.textContent = 'Restoring…';
         try {
@@ -286,6 +299,9 @@ export function runControllerSetup(ip, live) {
       const list = steps();
       const step = list[stepIndex];
       if (delta > 0 && !step.check()) return;
+      // The strip shows the next step's test from here on, not the start LED
+      clearTimeout(startTimer);
+      startTest = null;
       if (delta > 0 && step.id === 'review') {
         close({ name: plan.name, hw_ins: buildOutputs(plan), seg: idleSegments(plan) });
         return;
@@ -562,27 +578,35 @@ export function runControllerSetup(ip, live) {
     }
 
     // --- Step 4: zones ---
+    let startTest = null;     // zone whose start LED is lit on the strip
+    let startTimer = null;
+
     function renderZones() {
       const maxZones = Math.min(MAX_ZONES, plan.count);
       const split = plan.zones > 1;
       const zoneCount = numberInput(split ? plan.zones : 4, { min: 2, max: maxZones, onchange: input => {
         const n = parseInt(input.value, 10);
-        if (n >= 2 && n <= maxZones) {
-          plan.zones = n;
-          refreshZones();
-        }
+        if (n >= 2 && n <= maxZones) setZones(n);
       } });
       zoneCount.disabled = !split;
       const pick = zones => {
-        plan.zones = zones;
         zoneCount.disabled = zones === 1;
+        setZones(zones);
+      };
+      // New zone bounds make the old start LEDs meaningless, so each zone starts at its first LED again
+      const setZones = zones => {
+        if (zones !== plan.zones) {
+          plan.zones = zones;
+          plan.offsets = [];
+          startTest = null;
+        }
         refreshZones();
       };
       const zonesBox = h('div', { class: 'setup-zones' });
-      const refreshZones = () => zonesBox.replaceChildren(stripPreview(plan), zoneList());
+      const refreshZones = () => zonesBox.replaceChildren(stripPreview(plan), zoneList(), startTestBody());
       refreshZones();
       return [
-        h('p', { class: 'setup-lead' }, 'Each zone gets its own effects in the Event and Flow matrices, so different parts of the RGB strip can light up differently.'),
+        h('p', { class: 'setup-lead' }, 'Each zone gets its own effects in the Event and Flow matrices, so different parts of the RGB strip can light up differently. Effects start at a zone\'s first LED unless you pick another one; they run to the zone\'s end and continue from its first LED.'),
         h('fieldset', { class: 'setup-field' },
           h('legend', { class: 'setup-label' }, 'How should the RGB strip be used?'),
           h('label', { class: 'setup-check' }, h('input', { type: 'radio', name: 'setupZones', checked: !split, onchange: () => pick(1) }), h('span', {}, 'As one zone (the whole strip)')),
@@ -593,7 +617,10 @@ export function runControllerSetup(ip, live) {
           h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: async () => {
             if (busy) return;
             const segs = buildSegments(plan).map((s, i) => (s.n === LIGHT_SEGMENT ? { ...s, on: false } : { ...s, fx: 0, col: [rgb(ZONE_COLORS[i % ZONE_COLORS.length]), [0, 0, 0]] }));
-            await preview({ on: true, bri: 110, transition: 0, seg: segs });
+            if (await preview({ on: true, bri: 110, transition: 0, seg: segs })) {
+              startTest = null;
+              refreshStartTest();
+            }
           } }, 'Show the zones on the strip'))
       ];
     }
@@ -602,8 +629,71 @@ export function runControllerSetup(ip, live) {
       const ranges = zoneRanges(plan.count, plan.zones);
       return h('ul', { class: 'setup-zone-list' }, ...ranges.map((r, i) => h('li', {},
         swatch(ZONE_COLORS[i % ZONE_COLORS.length]),
-        ranges.length === 1 ? 'Whole strip' : `Zone ${i + 1}`,
-        h('span', { class: 'setup-muted' }, `${humanRange(r)} (${r.stop - r.start})`))));
+        zoneLabel(ranges, i),
+        h('span', { class: 'setup-muted' }, `${humanRange(r)} (${r.stop - r.start})`),
+        zoneStart(r, i))));
+    }
+
+    const zoneLabel = (ranges, i) => (ranges.length === 1 ? 'Whole strip' : `Zone ${i + 1}`);
+
+    // "Starts at LED" with − and +, counted like the strip (from 1); the buttons wrap around inside the zone
+    function zoneStart(range, zone) {
+      const len = range.stop - range.start;
+      const firstLed = () => range.start + zoneOffset(plan, zone, range) + 1;
+      const set = offset => {
+        plan.offsets[zone] = ((offset % len) + len) % len;
+        input.value = firstLed();
+        document.getElementById('setupStripPreview')?.replaceWith(stripPreview(plan));
+        clearTimeout(startTimer);
+        startTimer = setTimeout(() => testStart(zone), 250);
+      };
+      const input = numberInput(firstLed(), { min: range.start + 1, max: range.stop, onchange: el => {
+        const led = parseInt(el.value, 10);
+        if (led >= range.start + 1 && led <= range.stop) set(led - 1 - range.start);
+      } });
+      input.setAttribute('aria-label', `LED where effects start, ${range.start + 1} to ${range.stop}`);
+      // A number outside the zone is not applied; leaving the field shows the start in use again
+      input.addEventListener('change', () => { input.value = firstLed(); });
+      const step = delta => set(zoneOffset(plan, zone, range) + delta);
+      return h('span', { class: 'setup-zone-start' },
+        h('span', { class: 'setup-muted' }, 'Starts at LED'),
+        h('span', { class: 'setup-stepper' },
+          h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'Start one LED earlier', disabled: len === 1, onclick: () => step(-1) }, '−'),
+          input,
+          h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'Start one LED later', disabled: len === 1, onclick: () => step(1) }, '+')),
+        h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: () => testStart(zone) }, 'Show'));
+    }
+
+    // Green on the zone's start LED, red on the LED before and after it (wrapping inside the zone).
+    // The other zones stay dark. WLED's "i" counts from the segment's first LED, and the test segments have no offset.
+    async function testStart(zone) {
+      if (busy) return;
+      const range = zoneRanges(plan.count, plan.zones)[zone];
+      if (!range) return;
+      const len = range.stop - range.start;
+      const first = zoneOffset(plan, zone, range);
+      const i = [first, '00FF00'];
+      if (len > 1) i.push((first + len - 1) % len, 'FF0000', (first + 1) % len, 'FF0000');
+      const segs = buildSegments(plan).map((s, n) => (s.n === LIGHT_SEGMENT
+        ? { ...s, on: false }
+        : { ...s, fx: 0, col: [[0, 0, 0], [0, 0, 0]], ...(n === zone ? { i } : {}) }));
+      if (await preview({ on: true, bri: 110, transition: 0, seg: segs })) {
+        startTest = zone;
+        refreshStartTest();
+      }
+    }
+
+    function refreshStartTest() {
+      document.getElementById('setupStartTest')?.replaceWith(startTestBody());
+    }
+
+    function startTestBody() {
+      const box = h('div', { class: 'setup-test-body setup-zones-test', id: 'setupStartTest', 'aria-live': 'polite' });
+      const ranges = zoneRanges(plan.count, plan.zones);
+      if (startTest === null || !ranges[startTest]) return box;
+      const r = ranges[startTest];
+      box.append(h('p', {}, `${zoneLabel(ranges, startTest)}: green = LED ${r.start + zoneOffset(plan, startTest, r) + 1}, where effects start, with a red LED on each side. Use − and + until the green LED is where you want it.`));
+      return box;
     }
 
     // --- Step 5: idle lighting ---
@@ -656,7 +746,11 @@ export function runControllerSetup(ip, live) {
         ['Name', plan.name],
         ['RGB strip', `${plan.count} LEDs on GPIO ${plan.stripPin}, ${strip}`],
         ['Colors', `${COLOR_ORDERS[plan.order & 0x0f]} order${plan.colorsChecked ? ', checked' : ' (not checked)'}`],
-        ['Zones', ranges.length === 1 ? 'One zone, the whole strip' : ranges.map((r, i) => `Zone ${i + 1}: ${humanRange(r)}`).join('\n')],
+        ['Zones', ranges.map((r, i) => {
+          const offset = zoneOffset(plan, i, r);
+          const start = offset ? `, effects start at LED ${r.start + offset + 1}` : '';
+          return ranges.length === 1 ? `One zone, the whole strip${start}` : `Zone ${i + 1}: ${humanRange(r)}${start}`;
+        }).join('\n')],
         ['Light strip', plan.lightStrip ? `On GPIO ${plan.lightPin}` : 'None'],
         ['Idle lighting', describeIdle(plan)]
       ];

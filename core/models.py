@@ -17,6 +17,69 @@ def _safe_int(val: Any, default: int = 0) -> int:
     except (ValueError, TypeError):
         return default
 
+def profile_dict_for_device(raw: Dict[str, Any], ip: str) -> Dict[str, Any]:
+    """Flatten one controller's per-segment effects from a pre-2.3 profile into a plain profile dict.
+
+    Old profiles kept effects per controller and segment in "device_events". Segment "0" (else the first
+    numbered segment) becomes the profile's effects; its "player_N" entries become the player slot effects.
+    """
+    out = {k: v for k, v in raw.items() if k != "device_events"}
+    out["events"] = dict(raw.get("events") or {})
+    slots = [dict(s) for s in (raw.get("player_slots") or []) if isinstance(s, dict)]
+    seg_map = (raw.get("device_events") or {}).get(ip)
+    if isinstance(seg_map, dict) and seg_map:
+        numbered = sorted((k for k in seg_map if str(k).isdigit()), key=int)
+        key = "0" if "0" in seg_map else (numbered[0] if numbered else next(iter(seg_map)))
+        for ev_key, eff in (seg_map.get(key) or {}).items():
+            if not isinstance(eff, dict):
+                continue
+            if ev_key.startswith("player_") and ev_key[7:].isdigit():
+                slot_id = int(ev_key[7:])
+                slot = next((s for s in slots if _safe_int(s.get("id"), 0) == slot_id), None)
+                if slot is None:
+                    slot = {"id": slot_id, "name_filter": "", "match_type": "contains"}
+                    slots.append(slot)
+                slot["effect"] = dict(eff)
+                slot["enabled"] = bool(eff.get("enabled", False))
+            else:
+                out["events"][ev_key] = dict(eff)
+    if slots:
+        out["player_slots"] = slots
+    return out
+
+
+def split_device_profiles(raw_profiles: List[Any], devices: List["DeviceConfig"], device_profiles: Dict[str, str], active_name: str):
+    """Turn pre-2.3 profiles that hold per-controller effects into one fixed profile per controller.
+
+    Returns (profiles, device_profiles); each controller that had its own effects now uses a new profile
+    named "<profile> - <controller>".
+    """
+    profiles: List[Dict[str, Any]] = []
+    assigned = dict(device_profiles)
+    taken = {str(p.get("name", "")).lower() for p in raw_profiles if isinstance(p, dict)}
+    names = {d.ip: (d.name or d.ip) for d in devices}
+    for raw in raw_profiles:
+        if not isinstance(raw, dict):
+            continue
+        dev_events = raw.get("device_events")
+        profiles.append({k: v for k, v in raw.items() if k != "device_events"})
+        if not isinstance(dev_events, dict):
+            continue
+        base = str(raw.get("name", "Default"))
+        for ip, seg_map in dev_events.items():
+            if not seg_map or ip not in names:
+                continue
+            new_name = f"{base} - {names[ip]}"
+            if new_name.lower() not in taken:
+                taken.add(new_name.lower())
+                split = profile_dict_for_device(raw, ip)
+                split["name"] = new_name
+                profiles.append(split)
+            # else: an earlier split already made this profile; keep it rather than adding a copy
+            if assigned.get(ip, active_name) == base:
+                assigned[ip] = new_name
+    return profiles, assigned
+
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
     """Safely cast any value to float, handling NoneType and invalid formats gracefully."""
@@ -263,6 +326,7 @@ class SegmentConfig:
     length: int = 45
     role: str = "dartboard_ring"  # "dartboard_ring", "white_illumination", "ambient"
     hw_key: Optional[str] = None
+    offset: int = 0                   # effects begin this many LEDs after start, wrapping around (WLED "of")
 
     def to_dict(self) -> Dict[str, Any]:
         out = {
@@ -272,7 +336,8 @@ class SegmentConfig:
             "gpio": self.gpio,
             "start": self.start,
             "length": self.length,
-            "role": self.role
+            "role": self.role,
+            "offset": self.offset
         }
         if self.hw_key:
             out["hw_key"] = self.hw_key
@@ -302,7 +367,8 @@ class SegmentConfig:
 
         role = str(data.get("role", "dartboard_ring"))
         hw_key = data.get("hw_key")
-        return cls(id=seg_id, name=name, type=seg_type, gpio=gpio, start=start, length=length, role=role, hw_key=hw_key)
+        offset = _safe_int(data.get("offset", data.get("of")), 0) % length
+        return cls(id=seg_id, name=name, type=seg_type, gpio=gpio, start=start, length=length, role=role, hw_key=hw_key, offset=offset)
 
 
 @dataclass
@@ -408,30 +474,11 @@ class DartEvent:
 class ProfileConfig:
     name: str = "Default"
     events: Dict[str, EffectConfig] = field(default_factory=dict)
-    device_events: Dict[str, Dict[str, Dict[str, EffectConfig]]] = field(default_factory=dict)
     player_slots: List[PlayerSlotConfig] = field(default_factory=list)
 
-    def get_effect(self, event_key: str, ip: Optional[str] = None, seg_id: Optional[Any] = None, hw_key: Optional[str] = None) -> Optional[EffectConfig]:
-        """Lookup effect by specific device & segment (checking hw_key first, then seg_id), falling back to global profile default."""
+    def get_effect(self, event_key: str) -> Optional[EffectConfig]:
+        """The profile's effect for an event; every controller and segment using the profile plays it."""
         alt_key = "calibrating" if event_key == "calibration" else ("calibration" if event_key == "calibrating" else None)
-        if ip and (seg_id is not None or hw_key is not None):
-            dev_map = self.device_events.get(ip, {})
-            # 1. Hardware Key Anchor Lookup (e.g. gpio_16_pwm_45)
-            if hw_key and hw_key in dev_map:
-                if event_key in dev_map[hw_key]:
-                    return dev_map[hw_key][event_key]
-                if alt_key and alt_key in dev_map[hw_key]:
-                    return dev_map[hw_key][alt_key]
-            # 2. Numerical Index Lookup (e.g. "0", "1")
-            if seg_id is not None:
-                seg_str = str(seg_id)
-                if seg_str in dev_map:
-                    if event_key in dev_map[seg_str]:
-                        return dev_map[seg_str][event_key]
-                    if alt_key and alt_key in dev_map[seg_str]:
-                        return dev_map[seg_str][alt_key]
-            # Specific segment has no override: do not leak global events across segments
-            return None
         eff = self.events.get(event_key)
         if not eff and alt_key:
             eff = self.events.get(alt_key)
@@ -442,20 +489,14 @@ class ProfileConfig:
         player_name: Optional[str] = None,
         player_index: Optional[int] = None,
         match_players: Optional[List[str]] = None,
-        ip: Optional[str] = None,
-        seg_id: Optional[Any] = None,
-        hw_key: Optional[str] = None
     ) -> Optional[EffectConfig]:
         """
-        Resolve the active throwing effect for a player on a specific device & segment:
+        Resolve the throwing effect for a player:
         1. Exact Name Match (case-insensitive) across player slots.
         2. Contains Name Match (case-insensitive) across player slots.
         3. Dynamic Slot Fallback: Unnamed match players claim available slots sequentially.
         4. Slot Index Fallback: player_index maps to slot id.
         5. Global Base Fallback: default 'throw' effect.
-
-        After matching to slot ID (e.g. 1), checks if (ip, seg_id/hw_key) has a segment-specific
-        override in device_events[ip].
         """
         all_slots = self.player_slots or self.get_default_player_slots()
 
@@ -525,71 +566,20 @@ class ProfileConfig:
         if not target_slot and all_slots:
             target_slot = all_slots[p_idx % len(all_slots)]
 
-        slot_id = target_slot.id if target_slot else (p_idx + 1)
-
-        # Check per-device & per-segment override for this player slot (hw_key first, then seg_id)
-        if ip and (seg_id is not None or hw_key is not None):
-            dev_map = self.device_events.get(ip, {})
-            slot_key = f"player_{slot_id}"
-
-            # 1. Check Hardware Key Anchor (e.g. gpio_16_pwm_45)
-            if hw_key and hw_key in dev_map:
-                seg_map = dev_map[hw_key]
-                if slot_key in seg_map:
-                    slot_eff = seg_map[slot_key]
-                    if slot_eff.enabled:
-                        return slot_eff
-                    has_other_player_enabled = any(k.startswith("player_") and k != slot_key and v.enabled for k, v in seg_map.items())
-                    if not has_other_player_enabled and DartEventType.THROW.value in seg_map and seg_map[DartEventType.THROW.value].enabled:
-                        return seg_map[DartEventType.THROW.value]
-                    return slot_eff
-                if DartEventType.THROW.value in seg_map and seg_map[DartEventType.THROW.value].enabled:
-                    return seg_map[DartEventType.THROW.value]
-
-            # 2. Check Numeric Index Fallback
-            if seg_id is not None:
-                seg_str = str(seg_id)
-                if seg_str in dev_map:
-                    seg_map = dev_map[seg_str]
-                    if slot_key in seg_map:
-                        slot_eff = seg_map[slot_key]
-                        if slot_eff.enabled:
-                            return slot_eff
-                        has_other_player_enabled = any(k.startswith("player_") and k != slot_key and v.enabled for k, v in seg_map.items())
-                        if not has_other_player_enabled and DartEventType.THROW.value in seg_map and seg_map[DartEventType.THROW.value].enabled:
-                            return seg_map[DartEventType.THROW.value]
-                        return slot_eff
-                    if DartEventType.THROW.value in seg_map and seg_map[DartEventType.THROW.value].enabled:
-                        return seg_map[DartEventType.THROW.value]
-
-            # Specific segment has no player slot or throw override: do not leak global player slots
-            return None
-
         if target_slot and target_slot.enabled and target_slot.effect and target_slot.effect.enabled:
             return target_slot.effect
 
         enabled_slots = [s for s in all_slots if s.enabled and s.effect and s.effect.enabled]
         if not enabled_slots:
-            return self.get_effect(DartEventType.THROW.value, ip=ip, seg_id=seg_id, hw_key=hw_key)
+            return self.get_effect(DartEventType.THROW.value)
 
         return EffectConfig(enabled=False)
 
     def to_dict(self) -> Dict[str, Any]:
         prof_events = {k: v.to_dict() for k, v in self.events.items()}
-        prof_dev_events = {}
-        for dev_ip, seg_map in self.device_events.items():
-            if isinstance(seg_map, dict):
-                prof_dev_events[dev_ip] = {}
-                for seg_id, evt_map in seg_map.items():
-                    if isinstance(evt_map, dict):
-                        prof_dev_events[dev_ip][str(seg_id)] = {
-                            k: v.to_dict() if isinstance(v, EffectConfig) else dict(v)
-                            for k, v in evt_map.items()
-                        }
         return {
             "name": self.name,
             "events": prof_events,
-            "device_events": prof_dev_events,
             "player_slots": [s.to_dict() for s in self.player_slots]
         }
 
@@ -601,21 +591,13 @@ class ProfileConfig:
         if not isinstance(data, dict):
             return profile
 
+        if isinstance(data.get("device_events"), dict) and data["device_events"]:
+            # Pre-2.3 preset with per-controller effects: keep the first controller's
+            data = profile_dict_for_device(data, next(iter(data["device_events"])))
         profile.name = str(data.get("name", "Default"))
         if "events" in data and isinstance(data["events"], dict):
             for k, v in data["events"].items():
                 profile.events[k] = EffectConfig.from_dict(v)
-
-        if "device_events" in data and isinstance(data["device_events"], dict):
-            profile.device_events = {}
-            for dev_ip, seg_map in data["device_events"].items():
-                if isinstance(seg_map, dict):
-                    profile.device_events[dev_ip] = {}
-                    for seg_id, evt_map in seg_map.items():
-                        if isinstance(evt_map, dict):
-                            profile.device_events[dev_ip][str(seg_id)] = {
-                                k: EffectConfig.from_dict(v) for k, v in evt_map.items()
-                            }
 
         if "player_slots" in data and isinstance(data["player_slots"], list):
             profile.player_slots = [
@@ -758,6 +740,8 @@ class AppConfig:
     active_profile: str = "Default"
     # Controller IP -> profile name it uses; controllers not listed use active_profile
     device_profiles: Dict[str, str] = field(default_factory=dict)
+    # Controller IP -> segment id -> profile name; segments not listed use their controller's profile
+    segment_profiles: Dict[str, Dict[str, str]] = field(default_factory=dict)
     global_brightness: int = 200
     wifi_ip: str = ""
     autodarts_user: str = ""
@@ -798,27 +782,45 @@ class AppConfig:
                 return p
         return None
 
-    def profile_name_for(self, ip: Optional[str]) -> str:
-        """Name of the profile a controller uses (its own choice, else the shared active profile)."""
-        name = self.device_profiles.get(ip) if ip else None
+    def profile_name_for(self, ip: Optional[str], seg_id: Optional[Any] = None) -> str:
+        """Name of the profile a segment uses: its own choice, else its controller's, else the active profile."""
+        name = self.segment_profiles.get(ip, {}).get(str(seg_id)) if ip and seg_id is not None else None
+        if not (name and self.get_profile(name)):
+            name = self.device_profiles.get(ip) if ip else None
         return name if name and self.get_profile(name) else self.active_profile
 
-    def profile_for(self, ip: Optional[str]) -> ProfileConfig:
-        return self.get_profile(self.profile_name_for(ip)) or self.profile
+    def profile_for(self, ip: Optional[str], seg_id: Optional[Any] = None) -> ProfileConfig:
+        return self.get_profile(self.profile_name_for(ip, seg_id)) or self.profile
 
     def set_device_profile(self, ip: str, name: str) -> bool:
+        """Controller-wide choice: every segment follows it, replacing any segment choices."""
         if not ip or not self.get_profile(name):
             return False
         self.device_profiles[ip] = name
+        self.segment_profiles.pop(ip, None)
+        return True
+
+    def set_segment_profile(self, ip: str, seg_id: Any, name: str) -> bool:
+        if not ip or seg_id is None or not self.get_profile(name):
+            return False
+        self.segment_profiles.setdefault(ip, {})[str(seg_id)] = name
         return True
 
     def rename_profile_refs(self, old_name: str, new_name: str) -> None:
         for ip, name in self.device_profiles.items():
             if name == old_name:
                 self.device_profiles[ip] = new_name
+        for segs in self.segment_profiles.values():
+            for seg_id, name in segs.items():
+                if name == old_name:
+                    segs[seg_id] = new_name
 
     def drop_profile_refs(self, name: str) -> None:
         self.device_profiles = {ip: n for ip, n in self.device_profiles.items() if n != name}
+        self.segment_profiles = {
+            ip: kept for ip, segs in self.segment_profiles.items()
+            if (kept := {sid: n for sid, n in segs.items() if n != name})
+        }
 
     def set_active_profile(self, name: str) -> bool:
         target = self.get_profile(name)
@@ -875,6 +877,7 @@ class AppConfig:
             "profiles": [p.to_dict() for p in self.profiles],
             "active_profile": self.active_profile,
             "device_profiles": dict(self.device_profiles),
+            "segment_profiles": {ip: dict(segs) for ip, segs in self.segment_profiles.items()},
             "profile": self.profile.to_dict(),
             "global_brightness": self.global_brightness,
             "wifi_ip": self.devices[0].ip if self.devices else self.wifi_ip,
@@ -918,6 +921,12 @@ class AppConfig:
 
         profiles = []
         raw_profiles = data.get("profiles", [])
+        raw_device_profiles = data.get("device_profiles")
+        raw_device_profiles = raw_device_profiles if isinstance(raw_device_profiles, dict) else {}
+        if isinstance(raw_profiles, list) and any(isinstance(p, dict) and p.get("device_events") for p in raw_profiles):
+            raw_profiles, raw_device_profiles = split_device_profiles(
+                raw_profiles, devices, raw_device_profiles, str(data.get("active_profile", "")).strip() or "Default"
+            )
         if isinstance(raw_profiles, list) and len(raw_profiles) > 0:
             for p in raw_profiles:
                 if isinstance(p, dict):
@@ -943,10 +952,9 @@ class AppConfig:
             active_profile_name = active_match.name
 
         profile_names = {p.name for p in profiles}
-        raw_device_profiles = data.get("device_profiles")
         device_profiles = {
             str(ip).strip(): str(name)
-            for ip, name in (raw_device_profiles.items() if isinstance(raw_device_profiles, dict) else [])
+            for ip, name in raw_device_profiles.items()
             if str(ip).strip() and str(name) in profile_names
         }
 
@@ -955,6 +963,11 @@ class AppConfig:
             profiles=profiles,
             active_profile=active_profile_name,
             device_profiles=device_profiles,
+            segment_profiles={
+                str(ip).strip(): {str(sid): str(n) for sid, n in segs.items() if str(n) in profile_names}
+                for ip, segs in (data.get("segment_profiles") or {}).items()
+                if str(ip).strip() and isinstance(segs, dict)
+            } if isinstance(data.get("segment_profiles"), dict) else {},
             profile=active_match,
             global_brightness=_safe_int(data.get("global_brightness"), 200),
             wifi_ip=devices[0].ip if devices else str(data.get("wifi_ip", "")),
@@ -971,7 +984,7 @@ class AppConfig:
             idle_power_off_minutes=max(1, _safe_int(data.get("idle_power_off_minutes"), 30)),
             idle_dimming_brightness=max(0, min(255, _safe_int(data.get("idle_dimming_brightness"), 50))),
             extra={k: v for k, v in data.items() if k not in [
-                "devices", "profiles", "active_profile", "device_profiles", "profile", "global_brightness", "wifi_ip",
+                "devices", "profiles", "active_profile", "device_profiles", "segment_profiles", "profile", "global_brightness", "wifi_ip",
                 "autodarts_user", "autodarts_password", "autodarts_board_id",
                 "ai_key", "gemini_api_key", "game_mode_spotlight_brightness", "lighting_mode", "auto_connect_udp_on_game_start",
                 "disconnect_udp_on_match_end",

@@ -17,7 +17,7 @@ from routes.profile_routes import (
 from routes.wled_routes import (
     handle_ping_device, handle_wled_update, handle_get_wled_preset,
     handle_save_wled_preset, handle_get_wled_effects, handle_preview_wled_state,
-    handle_wled_setup_preview, handle_scan_network, handle_test_effect, handle_test_light,
+    handle_wled_setup_preview, handle_scan_network, handle_test_effect, handle_test_light, handle_test_end,
     handle_get_protocol_mode, handle_post_protocol_mode
 )
 from routes.autodarts_routes import (
@@ -67,6 +67,8 @@ def register_routes(app: web.Application, web_dir: str):
     # SPA Navigation Routes & Aliases
     for path in SPA_PATHS:
         app.router.add_get(path, handle_index)
+    # One controller's page; the IP's dots must not be taken for a file extension
+    app.router.add_get("/setup/controllers/{ip}", handle_index)
 
     # Access PIN Routes
     app.router.add_get("/api/auth/status", handle_auth_status)
@@ -106,6 +108,7 @@ def register_routes(app: web.Application, web_dir: str):
     app.router.add_post("/api/protocol/mode", handle_post_protocol_mode)
     app.router.add_post("/api/test/effect", handle_test_effect)
     app.router.add_post("/api/test/light", handle_test_light)
+    app.router.add_post("/api/test/end", handle_test_end)
 
     # Power & Standby Simulation Routes
     app.router.add_post("/api/power/test_dim", handle_test_inactivity_dim)

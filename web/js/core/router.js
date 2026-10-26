@@ -9,7 +9,8 @@ export const VIEWS = [
   {
     id: 'setup', label: 'Setup', path: '/setup',
     subs: [
-      { id: 'controllers', label: 'Controllers', pane: 'tab-devices' },
+      // /setup/controllers/<ip> opens one controller's page (route.param)
+      { id: 'controllers', label: 'Controllers', pane: 'tab-devices', detail: true },
       { id: 'connection', label: 'Autodarts', pane: 'tab-autodarts' }
     ]
   },
@@ -41,16 +42,18 @@ function defaultSub(view) {
   return view.subs[0];
 }
 
-// Turn any path into { view, sub, pane, path } with path being the canonical URL
+// Turn any path into { view, sub, param, pane, path } with path being the canonical URL
 export function resolve(rawPath) {
   const clean = (rawPath || '/').toLowerCase().replace(/\/+$/, '') || '/';
   const path = ALIASES[clean] || clean;
-  const [, viewId, subId] = path.split('/');
+  const [, viewId, subId, rawParam] = path.split('/');
   const view = VIEWS.find(v => v.id === viewId) || VIEWS[0];
-  if (!view.subs) return { view, sub: null, pane: view.pane, path: view.path };
+  if (!view.subs) return { view, sub: null, param: null, pane: view.pane, path: view.path };
   // Lighting always shows the engine selected in Settings
   const sub = view.id === 'lighting' ? defaultSub(view) : view.subs.find(s => s.id === subId) || defaultSub(view);
-  return { view, sub, pane: sub.pane, path: `${view.path}/${sub.id}` };
+  const param = sub.detail && sub.id === subId && rawParam ? decodeURIComponent(rawParam) : null;
+  const subPath = `${view.path}/${sub.id}`;
+  return { view, sub, param, pane: sub.pane, path: param ? `${subPath}/${encodeURIComponent(param)}` : subPath };
 }
 
 function pathForPane(paneId) {
@@ -63,9 +66,16 @@ function pathForPane(paneId) {
 }
 
 // A page can veto leaving it: guard(fromRoute, toRoute) returns true to allow, or a promise of true/false
-let leaveGuard = null;
+const leaveGuards = [];
+
+// Lighting-page tests leave the lights in a test state; going idle again is the server's job
+function endLightingTest() {
+  fetch('/api/test/end', { method: 'POST', keepalive: true }).catch(() => {});
+}
 
 function enter(route, replace) {
+  const previous = appStore.get().route;
+  if (previous?.view.id === 'lighting' && route.view.id !== 'lighting') endLightingTest();
   if (route.path !== location.pathname) {
     history[replace ? 'replaceState' : 'pushState']({ path: route.path }, '', route.path);
   }
@@ -78,10 +88,10 @@ function enter(route, replace) {
 export function navigate(path, { replace = false, fromHistory = false } = {}) {
   const route = resolve(path);
   const current = appStore.get().route;
-  if (leaveGuard && current && current.pane !== route.pane) {
-    const verdict = leaveGuard(current, route);
-    if (verdict !== true) {
-      Promise.resolve(verdict).then(ok => {
+  if (leaveGuards.length && current && current.path !== route.path) {
+    const verdicts = leaveGuards.map(guard => guard(current, route));
+    if (verdicts.some(verdict => verdict !== true)) {
+      Promise.all(verdicts).then(all => all.every(v => v === true)).then(ok => {
         if (ok) enter(route, replace);
         // Back/Forward already changed the URL; put it back
         else if (fromHistory) history.pushState({ path: current.path }, '', current.path);
@@ -96,8 +106,11 @@ export const router = {
   navigate,
   resolve,
   showPane: paneId => navigate(pathForPane(paneId)),
-  setLeaveGuard(fn) { leaveGuard = fn; },
+  addLeaveGuard(fn) { leaveGuards.push(fn); },
   start() {
+    window.addEventListener('pagehide', () => {
+      if (appStore.get().route?.view.id === 'lighting') navigator.sendBeacon('/api/test/end');
+    });
     window.addEventListener('popstate', () => navigate(location.pathname, { replace: true, fromHistory: true }));
     // Links with data-link navigate without a page load
     document.addEventListener('click', event => {

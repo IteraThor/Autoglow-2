@@ -84,6 +84,8 @@ class AutoGlowEngine:
         self._match_end_task: Optional[asyncio.Task] = None
         self._telemetry_subscribers: Set[Callable[[Dict[str, Any]], Awaitable[None]]] = set()
         self._pending_throw_event: Optional[DartEvent] = None
+        # Set when the Lighting page plays a test effect, so leaving the page can restore idle
+        self.lighting_test_active = False
 
         # Flow Matrix (Game Flow) state
         self.game_flow_storage = GameFlowStorageManager()
@@ -122,11 +124,15 @@ class AutoGlowEngine:
             return drv
         return None
 
-    def _profile_for(self, ip: str) -> ProfileConfig:
-        """Profile a controller uses; controllers without their own choice use the engine-wide profile."""
+    def _profile_for(self, ip: str, seg_id: Optional[int] = None) -> ProfileConfig:
+        """Profile a segment uses; controllers without their own choice use the engine-wide profile."""
         cfg = self.app_config
-        name = getattr(cfg, "device_profiles", {}).get(ip) if cfg else None
-        return (cfg.get_profile(name) if name else None) or self.profile
+        if not cfg:
+            return self.profile
+        name = cfg.profile_name_for(ip, seg_id)
+        if name == cfg.active_profile:
+            return self.profile
+        return cfg.get_profile(name) or self.profile
 
     def _active_devices(self) -> list:
         """Enabled devices with an IP, falling back to the primary device config."""
@@ -338,6 +344,21 @@ class AutoGlowEngine:
             await self._broadcast_telemetry({"type": "power_state", "state": "on"})
         return True
 
+    async def end_lighting_test(self) -> bool:
+        """Return the lights to idle after Lighting-page testing; never interrupts a running match."""
+        if not self.lighting_test_active:
+            return False
+        self.lighting_test_active = False
+        if self.autodarts and getattr(self.autodarts, "_active_match_id", None):
+            return False
+        logger.info("Lighting test ended -> restoring idle")
+        if self.is_board_off or self.is_board_dimmed:
+            for drv in self.drivers.values():
+                await drv.transition_to_http_mode(restore_preset_id=1)
+            await self._broadcast_telemetry({"type": "protocol_state", "mode": "http"})
+            return True
+        return await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
+
     def _get_max_effect_duration(self, event_key: str) -> float:
         """Calculate the maximum configured duration for a given event across enabled devices and segments."""
         if self._is_flow_mode():
@@ -367,17 +388,12 @@ class AutoGlowEngine:
 
         max_dur = 0.0
         for dev in self._active_devices():
-            if dev.segments:
-                for seg in dev.segments:
-                    seg_eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=_seg_id(seg), hw_key=_seg_attr(seg, "hw_key"))
-                    if seg_eff and seg_eff.enabled and seg_eff.duration > 0:
-                        max_dur = max(max_dur, seg_eff.duration)
-            else:
-                eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=None)
+            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+                eff = self._profile_for(dev.ip, seg_id).get_effect(event_key)
                 if eff and eff.enabled and eff.duration > 0:
                     max_dur = max(max_dur, eff.duration)
 
-        if max_dur == 0.0 and not self.profile.device_events:
+        if max_dur == 0.0 and not self._active_devices():
             fallback_eff = self.profile.get_effect(event_key)
             if fallback_eff and fallback_eff.enabled and fallback_eff.duration > 0:
                 max_dur = fallback_eff.duration
@@ -547,54 +563,29 @@ class AutoGlowEngine:
                 if not drv:
                     continue
 
-                if dev.segments:
-                    for seg in dev.segments:
-                        seg_id = _seg_id(seg)
-                        seg_hw_key = _seg_attr(seg, "hw_key")
-                        if not seg_hw_key:
-                            seg_gpio = _seg_attr(seg, "gpio", "") or ""
-                            seg_type = _seg_attr(seg, "type", "") or ""
-                            seg_start = _seg_attr(seg, "start", 0) or 0
-                            pin_clean = seg_gpio.lower().replace(" ", "_") if seg_gpio else ""
-                            type_clean = "pwm" if ("pwm" in seg_type.lower() or "white" in seg_type.lower()) else "ws281x"
-                            if pin_clean:
-                                seg_hw_key = f"{pin_clean}_{type_clean}_{seg_start}"
-
-                        if event.event_type == DartEventType.THROW:
-                            seg_eff = self._profile_for(dev.ip).resolve_player_effect(
-                                player_name=event.player_name,
-                                player_index=event.player_index,
-                                match_players=match_players,
-                                ip=dev.ip,
-                                seg_id=seg_id,
-                                hw_key=seg_hw_key
-                            )
-                        else:
-                            seg_eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=seg_id, hw_key=seg_hw_key)
-
-                        if seg_eff and seg_eff.enabled:
-                            logger.info(f"Dispatching effect '{seg_eff.animation.value}' on {dev.name} ({dev.ip}) Segment #{seg_id} for '{self.last_event_name}'")
-                            await drv.play_effect(seg_eff, segment_id=seg_id)
-                            dispatched_any = True
-                else:
+                # Each segment plays the effect of the profile it is assigned
+                for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+                    profile = self._profile_for(dev.ip, seg_id)
                     if event.event_type == DartEventType.THROW:
-                        eff = self._profile_for(dev.ip).resolve_player_effect(
+                        eff = profile.resolve_player_effect(
                             player_name=event.player_name,
                             player_index=event.player_index,
                             match_players=match_players,
-                            ip=dev.ip,
-                            seg_id=0
                         )
                     else:
-                        eff = self._profile_for(dev.ip).get_effect(event_key, ip=dev.ip, seg_id=None)
-
-                    if eff and eff.enabled:
-                        logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) for '{self.last_event_name}'")
+                        eff = profile.get_effect(event_key)
+                    if not (eff and eff.enabled):
+                        continue
+                    where = f"Segment #{seg_id}" if seg_id is not None else "all segments"
+                    logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) {where} for '{self.last_event_name}'")
+                    if seg_id is None:
                         await drv.play_effect(eff)
-                        dispatched_any = True
+                    else:
+                        await drv.play_effect(eff, segment_id=seg_id)
+                    dispatched_any = True
 
-            if not dispatched_any and not self.profile.device_events:
-                # Fallback to global profile default across all drivers only if no per-device bindings exist
+            if not dispatched_any and not self._active_devices():
+                # No controller configured: fall back to the active profile across all drivers
                 fallback_eff = self.profile.resolve_player_effect(
                     player_name=event.player_name,
                     player_index=event.player_index,

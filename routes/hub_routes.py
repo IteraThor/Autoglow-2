@@ -129,13 +129,12 @@ def _lighting_configured(cfg: AppConfig) -> bool:
     """Flow Matrix ships with working default phases; the Event Matrix needs an enabled effect on a controller."""
     if cfg.lighting_mode == LightingMode.FLOW:
         return True
-    for ip in {d.ip for d in cfg.devices if d.ip}:
-        # Each controller counts with the effects of the profile it uses
-        segments = (cfg.profile_for(ip).device_events or {}).get(ip)
-        if not isinstance(segments, dict):
+    for dev in cfg.devices:
+        if not dev.ip:
             continue
-        for effects in segments.values():
-            if isinstance(effects, dict) and any(getattr(e, "enabled", False) for e in effects.values()):
+        # Each segment counts with the effects of the profile it uses
+        for seg_id in ([seg.id for seg in dev.segments] if dev.segments else [None]):
+            if any(e.enabled for e in cfg.profile_for(dev.ip, seg_id).events.values()):
                 return True
     return False
 

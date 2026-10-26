@@ -8,6 +8,7 @@
   'use strict';
 
   var currentFlow = null;
+  var savedFlowJson = null;
   var selectedPhaseId = null;
   var activeTransitionKey = null;
   var isPlayingFlow = false;
@@ -246,6 +247,13 @@
   window.renderFlowHardwareToolbar = renderFlowHardwareToolbar;
 
   window.onFlowDeviceSelected = function (ip) {
+    if (isFlowDirty()) {
+      confirmFlowLeave().then(function (ok) {
+        if (ok) window.onFlowDeviceSelected(ip);
+        else renderFlowHardwareToolbar();
+      });
+      return;
+    }
     selectedFlowDeviceIp = ip;
     try {
       localStorage.setItem('autoglow_selected_flow_device', ip);
@@ -271,6 +279,13 @@
   };
 
   window.selectFlowSegment = function (segId) {
+    if (isFlowDirty()) {
+      confirmFlowLeave().then(function (ok) {
+        if (ok) window.selectFlowSegment(segId);
+        else renderFlowHardwareToolbar();
+      });
+      return;
+    }
     selectedFlowSegmentId = parseInt(segId, 10);
     try {
       localStorage.setItem('autoglow_selected_flow_seg', String(selectedFlowSegmentId));
@@ -278,6 +293,35 @@
     renderFlowHardwareToolbar();
     loadCurrentFlow();
   };
+
+  // Unsaved changes = the flow differs from what was last loaded or saved
+  function isFlowDirty() {
+    return !!currentFlow && savedFlowJson !== null && JSON.stringify(currentFlow) !== savedFlowJson;
+  }
+
+  function updateFlowSaveState() {
+    var dirty = isFlowDirty();
+    document.querySelectorAll('.btn-save-flow, #btnSaveFlow').forEach(function (btn) {
+      if (btn.textContent === 'Saving...' || btn.textContent === 'Saved!') return;
+      btn.textContent = dirty ? 'Save Flow *' : 'Save Flow';
+      btn.disabled = !dirty;
+    });
+  }
+
+  function markFlowSaved() {
+    savedFlowJson = JSON.stringify(currentFlow);
+    updateFlowSaveState();
+  }
+
+  function confirmFlowLeave() {
+    return window.lightingGuard.confirmLeave({
+      what: 'flow',
+      save: window.saveGameFlow,
+      discard: loadCurrentFlow
+    });
+  }
+
+  window.flowPage = { isDirty: isFlowDirty, save: function () { return window.saveGameFlow(); }, discard: function () { loadCurrentFlow(); } };
 
   function loadCurrentFlow() {
     var url = '/api/flow/current';
@@ -303,6 +347,7 @@
           if (currentFlow.phases && currentFlow.phases.length > 0) {
             selectPhase(currentFlow.phases[0].id, false);
           }
+          markFlowSaved();
         }
       })
       .catch(function (err) {
@@ -2102,8 +2147,9 @@
   }
 
   // --- Persistence ---
+  // Resolves true when the flow was saved
   window.saveGameFlow = function () {
-    if (!currentFlow) return;
+    if (!currentFlow) return Promise.resolve(false);
     var saveBtns = document.querySelectorAll('.btn-save-flow, #btnSaveFlow');
     saveBtns.forEach(function (btn) { btn.textContent = 'Saving...'; });
 
@@ -2113,17 +2159,18 @@
       seg: (selectedFlowDeviceIp && selectedFlowDeviceIp !== 'all') ? selectedFlowSegmentId : null
     };
 
-    window.api.post('/api/flow/save', payload)
+    return window.api.post('/api/flow/save', payload)
       .then(function () {
-        saveBtns.forEach(function (btn) {
-          btn.textContent = 'Saved!';
-          setTimeout(function () { btn.textContent = 'Save Flow'; }, 1800);
-        });
+        saveBtns.forEach(function (btn) { btn.textContent = 'Saved!'; });
+        markFlowSaved();
+        setTimeout(updateFlowSaveState, 1800);
         window.toast.success('Flow saved');
+        return true;
       })
       .catch(function (err) {
-        saveBtns.forEach(function (btn) { btn.textContent = 'Save Flow'; });
+        updateFlowSaveState();
         window.toast.error(err, { onRetry: window.saveGameFlow });
+        return false;
       });
   };
 
@@ -2142,6 +2189,7 @@
           if (currentFlow.phases && currentFlow.phases.length > 0) {
             selectPhase(currentFlow.phases[0].id, false);
           }
+          markFlowSaved();
         }
       });
     }).catch(function (err) {
@@ -2159,6 +2207,12 @@
       card.classList.add('is-playing');
     }
   };
+
+  ['input', 'change', 'click'].forEach(function (type) {
+    document.addEventListener(type, function (event) {
+      if (event.target.closest && event.target.closest('#tab-simulator')) setTimeout(updateFlowSaveState, 0);
+    });
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', window.initFlowPlanner);

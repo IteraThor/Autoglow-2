@@ -17,20 +17,8 @@ var appState = {
 
 var matrixDirty = false;
 var lastFetchedLiveDeviceData = {};
-var activeInlineEdits = {};
 var selectedMatrixDeviceIp = (typeof localStorage !== 'undefined' ? localStorage.getItem('autoglow_selected_matrix_device') : null) || null;
 var selectedMatrixSegmentId = null;
-
-var idlePresetState = {
-  ip: null,
-  loaded: false,
-  presetId: 1,
-  name: 'AutoGlow Default',
-  loadedPreset: null,
-  deviceInfo: null,
-  segments: [],
-  cachedWledEffects: null
-};
 
 const EVENT_CATEGORIES = [
   {
@@ -105,10 +93,8 @@ const ANIMATION_OPTIONS = [
 if (typeof window !== "undefined") {
   window.appState = appState;
   window.lastFetchedLiveDeviceData = lastFetchedLiveDeviceData;
-  window.activeInlineEdits = activeInlineEdits;
   window.selectedMatrixDeviceIp = selectedMatrixDeviceIp;
   window.selectedMatrixSegmentId = selectedMatrixSegmentId;
-  window.idlePresetState = idlePresetState;
   window.EVENT_CATEGORIES = EVENT_CATEGORIES;
   window.EVENT_DEFS = EVENT_DEFS;
   window.DEFAULT_PLAYER_SLOTS = DEFAULT_PLAYER_SLOTS;

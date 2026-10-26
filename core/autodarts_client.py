@@ -32,6 +32,19 @@ class AutodartsClient:
     and event decoding into typed DartEvent instances.
     """
 
+    @property
+    def _active_match_id(self) -> Optional[str]:
+        return self._match_id
+
+    @_active_match_id.setter
+    def _active_match_id(self, value: Optional[str]) -> None:
+        # Remember matches that ended so trailing messages for them are not re-adopted as the active match
+        if value is None and self._match_id:
+            self._ended_match_ids[self._match_id] = None
+            while len(self._ended_match_ids) > 20:
+                self._ended_match_ids.pop(next(iter(self._ended_match_ids)))
+        self._match_id = value
+
     def __init__(
         self,
         email: Optional[str] = None,
@@ -43,6 +56,7 @@ class AutodartsClient:
         self.email = email
         self.password = password
         self.board_id = board_id
+        self._start_announced_at: float = 0.0
         self.on_event = on_event
         self.on_token_refreshed = on_token_refreshed
 
@@ -56,7 +70,8 @@ class AutodartsClient:
         self._loop_task: Optional[asyncio.Task] = None
         self._background_tasks: Set[asyncio.Task] = set()
         self._reconnect_delay: float = RECONNECT_MIN_DELAY
-        self._active_match_id: Optional[str] = None
+        self._match_id: Optional[str] = None
+        self._ended_match_ids: Dict[str, None] = {}
 
         # Tracking state to deduplicate trigger spam
         self._last_180_fired = False
@@ -535,8 +550,28 @@ class AutodartsClient:
         # 4. Match State & Events
         if channel == "autodarts.matches":
             match_id_from_topic = topic.split(".")[0] if "." in topic else None
+            if not match_id_from_topic and not self._active_match_id and topic in (".game-events", ".corrections"):
+                # A new match announces itself with id-less topics before any throw
+                now = time.time()
+                if now - self._start_announced_at > 3.0:
+                    self._start_announced_at = now
+                    logger.info("Match start signalled by id-less match topic")
+                    b_id = next(iter(self.board_states), None)
+                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=b_id))
+                    # Players are unknown until the first dart, so show player 1's color while waiting
+                    await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_index=0, board_id=b_id))
+                return
+            if match_id_from_topic in self._ended_match_ids:
+                logger.debug(f"Ignoring message for ended match {match_id_from_topic}")
+                return
             if not self._active_match_id and match_id_from_topic:
+                # Bridge mode never sees the board's match-start message, so the first match topic starts the match
                 self._active_match_id = match_id_from_topic
+                self._reset_match_state()
+                logger.info(f"Match started (first message on match topic): {match_id_from_topic}")
+                await self._subscribe_match(ws, match_id_from_topic)
+                if time.time() - self._start_announced_at > 120.0:
+                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=next(iter(self.board_states), None)))
 
             # Ignore state/events from a stale or different match
             if self._active_match_id and match_id_from_topic and match_id_from_topic != self._active_match_id:

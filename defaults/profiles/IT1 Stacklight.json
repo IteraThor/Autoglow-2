@@ -1,0 +1,691 @@
+{
+    "name": "IT1 Stacklight",
+    "events": {
+        "180": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "match_won": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "leg_won": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "bust": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "triple": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "double": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "single": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "bullseye": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "game_start": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                255,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "calibrating": {
+            "animation": "curtain",
+            "color_primary": [
+                174,
+                0,
+                255
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": true,
+            "duration": 3.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": true,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "takeout": {
+            "animation": "solid",
+            "color_primary": [
+                255,
+                128,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": true,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "takeout_in_progress": {
+            "animation": "solid",
+            "color_primary": [
+                255,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": true,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "manual_reset": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                0,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": false,
+            "transition": "instant",
+            "transition_duration": 0.0
+        },
+        "throw": {
+            "animation": "solid",
+            "color_primary": [
+                0,
+                255,
+                0
+            ],
+            "color_secondary": [
+                0,
+                0,
+                0
+            ],
+            "color_tertiary": [
+                0,
+                0,
+                0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": true,
+            "transition": "instant",
+            "transition_duration": 0.0
+        }
+    },
+    "player_slots": [
+        {
+            "id": 1,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    160,
+                    255
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 2,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    255,
+                    60,
+                    60
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 3,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 4,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 5,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 6,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 7,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 8,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 9,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        },
+        {
+            "id": 10,
+            "name_filter": "",
+            "match_type": "contains",
+            "effect": {
+                "animation": "solid",
+                "color_primary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_secondary": [
+                    0,
+                    0,
+                    0
+                ],
+                "color_tertiary": [
+                    0,
+                    0,
+                    0
+                ],
+                "dynamic_secondary": false,
+                "duration": 0.0,
+                "speed": 1.0,
+                "fps": 50,
+                "reverse": false,
+                "enabled": false,
+                "transition": "instant",
+                "transition_duration": 0.0
+            },
+            "enabled": false
+        }
+    ]
+}

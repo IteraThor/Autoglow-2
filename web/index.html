@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="/css/theme.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/shell.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/pages.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/layout.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/components.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p16">
-  <link rel="stylesheet" href="/css/hub.css?v=2.2-p16">
+  <link rel="stylesheet" href="/css/theme.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/tokens.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/shell.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/layout.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/components.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p23">
+  <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
+  <link rel="stylesheet" href="/css/pages.css?v=2.2-p23">
+  <link rel="stylesheet" href="/css/hub.css?v=2.2-p23">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -56,6 +57,9 @@
         
         <!-- TAB 1: OPERATIONAL STATUS HUB -->
         <section id="tab-dashboard" class="tab-pane true-size hub-page">
+          <!-- Ready to play, or what is still missing (web/js/features/hub.js) -->
+          <div class="card hub-ready" id="hubReadiness" aria-live="polite" hidden></div>
+
           <!-- First-run steps; hidden once everything is done (web/js/features/hub.js) -->
           <div class="card" id="hubChecklist" hidden></div>
 
@@ -87,45 +91,24 @@
 
         <!-- TAB 2: WLED DEVICES SETUP -->
         <section id="tab-devices" class="tab-pane true-size ctl-page">
-          <div class="ctl-toolbar">
-            <form class="ctl-add" id="controllerAddForm" novalidate>
-              <input type="text" class="ui-input" id="deviceIpInput" placeholder="Controller IP, e.g. 192.168.1.40" autocomplete="off" spellcheck="false" aria-label="Controller IP address">
-              <button type="submit" class="ui-btn ui-btn-primary">Add</button>
-            </form>
-            <button type="button" class="ui-btn" id="btnScanNetwork">Scan network</button>
+          <!-- Controller list (web/js/features/controllers.js) -->
+          <div id="controllerListView" class="ctl-list-view">
+            <header class="page-head">
+              <div>
+                <h1 class="page-title">Controllers</h1>
+                <p class="page-lead">The WLED controllers AutoGlow drives. Open one to set up its LEDs, idle lighting and game profile.</p>
+              </div>
+              <div class="page-actions">
+                <button type="button" class="ui-btn" id="btnScanNetwork">Scan network</button>
+                <button type="button" class="ui-btn ui-btn-primary" id="btnAddController">Add controller</button>
+              </div>
+            </header>
+            <div class="card ctl-scan" id="scanResults" hidden></div>
+            <div class="ctl-list" id="controllerList"></div>
           </div>
 
-          <div class="ctl-scan" id="scanResults" hidden></div>
-          <div class="ctl-list" id="controllerList"></div>
-
-          <!-- Per-controller setup (web/js/devices.js): outputs & segments, and idle lighting (power.js).
-               Both panels are drawn at the legacy scale for now. -->
-          <aside class="drawer" id="controllerDrawer" aria-label="Edit controller" hidden>
-            <div class="drawer-tabs" role="tablist" aria-label="Controller setup">
-              <button type="button" class="drawer-tab" role="tab" id="drawerTabLayout" aria-controls="controllerDrawerBody" aria-selected="true" data-drawer-tab="layout">LEDs &amp; segments</button>
-              <button type="button" class="drawer-tab" role="tab" id="drawerTabIdle" aria-controls="controllerIdlePanel" aria-selected="false" data-drawer-tab="idle">Idle lighting</button>
-              <button type="button" class="ui-btn ui-btn-sm ui-btn-quiet drawer-close" id="drawerClose" aria-label="Close" title="Close">✕</button>
-            </div>
-            <div class="drawer-body legacy-scale" id="controllerDrawerBody" role="tabpanel" aria-labelledby="drawerTabLayout"></div>
-
-            <!-- Idle lighting: what the controller shows when no game is running (WLED boot preset 1) -->
-            <div class="drawer-body legacy-scale idle-panel" id="controllerIdlePanel" role="tabpanel" aria-labelledby="drawerTabIdle" hidden>
-              <p class="idle-panel-intro">What this controller shows when no game is running. It is saved on the controller as WLED preset 1 and also plays when the controller starts up.</p>
-              <div class="idle-seg-grid" id="idleSegmentsListContainer">
-                <!-- Populated dynamically by renderIdleSegmentsList() -->
-              </div>
-              <div class="idle-panel-actions">
-                <button class="btn-ide" id="btnPreviewIdlePreset" onclick="previewIdlePreset()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <span>Live Preview</span>
-                </button>
-                <button class="btn-ide btn-ide-primary" id="btnSaveIdlePreset" onclick="saveIdlePreset()">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                  <span>Save idle lighting</span>
-                </button>
-              </div>
-            </div>
-          </aside>
+          <!-- One controller's page, /setup/controllers/<ip> (web/js/features/controller-detail.js) -->
+          <div id="controllerDetail" class="ctl-detail"></div>
         </section>
 
 
@@ -369,22 +352,8 @@
 
         <!-- TAB 4: EVENT MATRIX -->
         <section id="tab-effects" class="tab-pane">
-          <!-- Segment selectors container separated above the panel -->
-          <div class="matrix-segment-strip" id="matrixSegmentStrip" style="display: none; align-items: center; margin-bottom: -6px; padding: 0;">
-            <div class="matrix-segment-tabs matrix-seg-tabs-list" id="matrixSegmentTabsList" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-              <!-- Segment selection pills rendered separated above the panel -->
-            </div>
-          </div>
-
           <div class="ide-panel">
             <div class="panel-header" id="matrixTopHeader" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-              <div id="matrixLandingHeaderTitle" style="display: none;">
-                <span class="panel-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Select Controller</span></span>
-              </div>
-
-              <!-- Controller picker (filled by renderMatrixDevicePicker) -->
-              <select id="matrixDeviceSelect" class="select-ide matrix-device-select" aria-label="Controller" onchange="selectMatrixDevice(this.value)" hidden></select>
-
               <!-- Presets Toolbar (Left side) -->
               <div id="matrixPresetToolbar" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <select id="matrixPresetSelect" class="select-ide" style="font-weight: 600; min-width: 140px; max-width: 220px; height: 26px; padding: 2px 8px;" onchange="onPresetSelected(this.value)">
@@ -408,7 +377,10 @@
                 </div>
               </div>
 
+              <span id="matrixProfileUsers" style="font-size: 11.5px; color: var(--text-muted);"></span>
+
               <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
+                <select id="matrixDeviceSelect" class="select-ide matrix-device-select" aria-label="Controller to test on" onchange="selectMatrixDevice(this.value)" hidden></select>
                 <label id="matrixLivePreviewContainer" style="display: none; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 11.5px; font-family: var(--font-mono); color: var(--accent-primary); background: var(--bg-surface); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid rgba(var(--accent-rgb), 0.35);" title="Live Preview Mode&#10;When enabled, dragging color pickers or changing animation effects immediately streams live to your physical LEDs via UDP in real-time (no need to click Test).">
                   <span style="font-weight: 600; display: flex; align-items: center; gap: 4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Live Preview</span></span>
                   <label class="switch" style="transform: scale(0.75); margin: 0;" title="Toggle Live Preview on / off">
@@ -423,13 +395,13 @@
                     <span class="switch-slider"></span>
                   </label>
                 </label>
-                <button class="btn-ide btn-ide-primary" id="matrixSaveBtn" onclick="saveEffectsProfile()" style="display: none;" title="Save all event effects and player slot mappings for this segment">Save Matrix</button>
+                <button class="btn-ide btn-ide-primary" id="matrixSaveBtn" onclick="saveEffectsProfile()" style="display: none;" title="Save all event effects and player slot mappings of this profile">Save Matrix</button>
               </div>
             </div>
 
             <div id="matrixContentArea" style="padding: 0;">
               <div style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; padding: 24px 16px; text-align: center;">
-                Select a WLED device from the Event Matrix submenu to configure its event lighting.
+                Loading profile…
               </div>
             </div>
           </div>
@@ -1006,17 +978,16 @@
   </div>
 
   <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
-  <script type="module" src="/js/core/index.js?v=2.2-p16"></script>
-  <script defer src="/js/auth.js?v=2.2-p16"></script>
-  <script defer src="/js/state.js?v=2.2-p16"></script>
-  <script defer src="/js/utils.js?v=2.2-p16"></script>
-  <script defer src="/js/devices.js?v=2.2-p16"></script>
-  <script defer src="/js/autodarts.js?v=2.2-p16"></script>
-  <script defer src="/js/matrix.js?v=2.2-p16"></script>
-  <script defer src="/js/power.js?v=2.2-p16"></script>
-  <script defer src="/js/simulator.js?v=2.2-p16"></script>
-  <script defer src="/js/flow_planner.js?v=2.2-p16"></script>
-  <script defer src="/app.js?v=2.2-p16"></script>
+  <script type="module" src="/js/core/index.js?v=2.2-p23"></script>
+  <script defer src="/js/auth.js?v=2.2-p23"></script>
+  <script defer src="/js/state.js?v=2.2-p23"></script>
+  <script defer src="/js/utils.js?v=2.2-p23"></script>
+  <script defer src="/js/autodarts.js?v=2.2-p23"></script>
+  <script defer src="/js/matrix.js?v=2.2-p23"></script>
+  <script defer src="/js/power.js?v=2.2-p23"></script>
+  <script defer src="/js/simulator.js?v=2.2-p23"></script>
+  <script defer src="/js/flow_planner.js?v=2.2-p23"></script>
+  <script defer src="/app.js?v=2.2-p23"></script>
 
 </body>
 </html>

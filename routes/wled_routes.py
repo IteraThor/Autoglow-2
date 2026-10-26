@@ -13,6 +13,7 @@ from core.models import (
     RGBColor, ProtocolMode, _safe_int
 )
 from core.storage import load_app_config, save_app_config
+from core.engine import _is_pwm_segment
 from core.wled_driver import WLEDDriver
 from core.discovery import DiscoveryService
 
@@ -97,7 +98,8 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                         name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
                         start=_safe_int(s.get("start"), 0),
                         length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                        type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x"
+                        type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
+                        offset=max(0, _safe_int(s.get("of"), 0))
                     )
                     for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
                 ]
@@ -109,7 +111,8 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                 name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
                 start=_safe_int(s.get("start"), 0),
                 length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x"
+                type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
+                offset=max(0, _safe_int(s.get("of"), 0))
             )
             for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
         ] if seg_data else []
@@ -329,7 +332,7 @@ async def handle_test_effect(request: web.Request) -> web.Response:
     cfg = request.app.get("current_app_config") or load_app_config(config_path)
 
     if not evt_data and event_key:
-        found_effect = cfg.profile_for(target_ip).get_effect(event_key, ip=target_ip, seg_id=segment_id)
+        found_effect = cfg.profile_for(target_ip, segment_id).get_effect(event_key)
         if found_effect:
             effect = EffectConfig(
                 animation=found_effect.animation,
@@ -365,6 +368,7 @@ async def handle_test_effect(request: web.Request) -> web.Response:
     target_driver = engine.get_driver(target_ip) if target_ip else engine.driver
     if not target_driver:
         raise NotFound(f"No driver configured for controller {target_ip or 'primary'}.", field="ip")
+    engine.lighting_test_active = True
 
     # Ensure UDP mode is active for live effect streaming (auto-connect if currently in HTTP idle)
     if target_driver.protocol_mode != ProtocolMode.ACTIVE_UDP:
@@ -380,20 +384,35 @@ async def handle_test_effect(request: web.Request) -> web.Response:
         if ch and ch.get("last_active_color"):
             prev_color = ch["last_active_color"]
         else:
-            p1 = cfg.profile_for(target_ip).get_player_slot(1)
+            p1 = cfg.profile_for(target_ip, segment_id).get_player_slot(1)
             if p1 and p1.effect and p1.effect.color_primary and p1.effect.color_primary.to_tuple() != (0, 0, 0):
                 prev_color = p1.effect.color_primary
             else:
-                th = cfg.profile_for(target_ip).get_effect("throw", ip=target_ip, seg_id=segment_id)
+                th = cfg.profile_for(target_ip, segment_id).get_effect("throw")
                 if th and th.color_primary and th.color_primary.to_tuple() != (0, 0, 0):
                     prev_color = th.color_primary
                 else:
-                    gs = cfg.profile.get_effect("game_start", ip=target_ip, seg_id=segment_id)
+                    gs = cfg.profile_for(target_ip, segment_id).get_effect("game_start")
                     if gs and gs.color_primary and gs.color_primary.to_tuple() != (0, 0, 0):
                         prev_color = gs.color_primary
 
-    await target_driver.play_effect(effect, segment_id=segment_id, force_enable=True, previous_color=prev_color)
+    segments = getattr(target_driver.config, "segments", None) or []
+    if segment_id is None and segments:
+        # A profile's effect plays on every light segment of the controller, as it does in a game
+        targets = [seg.id for seg in segments if not _is_pwm_segment(seg)]
+    else:
+        targets = [segment_id]
+    for seg_id in targets:
+        await target_driver.play_effect(effect, segment_id=seg_id, force_enable=True, previous_color=prev_color)
     return web.json_response({"status": "ok"})
+
+
+async def handle_test_end(request: web.Request) -> web.Response:
+    engine = request.app.get("engine")
+    if not engine:
+        raise ServiceUnavailable("Engine not initialized")
+    restored = await engine.end_lighting_test()
+    return web.json_response({"status": "ok", "restored": restored})
 
 
 async def handle_test_light(request: web.Request) -> web.Response:
@@ -406,6 +425,7 @@ async def handle_test_light(request: web.Request) -> web.Response:
     except (TypeError, ValueError):
         raise ValidationError("Brightness must be a number", field="brightness")
     target_ip = data.get("ip")
+    engine.lighting_test_active = True
     ok = await engine.set_board_light(bri, target_ip=target_ip)
     if not ok:
         logger.warning(f"set_board_light returned False for brightness {bri} on {target_ip or 'all'}")

@@ -152,7 +152,7 @@ export function initSettings() {
   window.settingsPage = { save, reset, isDirty };
   window.settingsDraftMode = () => draftMode;
 
-  router.setLeaveGuard((from) => (from.pane === 'tab-settings' && isDirty() ? confirmLeave() : true));
+  router.addLeaveGuard((from) => (from.pane === 'tab-settings' && isDirty() ? confirmLeave() : true));
   window.addEventListener('beforeunload', event => {
     if (isDirty()) event.preventDefault();
   });

@@ -2,18 +2,17 @@
 
 // --- Event Matrix Tab ---
 
-// Controller picker in the matrix header (shown once a controller is chosen)
+// "Test on" picker in the matrix header: which controller the Test buttons and live preview play on
 function renderMatrixDevicePicker() {
   const select = document.getElementById('matrixDeviceSelect');
   if (!select) return;
   const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-  const show = !!selectedMatrixDeviceIp && devicesList.length > 0;
-  select.hidden = !show;
-  if (!show) return;
+  select.hidden = devicesList.length === 0;
+  if (devicesList.length === 0) return;
   select.replaceChildren(...devicesList.map(dev => {
     const option = document.createElement('option');
     option.value = dev.ip || '';
-    option.textContent = dev.name || dev.ip || 'WLED Controller';
+    option.textContent = `Test on: ${dev.name || dev.ip || 'WLED Controller'}`;
     option.selected = dev.ip === selectedMatrixDeviceIp;
     return option;
   }));
@@ -148,248 +147,45 @@ function getDeviceSegments(ip) {
 
 // Controller IP -> profile it uses, from the last /api/matrix/presets response
 let devicePresetMap = {};
+let segmentPresetMap = {};
 
-// Select a controller (landing card or header picker) and show its event table
-async function selectMatrixDevice(ip) {
-  if (selectedMatrixDeviceIp && selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined) {
-    EVENT_DEFS.forEach(def => updateEventConfig(def.key));
-    for (let i = 1; i <= 10; i++) updatePlayerSlotConfig(i);
-  }
-  // Each controller uses its own profile: unsaved edits would be replaced when the other one loads
-  const targetPreset = devicePresetMap[ip];
-  if (matrixDirty && targetPreset && targetPreset !== appState.active_profile) {
-    const ok = await window.confirmDialog({
-      title: 'Save changes first?',
-      body: `You have unsaved changes in '${appState.active_profile}'. This controller uses '${targetPreset}', so they would be lost.`,
-      confirmLabel: 'Save and switch'
-    });
-    if (!ok || !await saveEffectsProfile()) {
-      renderMatrixDevicePicker();
-      return;
-    }
-  }
+// Choose the controller the Test buttons play on (the profile being edited does not change)
+function selectMatrixDevice(ip) {
   selectedMatrixDeviceIp = ip;
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('autoglow_selected_matrix_device', ip);
-    const savedSeg = localStorage.getItem(`autoglow_selected_matrix_seg_${ip}`);
-    if (savedSeg !== null && savedSeg !== undefined && savedSeg !== '') {
-      selectedMatrixSegmentId = parseInt(savedSeg, 10);
-    } else {
-      selectedMatrixSegmentId = null; // Will auto-select first segment of this device
-    }
-  } else {
-    selectedMatrixSegmentId = null;
-  }
-  
-  renderEffectsTable();
+  if (typeof localStorage !== 'undefined') localStorage.setItem('autoglow_selected_matrix_device', ip);
 }
 
-// Select a segment for the active device
-function selectMatrixSegment(segId) {
-  const newSegId = parseInt(segId, 10);
-  if (selectedMatrixSegmentId === newSegId) return;
-
-  // Flush any in-progress edits for the currently active segment before switching
-  if (selectedMatrixDeviceIp && selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined) {
-    EVENT_DEFS.forEach(def => updateEventConfig(def.key));
-    for (let i = 1; i <= 10; i++) updatePlayerSlotConfig(i);
-  }
-
-  selectedMatrixSegmentId = newSegId;
-  if (selectedMatrixDeviceIp && typeof localStorage !== 'undefined') {
-    localStorage.setItem(`autoglow_selected_matrix_seg_${selectedMatrixDeviceIp}`, String(selectedMatrixSegmentId));
-  }
-  renderEffectsTable();
-}
-
-// Device selection landing page when no specific device is selected in Event Matrix
-function renderMatrixDeviceLanding() {
-  const contentArea = document.getElementById('matrixContentArea');
-  const segTabsList = document.getElementById('matrixSegmentTabsList');
-  const segStrip = document.getElementById('matrixSegmentStrip');
-  const landingTitle = document.getElementById('matrixLandingHeaderTitle');
-  const saveBtn = document.getElementById('matrixSaveBtn');
-  const livePreviewContainer = document.getElementById('matrixLivePreviewContainer');
-  const activeOnlyContainer = document.getElementById('matrixActiveOnlyContainer');
-  const presetToolbar = document.getElementById('matrixPresetToolbar');
-
-  if (segStrip) segStrip.style.display = 'none';
-  if (segTabsList) segTabsList.innerHTML = '';
-  if (landingTitle) landingTitle.style.display = 'block';
-  if (saveBtn) saveBtn.style.display = 'none';
-  if (livePreviewContainer) livePreviewContainer.style.display = 'none';
-  if (activeOnlyContainer) activeOnlyContainer.style.display = 'none';
-  if (presetToolbar) presetToolbar.style.display = 'none';
-
-  const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  if (devicesList.length === 0) {
-    contentArea.innerHTML = `
-      <div style="padding: 40px 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-        <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: center;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        </div>
-        <strong style="color: var(--text-primary); font-size: 14px;">No controllers yet</strong>
-        <p style="color: var(--text-secondary); font-size: 12px; max-width: 360px; margin: 0; line-height: 1.5;">
-          Add a WLED controller in Setup first.
-        </p>
-        <button class="btn-ide btn-ide-primary" onclick="switchToTab('tab-devices')" style="margin-top: 4px;">Open Setup</button>
-      </div>
-    `;
-    return;
-  }
-
-  contentArea.innerHTML = `
-    <div style="padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 240px)); gap: 10px;">
-      ${devicesList.map(dev => {
-        const ip = dev.ip || '';
-        const name = dev.name || 'WLED Controller';
-        const cached = lastFetchedLiveDeviceData[ip];
-        const isOnline = cached ? (cached.status === 'ok' && cached.online) : null;
-        const dotClass = isOnline === true ? 'dot dot-green' : (isOnline === false ? 'dot dot-gray' : 'dot');
-
-        return `
-          <div class="card-device-select" onclick="selectMatrixDevice('${escapeJsString(ip)}')">
-            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-              <span class="${dotClass}" style="width: 8px; height: 8px; flex-shrink: 0;"></span>
-              <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0;">
-                <strong style="color: var(--text-primary); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(name)}</strong>
-                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);">${escapeHtml(ip)}</span>
-              </div>
-            </div>
-            <button class="btn-ide" style="font-size: 11px; padding: 4px 10px; pointer-events: none; flex-shrink: 0;">
-              Configure &rarr;
-            </button>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Called when the effects tab is activated — renders the event table for the selected device & segment
+// Renders the profile editor; the test controller defaults to the first one
 function renderEffectsTable() {
   const contentArea = document.getElementById('matrixContentArea');
   if (!contentArea) return;
 
   const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-
-  // If no device is selected, render the device selection landing
-  if (!selectedMatrixDeviceIp || !devicesList.find(d => d.ip === selectedMatrixDeviceIp)) {
-    selectedMatrixDeviceIp = null;
-    renderMatrixDevicePicker();
-    renderMatrixDeviceLanding();
-    return;
+  if (!devicesList.find(d => d.ip === selectedMatrixDeviceIp)) {
+    selectedMatrixDeviceIp = devicesList.length > 0 ? devicesList[0].ip : null;
   }
   renderMatrixDevicePicker();
-
-  renderMatrixForDevice(selectedMatrixDeviceIp);
+  renderMatrixForDevice();
 }
 
-function getSegmentEventConfig(ip, segId, eventKey) {
-  if (!appState.profile) appState.profile = { events: {}, device_events: {} };
-  if (!appState.profile.device_events) appState.profile.device_events = {};
-  
-  const devMap = appState.profile.device_events[ip] || {};
-  const segKey = String(segId !== null && segId !== undefined ? segId : 0);
-  
-  // Find current segment hwKey
-  const segments = getDeviceSegments(ip);
-  const segObj = segments.find(s => s.id === segId);
-  const hwKey = segObj ? segObj.hwKey : null;
-
-  // 1. Check Hardware Key Anchor (e.g. gpio_16_pwm_45)
-  if (hwKey && devMap[hwKey] && devMap[hwKey][eventKey]) {
-    return devMap[hwKey][eventKey];
-  }
-
-  // 2. Check Numeric Index Fallback
-  if (devMap[segKey] && devMap[segKey][eventKey]) {
-    return devMap[segKey][eventKey];
-  }
-
-  // Segment has no configuration for this event: return null so clean defaults apply without leaking
-  return null;
+// A profile holds one effect per event, shared by every controller and segment that uses it
+function getEventConfig(eventKey) {
+  return appState.profile?.events?.[eventKey] || null;
 }
 
-function renderMatrixForDevice(ip) {
+function renderMatrixForDevice() {
   const contentArea = document.getElementById('matrixContentArea');
-  const segTabsList = document.getElementById('matrixSegmentTabsList');
   const saveBtn = document.getElementById('matrixSaveBtn');
   if (!contentArea) return;
 
-  const dev = (Array.isArray(appState.devices) ? appState.devices : []).find(d => d.ip === ip);
-  const devName = dev ? (dev.name || 'WLED Controller') : ip;
-
-  const segments = getDeviceSegments(ip);
-
-  // Restore saved segment if available or auto-select first segment if none selected or invalid
-  if (selectedMatrixSegmentId === null && typeof localStorage !== 'undefined') {
-    const savedSeg = localStorage.getItem(`autoglow_selected_matrix_seg_${ip}`);
-    if (savedSeg !== null && savedSeg !== undefined && segments.find(s => s.id === parseInt(savedSeg, 10))) {
-      selectedMatrixSegmentId = parseInt(savedSeg, 10);
-    }
+  if (saveBtn) {
+    saveBtn.style.display = '';
+    saveBtn.disabled = !matrixDirty;
   }
-
-  if (selectedMatrixSegmentId === null || !segments.find(s => s.id === selectedMatrixSegmentId)) {
-    selectedMatrixSegmentId = segments.length > 0 ? segments[0].id : 0;
-  }
-
-  if (saveBtn) saveBtn.style.display = '';
-
-  const segStrip = document.getElementById('matrixSegmentStrip');
-  const landingTitle = document.getElementById('matrixLandingHeaderTitle');
-  if (landingTitle) landingTitle.style.display = 'none';
 
   const presetToolbar = document.getElementById('matrixPresetToolbar');
   if (presetToolbar) presetToolbar.style.display = 'flex';
   renderPresetDropdown();
-
-  // Render Segment Tabs grouped by GPIO in the separated top bar above the panel
-  if (segTabsList) {
-    if (segments.length > 0) {
-      if (segStrip) segStrip.style.display = 'flex';
-      const groups = {};
-      segments.forEach(seg => {
-        const gKey = seg.gpioGroup || 'default';
-        if (!groups[gKey]) {
-          const isPwm = String(seg.type || '').toLowerCase().includes('pwm') || String(seg.name || '').toLowerCase().includes('pwm');
-          groups[gKey] = {
-            isPwm: isPwm,
-            segments: []
-          };
-        }
-        groups[gKey].segments.push(seg);
-      });
-
-      let tabsHTML = '';
-      Object.values(groups).forEach(grp => {
-        const barClass = grp.isPwm ? 'pwm' : 'rgb';
-        tabsHTML += `
-          <div class="matrix-gpio-group">
-            <div class="matrix-gpio-bar ${barClass}"></div>
-            <div class="matrix-gpio-buttons">
-        `;
-        grp.segments.forEach(seg => {
-          const isSelected = seg.id === selectedMatrixSegmentId;
-          tabsHTML += `
-            <div class="matrix-seg-tab ${isSelected ? 'active' : ''}" onclick="selectMatrixSegment(${seg.id})">
-              <span class="seg-tab-name">#${seg.id} ${escapeHtml(seg.name)}</span>
-            </div>
-          `;
-        });
-        tabsHTML += `
-            </div>
-          </div>
-        `;
-      });
-
-      segTabsList.innerHTML = tabsHTML;
-    } else {
-      if (segStrip) segStrip.style.display = 'none';
-      segTabsList.innerHTML = '';
-    }
-  }
 
   const livePreviewContainer = document.getElementById('matrixLivePreviewContainer');
   const livePreviewSwitch = document.getElementById('matrixLivePreviewSwitch');
@@ -406,15 +202,6 @@ function renderMatrixForDevice(ip) {
   const hideDisabled = localStorage.getItem('autoglow_hide_disabled_matrix') === 'true';
   if (activeOnlySwitch) activeOnlySwitch.checked = hideDisabled;
 
-  const currentSeg = segments.find(s => s.id === selectedMatrixSegmentId);
-  const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
-
-  if (saveBtn) saveBtn.style.display = '';
-
-  const PWM_ANIM_OPTIONS = [
-    { value: 'solid', label: 'Solid' }
-  ];
-
   let tableHTML = `
     <table class="ide-table">
       <thead>
@@ -422,7 +209,7 @@ function renderMatrixForDevice(ip) {
           <th style="width: 70px; text-align: center;">ENABLED</th>
           <th>EVENT TRIGGER</th>
           <th>ANIMATION EFFECT</th>
-          <th>${isPwm ? 'BRIGHTNESS (%)' : 'PRIMARY COLOR'}</th>
+          <th>PRIMARY COLOR</th>
           <th style="width: 125px; white-space: nowrap;">DURATION (SEC)</th>
           <th style="width: 85px;">ACTION</th>
         </tr>
@@ -431,8 +218,8 @@ function renderMatrixForDevice(ip) {
   `;
 
   function renderEventRow(def, catId) {
-    const evConfig = getSegmentEventConfig(ip, selectedMatrixSegmentId, def.key);
-    const anim = (evConfig && evConfig.animation) ? evConfig.animation : (isPwm ? "solid" : (def.defaultAnim || "solid"));
+    const evConfig = getEventConfig(def.key);
+    const anim = (evConfig && evConfig.animation) ? evConfig.animation : (def.defaultAnim || "solid");
     const col = (evConfig && (evConfig.color || evConfig.color_primary)) ? rgbToHex(evConfig.color || evConfig.color_primary) : (def.defaultCol || "#000000");
     const colSec = (evConfig && evConfig.color_secondary) ? rgbToHex(evConfig.color_secondary) : "#000000";
     const dynSec = (evConfig && evConfig.dynamic_secondary !== undefined) ? evConfig.dynamic_secondary : false;
@@ -440,28 +227,20 @@ function renderMatrixForDevice(ip) {
     const reverse = (evConfig && evConfig.reverse !== undefined) ? evConfig.reverse : false;
     const dur = (evConfig && evConfig.duration !== undefined) ? evConfig.duration : (def.defaultDur ?? 0.0);
     const enabled = (evConfig && evConfig.enabled !== undefined) ? evConfig.enabled : (def.defaultEnabled !== undefined ? def.defaultEnabled : false);
-    const briPercent = (evConfig && evConfig.brightness !== undefined) ? evConfig.brightness : ((evConfig && (evConfig.color_primary || evConfig.color)) ? Math.round(((evConfig.color_primary || evConfig.color)[0] / 255) * 100) : 0);
-    const isNonSolid = (anim !== "solid" && !isPwm);
-    const isRainbow = (anim === "rainbow" && !isPwm);
-    const isPastelRainbow = (anim === "pastel_rainbow" && !isPwm);
-    const hasDirection = (anim === "chase" || anim === "rainbow" || anim === "pastel_rainbow" || anim === "curtain" || anim === "dual_comet" || anim === "radar") && !isPwm;
-    const hasSecondary = (anim === "chase" || anim === "flash" || anim === "curtain" || anim === "heartbeat" || anim === "dual_comet" || anim === "sparkle" || anim === "fire" || anim === "radar" || anim === "breathe") && !isPwm;
+    const isNonSolid = (anim !== "solid");
+    const isRainbow = (anim === "rainbow");
+    const isPastelRainbow = (anim === "pastel_rainbow");
+    const hasDirection = (anim === "chase" || anim === "rainbow" || anim === "pastel_rainbow" || anim === "curtain" || anim === "dual_comet" || anim === "radar");
+    const hasSecondary = (anim === "chase" || anim === "flash" || anim === "curtain" || anim === "heartbeat" || anim === "dual_comet" || anim === "sparkle" || anim === "fire" || anim === "radar" || anim === "breathe");
     const secLabel = (anim === "chase" ? "TRAIL:" : (anim === "heartbeat" ? "REST:" : (anim === "breathe" ? "REST:" : (anim === "dual_comet" ? "COMET B:" : (anim === "fire" ? "BASE:" : "BG:")))));
     const dirLabel = anim === "curtain" ? (reverse ? 'B->T' : 'T->B') : (reverse ? 'CCW' : 'CW');
     const dirTitle = anim === "curtain" ? (reverse ? 'Direction: Bottom-to-Top' : 'Direction: Top-to-Bottom') : (reverse ? 'Direction: Counter-Clockwise' : 'Direction: Clockwise');
 
-    const animSelectOptions = isPwm ? PWM_ANIM_OPTIONS : ANIMATION_OPTIONS;
+    const animSelectOptions = ANIMATION_OPTIONS;
     const rowStyle = (hideDisabled && !enabled) ? 'style="display: none;"' : '';
 
     let colorCellHtml = '';
-    if (isPwm) {
-      colorCellHtml = `
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <input type="number" class="input-text" id="bri_${def.key}" value="${briPercent}" min="0" max="100" step="5" style="width: 70px;" onchange="updateEventConfig('${def.key}')" oninput="updateEventConfig('${def.key}')">
-          <span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);">%</span>
-        </div>
-      `;
-    } else if (isRainbow) {
+    if (isRainbow) {
       colorCellHtml = `
         <div class="badge-rainbow-spectrum">
           <span class="spectrum-gradient-bar"></span>
@@ -542,7 +321,7 @@ function renderMatrixForDevice(ip) {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z"/></svg>
             </span>
             ${def.key === 'game_start' ? `
-              <div id="game_start_warn" class="matrix-tooltip-wrapper" style="display: ${enabled && dur <= 0 && isAnyThrowTriggerEnabled(ip, selectedMatrixSegmentId) ? 'inline-flex' : 'none'}; align-items: center; cursor: help; color: #f59e0b;">
+              <div id="game_start_warn" class="matrix-tooltip-wrapper" style="display: ${enabled && dur <= 0 && isAnyThrowTriggerEnabled() ? 'inline-flex' : 'none'}; align-items: center; cursor: help; color: #f59e0b;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                   <line x1="12" y1="9" x2="12" y2="13"/>
@@ -566,8 +345,8 @@ function renderMatrixForDevice(ip) {
   }
 
   function renderPlayerSlotRow(slotDef) {
-    const slot = getSegmentPlayerSlotConfig(selectedMatrixDeviceIp, selectedMatrixSegmentId, slotDef.id);
-    const globalSlot = getPlayerSlotConfig(slotDef.id);
+    const slot = getPlayerSlotConfig(slotDef.id);
+    const globalSlot = slot;
     const enabled = slot.enabled === true && slot.effect?.enabled === true;
     const anim = slot.effect?.animation || "solid";
     const speed = slot.effect?.speed !== undefined ? slot.effect.speed : 1.0;
@@ -590,43 +369,23 @@ function renderMatrixForDevice(ip) {
       }
     }
 
-    const currentSeg = getDeviceSegments(selectedMatrixDeviceIp).find(s => s.id === selectedMatrixSegmentId);
-    const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
-    const isNonSolid = (anim !== "solid" && !isPwm);
-    const isRainbow = (anim === "rainbow" && !isPwm);
-    const isPastelRainbow = (anim === "pastel_rainbow" && !isPwm);
-    const hasDirection = (anim === "chase" || anim === "rainbow" || anim === "pastel_rainbow" || anim === "curtain" || anim === "dual_comet" || anim === "radar") && !isPwm;
-    const hasSecondary = (anim === "chase" || anim === "flash" || anim === "curtain" || anim === "heartbeat" || anim === "dual_comet" || anim === "sparkle" || anim === "fire" || anim === "radar" || anim === "breathe") && !isPwm;
+    const isNonSolid = (anim !== "solid");
+    const isRainbow = (anim === "rainbow");
+    const isPastelRainbow = (anim === "pastel_rainbow");
+    const hasDirection = (anim === "chase" || anim === "rainbow" || anim === "pastel_rainbow" || anim === "curtain" || anim === "dual_comet" || anim === "radar");
+    const hasSecondary = (anim === "chase" || anim === "flash" || anim === "curtain" || anim === "heartbeat" || anim === "dual_comet" || anim === "sparkle" || anim === "fire" || anim === "radar" || anim === "breathe");
     const secLabel = (anim === "chase" ? "TRAIL:" : (anim === "heartbeat" ? "REST:" : (anim === "breathe" ? "REST:" : (anim === "dual_comet" ? "COMET B:" : (anim === "fire" ? "BASE:" : "BG:")))));
     const dirLabel = anim === "curtain" ? (reverse ? 'B->T' : 'T->B') : (reverse ? 'CCW' : 'CW');
     const dirTitle = anim === "curtain" ? (reverse ? 'Direction: Bottom-to-Top' : 'Direction: Top-to-Bottom') : (reverse ? 'Direction: Counter-Clockwise' : 'Direction: Clockwise');
 
-    let briPercent = 0;
-    let col = "#000000";
-    let colSec = "#000000";
-    if (isPwm) {
-      if (slot.effect?.brightness !== undefined) {
-        briPercent = slot.effect.brightness;
-      } else if (slot.effect?.color_primary) {
-        briPercent = Math.round((slot.effect.color_primary[0] / 255) * 100);
-      }
-    } else {
-      col = rgbToHex(slot.effect?.color_primary || slotDef.effect?.color_primary) || "#000000";
-      colSec = rgbToHex(slot.effect?.color_secondary || [0, 0, 0]) || "#000000";
-    }
+    const col = rgbToHex(slot.effect?.color_primary || slotDef.effect?.color_primary) || "#000000";
+    const colSec = rgbToHex(slot.effect?.color_secondary || [0, 0, 0]) || "#000000";
 
-    const animSelectOptions = isPwm ? PWM_ANIM_OPTIONS : ANIMATION_OPTIONS;
+    const animSelectOptions = ANIMATION_OPTIONS;
     const rowStyle = (hideDisabled && !enabled) ? 'style="display: none;"' : '';
 
     let playerColorCellHtml = '';
-    if (isPwm) {
-      playerColorCellHtml = `
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <input type="number" class="input-text" id="bri_p_${slotDef.id}" value="${briPercent}" min="0" max="100" step="5" style="width: 70px;" onchange="updatePlayerSlotConfig(${slotDef.id})" oninput="updatePlayerSlotConfig(${slotDef.id})">
-          <span style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);">%</span>
-        </div>
-      `;
-    } else if (isRainbow) {
+    if (isRainbow) {
       playerColorCellHtml = `
         <div class="badge-rainbow-spectrum">
           <span class="spectrum-gradient-bar"></span>
@@ -737,7 +496,7 @@ function renderMatrixForDevice(ip) {
       let playersHTML = '';
       let activePlayerCount = 0;
       DEFAULT_PLAYER_SLOTS.forEach(slotDef => {
-        const slot = getSegmentPlayerSlotConfig(ip, selectedMatrixSegmentId, slotDef.id);
+        const slot = getPlayerSlotConfig(slotDef.id);
         const isSlotActive = (slot.enabled === true) && (slot.effect?.enabled !== false);
         if (isSlotActive) activePlayerCount++;
         playersHTML += renderPlayerSlotRow(slotDef);
@@ -773,7 +532,7 @@ function renderMatrixForDevice(ip) {
     let eventsHTML = '';
 
     catEvents.forEach(def => {
-      const evConfig = getSegmentEventConfig(ip, selectedMatrixSegmentId, def.key);
+      const evConfig = getEventConfig(def.key);
       const isEvActive = evConfig ? (evConfig.enabled === true) : (def.defaultEnabled === true);
       if (isEvActive) activeEventCount++;
       eventsHTML += renderEventRow(def, cat.id);
@@ -892,7 +651,7 @@ function updateCategoryCountBadge(catId) {
 }
 
 function getPlayerSlotConfig(slotId) {
-  if (!appState.profile) appState.profile = { events: {}, device_events: {}, player_slots: [] };
+  if (!appState.profile) appState.profile = { events: {}, player_slots: [] };
   if (!Array.isArray(appState.profile.player_slots)) {
     appState.profile.player_slots = JSON.parse(JSON.stringify(DEFAULT_PLAYER_SLOTS));
   }
@@ -911,78 +670,15 @@ function getPlayerSlotConfig(slotId) {
   return slot;
 }
 
-function getSegmentPlayerSlotConfig(ip, segId, slotId) {
-  const globalSlot = getPlayerSlotConfig(slotId);
-  if (!ip) return globalSlot;
-
-  const devMap = appState.profile?.device_events?.[ip] || {};
-  const segKey = String(segId !== null && segId !== undefined ? segId : 0);
-  const segKeyName = `player_${slotId}`;
-
-  // Find current segment hwKey
-  const segments = getDeviceSegments(ip);
-  const segObj = segments.find(s => s.id === segId);
-  const hwKey = segObj ? segObj.hwKey : null;
-
-  let override = null;
-  if (hwKey && devMap[hwKey] && devMap[hwKey][segKeyName]) {
-    override = devMap[hwKey][segKeyName];
-  } else if (devMap[segKey] && devMap[segKey][segKeyName]) {
-    override = devMap[segKey][segKeyName];
-  }
-
-  if (override) {
-    return {
-      id: slotId,
-      name_filter: globalSlot.name_filter || "",
-      match_type: globalSlot.match_type || "contains",
-      effect: {
-        animation: override.animation || globalSlot.effect?.animation || "solid",
-        color_primary: override.color_primary || globalSlot.effect?.color_primary || [0, 0, 0],
-        color_secondary: override.color_secondary || [0, 0, 0],
-        dynamic_secondary: override.dynamic_secondary ?? globalSlot.effect?.dynamic_secondary ?? false,
-        brightness: override.brightness !== undefined ? override.brightness : 0,
-        duration: override.duration !== undefined ? override.duration : (globalSlot.effect?.duration ?? 0.0),
-        speed: override.speed ?? 1.0,
-        fps: override.fps ?? 50,
-        reverse: override.reverse ?? false,
-        enabled: override.enabled === true
-      },
-      enabled: override.enabled === true
-    };
-  }
-
-  // Unconfigured segment: return isolated slot defaults without leaking enabled state from other segments
-  return {
-    id: slotId,
-    name_filter: globalSlot.name_filter || "",
-    match_type: globalSlot.match_type || "contains",
-    effect: {
-      animation: "solid",
-      color_primary: [0, 0, 0],
-      color_secondary: [0, 0, 0],
-      dynamic_secondary: false,
-      brightness: 0,
-      duration: 0.0,
-      speed: 1.0,
-      fps: 50,
-      reverse: false,
-      enabled: false
-    },
-    enabled: false
-  };
-}
-
-function isAnyThrowTriggerEnabled(ip, segId) {
-  if (!ip) return false;
+function isAnyThrowTriggerEnabled() {
   // 1. Check "Throw - Any Player" (throw event)
-  const throwConf = getSegmentEventConfig(ip, segId, 'throw');
+  const throwConf = getEventConfig('throw');
   if (throwConf && throwConf.enabled) return true;
 
   // 2. Check any "Throw - Players" slot (1..10)
   for (let i = 1; i <= 10; i++) {
-    const pSlot = getSegmentPlayerSlotConfig(ip, segId, i);
-    if (pSlot && pSlot.enabled) return true;
+    const pSlot = getPlayerSlotConfig(i);
+    if (pSlot && pSlot.enabled && pSlot.effect?.enabled !== false) return true;
   }
 
   return false;
@@ -995,8 +691,30 @@ function refreshGameStartDurationWarning() {
   const durElem = document.getElementById('dur_game_start');
   const en = enElem ? enElem.checked : false;
   const dur = durElem && durElem.value !== '' && !isNaN(parseFloat(durElem.value)) ? parseFloat(durElem.value) : 0.0;
-  const hasThrowEnabled = isAnyThrowTriggerEnabled(selectedMatrixDeviceIp, selectedMatrixSegmentId);
+  const hasThrowEnabled = isAnyThrowTriggerEnabled();
   warnElem.style.display = (en && dur <= 0 && hasThrowEnabled) ? 'inline-flex' : 'none';
+}
+
+// Sensible colors for a trigger that is switched on / given an effect while its color is still black
+const SMART_EVENT_COLORS = {
+  match_won: "#ffd700", leg_won: "#00ff64", "180": "#ffc800", single: "#00c8ff",
+  double: "#00ffb4", triple: "#ff7800", bullseye: "#ff1428", bust: "#ff0000",
+  game_start: "#00f0ff", throw: "#00a0ff", takeout_in_progress: "#ffa000",
+  takeout: "#ffffff", manual_reset: "#a855f7", calibrating: "#a855f7"
+};
+const SMART_PLAYER_COLORS = ["#00a0ff", "#ff3c3c", "#00ff64", "#ffc800", "#a855f7", "#ff7800", "#00f0ff", "#ff50b4", "#b4ff00", "#ffffff"];
+
+function isBlackHex(hex) {
+  return !hex || /^#0{6}$/i.test(hex);
+}
+
+// Replace a black primary color with a meaningful one (effects like rainbow ignore it, so skip those)
+// Returns the hex to use; the color input (if rendered) is updated to match
+function applySmartPrimaryColor(colElem, anim, fallbackHex) {
+  const current = colElem ? colElem.value : "#000000";
+  if (anim === "off" || anim === "rainbow" || anim === "pastel_rainbow" || !isBlackHex(current)) return current;
+  if (colElem) colElem.value = fallbackHex;
+  return fallbackHex;
 }
 
 function onAnimationTypeChanged(key) {
@@ -1030,7 +748,7 @@ function onPlayerDynamicSecondaryToggled(slotId) {
 }
 
 function toggleEventReverse(key) {
-  const current = getSegmentEventConfig(selectedMatrixDeviceIp, selectedMatrixSegmentId, key);
+  const current = getEventConfig(key);
   const curRev = current ? current.reverse === true : false;
   const newRev = !curRev;
   const animElem = document.getElementById(`anim_${key}`);
@@ -1046,7 +764,7 @@ function toggleEventReverse(key) {
 }
 
 function togglePlayerSlotReverse(slotId) {
-  const current = getSegmentPlayerSlotConfig(selectedMatrixDeviceIp, selectedMatrixSegmentId, slotId);
+  const current = getPlayerSlotConfig(slotId);
   const curRev = current && current.effect ? current.effect.reverse === true : false;
   const newRev = !curRev;
   const animElem = document.getElementById(`anim_p_${slotId}`);
@@ -1062,17 +780,7 @@ function togglePlayerSlotReverse(slotId) {
 }
 
 function updatePlayerSlotConfig(slotId) {
-  if (!selectedMatrixDeviceIp) return;
-  const segKey = String(selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined ? selectedMatrixSegmentId : 0);
-
-  if (!appState.profile) appState.profile = { events: {}, device_events: {}, player_slots: [] };
-  if (!appState.profile.device_events) appState.profile.device_events = {};
-  if (!appState.profile.device_events[selectedMatrixDeviceIp]) appState.profile.device_events[selectedMatrixDeviceIp] = {};
-  if (!appState.profile.device_events[selectedMatrixDeviceIp][segKey]) {
-    appState.profile.device_events[selectedMatrixDeviceIp][segKey] = {};
-  }
-
-  const globalSlot = getPlayerSlotConfig(slotId);
+  const slot = getPlayerSlotConfig(slotId);
   const nameElem = document.getElementById(`name_p_${slotId}`);
   const matchElem = document.getElementById(`match_p_${slotId}`);
   const animElem = document.getElementById(`anim_p_${slotId}`);
@@ -1080,14 +788,12 @@ function updatePlayerSlotConfig(slotId) {
   const enElem = document.getElementById(`en_p_${slotId}`);
   const speedElem = document.getElementById(`speed_p_${slotId}`);
   const revBtn = document.getElementById(`rev_btn_p_${slotId}`);
+  const colElem = document.getElementById(`col_p_${slotId}`);
   const colSecElem = document.getElementById(`col_sec_p_${slotId}`);
   const dynSecElem = document.getElementById(`dyn_sec_p_${slotId}`);
 
-  if (nameElem) globalSlot.name_filter = nameElem.value.trim();
-  if (matchElem) globalSlot.match_type = matchElem.value;
-
-  const currentSeg = getDeviceSegments(selectedMatrixDeviceIp).find(s => s.id === selectedMatrixSegmentId);
-  const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
+  if (nameElem) slot.name_filter = nameElem.value.trim();
+  if (matchElem) slot.match_type = matchElem.value;
 
   const en = enElem ? enElem.checked : false;
   const anim = animElem ? animElem.value : "solid";
@@ -1095,46 +801,22 @@ function updatePlayerSlotConfig(slotId) {
   const speed = speedElem && speedElem.value !== '' && !isNaN(parseFloat(speedElem.value)) ? Math.max(0.01, parseFloat(speedElem.value)) : 1.0;
   const reverse = revBtn ? revBtn.classList.contains('is-reversed') : false;
   const dynSec = dynSecElem ? dynSecElem.checked : false;
+  const primaryHex = en ? applySmartPrimaryColor(colElem, anim, SMART_PLAYER_COLORS[(slotId - 1) % SMART_PLAYER_COLORS.length]) : (colElem ? colElem.value : "#000000");
+  const rgb = hexToRgb(primaryHex);
+  const rgbSec = hexToRgb(colSecElem ? colSecElem.value : "#000000");
 
-  let rgb = [0, 0, 0];
-  let rgbSec = [0, 0, 0];
-  let briPercent = 0;
-
-  if (isPwm) {
-    const briElem = document.getElementById(`bri_p_${slotId}`);
-    briPercent = briElem && briElem.value !== '' && !isNaN(parseInt(briElem.value, 10)) ? Math.max(0, Math.min(100, parseInt(briElem.value, 10))) : 0;
-    const rawBri = Math.round(briPercent * 2.55);
-    rgb = [rawBri, rawBri, rawBri];
-  } else {
-    const colElem = document.getElementById(`col_p_${slotId}`);
-    const colHex = colElem ? colElem.value : "#000000";
-    rgb = hexToRgb(colHex);
-    const colSecHex = colSecElem ? colSecElem.value : "#000000";
-    rgbSec = hexToRgb(colSecHex);
-  }
-
-  const slotEntry = {
+  slot.enabled = en;
+  slot.effect = {
     animation: anim,
     color_primary: rgb,
     color_secondary: rgbSec,
     dynamic_secondary: dynSec,
-    brightness: isPwm ? briPercent : undefined,
     duration: dur,
     fps: 50,
     speed: speed,
     reverse: reverse,
     enabled: en
   };
-
-  // Store per-segment player override (under both hwKey anchor and segKey)
-  const segHwKey = currentSeg ? currentSeg.hwKey : null;
-  if (segHwKey) {
-    if (!appState.profile.device_events[selectedMatrixDeviceIp][segHwKey]) {
-      appState.profile.device_events[selectedMatrixDeviceIp][segHwKey] = {};
-    }
-    appState.profile.device_events[selectedMatrixDeviceIp][segHwKey][`player_${slotId}`] = slotEntry;
-  }
-  appState.profile.device_events[selectedMatrixDeviceIp][segKey][`player_${slotId}`] = slotEntry;
 
   const row = document.querySelector(`.matrix-player-row[data-slot-id="${slotId}"]`);
   const wasEnabled = row ? row.classList.contains('is-enabled') : false;
@@ -1165,13 +847,11 @@ function updatePlayerSlotConfig(slotId) {
     dispatchMatrixLivePreview({
       event: 'throw',
       ip: selectedMatrixDeviceIp,
-      segment_id: selectedMatrixSegmentId,
       effect: {
         animation: anim,
         color_primary: rgb,
         color_secondary: rgbSec,
         dynamic_secondary: dynSec,
-        brightness: isPwm ? briPercent : undefined,
         duration: 0.0,
         speed: speed,
         fps: 50,
@@ -1183,8 +863,10 @@ function updatePlayerSlotConfig(slotId) {
 }
 
 async function triggerPlayerSlotTest(slotId) {
-  const currentSeg = getDeviceSegments(selectedMatrixDeviceIp).find(s => s.id === selectedMatrixSegmentId);
-  const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
+  if (!selectedMatrixDeviceIp) {
+    showToast('Add a controller in Setup to test effects.', 'info');
+    return;
+  }
 
   const animElem = document.getElementById(`anim_p_${slotId}`);
   const durElem = document.getElementById(`dur_p_${slotId}`);
@@ -1206,19 +888,11 @@ async function triggerPlayerSlotTest(slotId) {
   let rgbSec = [0, 0, 0];
   let displayLabel = '';
 
-  if (isPwm) {
-    const briElem = document.getElementById(`bri_p_${slotId}`);
-    const briPercent = briElem && briElem.value !== '' && !isNaN(parseInt(briElem.value, 10)) ? Math.max(0, Math.min(100, parseInt(briElem.value, 10))) : 0;
-    const rawBri = Math.round(briPercent * 2.55);
-    rgb = [rawBri, rawBri, rawBri];
-    displayLabel = `${briPercent}% Brightness`;
-  } else {
-    const colHex = colElem ? colElem.value : "#000000";
-    rgb = hexToRgb(colHex);
-    const colSecHex = colSecElem ? colSecElem.value : "#000000";
-    rgbSec = hexToRgb(colSecHex);
-    displayLabel = colHex.toUpperCase();
-  }
+  const colHex = colElem ? colElem.value : "#000000";
+  rgb = hexToRgb(colHex);
+  const colSecHex = colSecElem ? colSecElem.value : "#000000";
+  rgbSec = hexToRgb(colSecHex);
+  displayLabel = colHex.toUpperCase();
 
   // Update in-memory state before dispatch
   updatePlayerSlotConfig(slotId);
@@ -1237,7 +911,7 @@ async function triggerPlayerSlotTest(slotId) {
     prevColor = window.lastTestedMatrixColor;
   }
 
-  showToast(`Testing Player ${slotId} (${nameFilter ? `"${nameFilter}"` : displayLabel}) on Seg #${selectedMatrixSegmentId ?? 0}...`, 'info');
+  showToast(`Testing Player ${slotId} (${nameFilter ? `"${nameFilter}"` : displayLabel})...`, 'info');
   try {
     const res = await fetch('/api/test/effect', {
       method: 'POST',
@@ -1245,14 +919,12 @@ async function triggerPlayerSlotTest(slotId) {
       body: JSON.stringify({
         event: 'throw',
         ip: selectedMatrixDeviceIp,
-        segment_id: selectedMatrixSegmentId,
         previous_color: prevColor,
         effect: {
           animation: anim,
           color_primary: rgb,
           color_secondary: rgbSec,
           dynamic_secondary: dynSec,
-          brightness: isPwm ? (Math.round((rgb[0] / 255) * 100)) : undefined,
           duration: dur,
           speed: speed,
           fps: 50,
@@ -1271,25 +943,17 @@ async function triggerPlayerSlotTest(slotId) {
 }
 
 function updateEventConfig(key) {
-  if (!selectedMatrixDeviceIp) return;
-  if (!appState.profile) appState.profile = { events: {}, device_events: {} };
-  if (!appState.profile.device_events) appState.profile.device_events = {};
-  if (!appState.profile.device_events[selectedMatrixDeviceIp]) appState.profile.device_events[selectedMatrixDeviceIp] = {};
-  
-  const segKey = String(selectedMatrixSegmentId !== null && selectedMatrixSegmentId !== undefined ? selectedMatrixSegmentId : 0);
-  if (!appState.profile.device_events[selectedMatrixDeviceIp][segKey]) {
-    appState.profile.device_events[selectedMatrixDeviceIp][segKey] = {};
-  }
+  if (!appState.profile) appState.profile = { events: {}, player_slots: [] };
+  if (!appState.profile.events) appState.profile.events = {};
 
   const def = EVENT_DEFS.find(d => d.key === key) || {};
-  const currentSeg = getDeviceSegments(selectedMatrixDeviceIp).find(s => s.id === selectedMatrixSegmentId);
-  const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
 
   const animElem = document.getElementById(`anim_${key}`);
   const durElem = document.getElementById(`dur_${key}`);
   const enElem = document.getElementById(`en_${key}`);
   const speedElem = document.getElementById(`speed_${key}`);
   const revBtn = document.getElementById(`rev_btn_${key}`);
+  const colElem = document.getElementById(`col_${key}`);
   const colSecElem = document.getElementById(`col_sec_${key}`);
   const dynSecElem = document.getElementById(`dyn_sec_${key}`);
 
@@ -1299,45 +963,21 @@ function updateEventConfig(key) {
   const speed = speedElem && speedElem.value !== '' && !isNaN(parseFloat(speedElem.value)) ? Math.max(0.01, parseFloat(speedElem.value)) : 1.0;
   const reverse = revBtn ? revBtn.classList.contains('is-reversed') : false;
   const dynSec = dynSecElem ? dynSecElem.checked : false;
+  const primaryHex = en ? applySmartPrimaryColor(colElem, anim, SMART_EVENT_COLORS[key] || "#00f0ff") : (colElem ? colElem.value : (def.defaultCol || "#000000"));
+  const rgb = hexToRgb(primaryHex);
+  const rgbSec = hexToRgb(colSecElem ? colSecElem.value : "#000000");
 
-  let rgb = [0, 0, 0];
-  let rgbSec = [0, 0, 0];
-  let briPercent = 0;
-
-  if (isPwm) {
-    const briElem = document.getElementById(`bri_${key}`);
-    briPercent = briElem && briElem.value !== '' && !isNaN(parseInt(briElem.value, 10)) ? Math.max(0, Math.min(100, parseInt(briElem.value, 10))) : 0;
-    const rawBri = Math.round(briPercent * 2.55);
-    rgb = [rawBri, rawBri, rawBri];
-  } else {
-    const colElem = document.getElementById(`col_${key}`);
-    const colHex = colElem ? colElem.value : (def.defaultCol || "#000000");
-    rgb = hexToRgb(colHex);
-    const colSecHex = colSecElem ? colSecElem.value : "#000000";
-    rgbSec = hexToRgb(colSecHex);
-  }
-
-  const eventEntry = {
+  appState.profile.events[key] = {
     animation: anim,
     color_primary: rgb,
     color_secondary: rgbSec,
     dynamic_secondary: dynSec,
-    brightness: isPwm ? briPercent : undefined,
     duration: dur,
     speed: speed,
     fps: 50,
     reverse: reverse,
     enabled: en
   };
-
-  const segHwKey = currentSeg ? currentSeg.hwKey : null;
-  if (segHwKey) {
-    if (!appState.profile.device_events[selectedMatrixDeviceIp][segHwKey]) {
-      appState.profile.device_events[selectedMatrixDeviceIp][segHwKey] = {};
-    }
-    appState.profile.device_events[selectedMatrixDeviceIp][segHwKey][key] = eventEntry;
-  }
-  appState.profile.device_events[selectedMatrixDeviceIp][segKey][key] = eventEntry;
 
   // Update row disabled/enabled visual state
   const row = document.querySelector(`.matrix-event-row[data-event-key="${key}"]`);
@@ -1370,13 +1010,11 @@ function updateEventConfig(key) {
     dispatchMatrixLivePreview({
       event: key,
       ip: selectedMatrixDeviceIp,
-      segment_id: selectedMatrixSegmentId,
       effect: {
         animation: anim,
         color_primary: rgb,
         color_secondary: rgbSec,
         dynamic_secondary: dynSec,
-        brightness: isPwm ? briPercent : undefined,
         duration: 0.0,
         speed: speed,
         fps: 50,
@@ -1393,6 +1031,7 @@ function setMatrixDirty(isDirty) {
   const btn = document.getElementById('matrixSaveBtn');
   if (btn) {
     btn.textContent = matrixDirty ? 'Save Matrix *' : 'Save Matrix';
+    btn.disabled = !matrixDirty;
     btn.style.boxShadow = matrixDirty ? '0 0 8px rgba(20, 184, 166, 0.4)' : '';
   }
 }
@@ -1406,24 +1045,15 @@ async function renderPresetDropdown() {
   if (!select) return;
 
   let presets = [];
-  let active = appState.active_profile || 'Default';
+  const active = appState.active_profile || 'Default';
 
   try {
-    const query = selectedMatrixDeviceIp ? `?ip=${encodeURIComponent(selectedMatrixDeviceIp)}` : '';
-    const res = await fetch(`/api/matrix/presets${query}`);
+    const res = await fetch('/api/matrix/presets');
     const data = await res.json();
     if (data.status === 'ok') {
       presets = data.presets || [];
       devicePresetMap = data.device_profiles || {};
-      active = data.active_profile || 'Default';
-      // Load the selected controller's profile when it differs from the one being edited
-      if (data.profile && active !== appState.active_profile && !matrixDirty) {
-        appState.active_profile = active;
-        appState.profile = data.profile;
-        renderEffectsTable();
-        return;
-      }
-      if (!matrixDirty) appState.active_profile = active;
+      segmentPresetMap = data.segment_profiles || {};
     }
   } catch (e) {
     console.warn('[AutoGlow] Could not fetch matrix presets:', e);
@@ -1438,6 +1068,21 @@ async function renderPresetDropdown() {
   select.innerHTML = presets.map(name => {
     return `<option value="${escapeHtml(name)}" ${name === active ? 'selected' : ''}>${escapeHtml(name)}</option>`;
   }).join('');
+
+  const users = [];
+  (Array.isArray(appState.devices) ? appState.devices : []).forEach(dev => {
+    const segs = (Array.isArray(dev.segments) ? dev.segments : []).filter(seg => !/pwm|white/i.test(`${seg.type || ''} ${seg.name || ''}`));
+    const name = dev.name || dev.ip;
+    if (!segs.length) {
+      if ((devicePresetMap[dev.ip] || 'Default') === active) users.push(name);
+      return;
+    }
+    const on = segs.filter(seg => (segmentPresetMap[dev.ip]?.[String(seg.id)] || devicePresetMap[dev.ip] || 'Default') === active);
+    if (on.length === segs.length) users.push(name);
+    else on.forEach(seg => users.push(`${name} #${seg.id}`));
+  });
+  const usedBy = document.getElementById('matrixProfileUsers');
+  if (usedBy) usedBy.textContent = users.length ? `Used by ${users.join(', ')}` : 'Not assigned to a controller';
 
   const isDefault = (active.toLowerCase() === 'default');
   const isOnlyOne = (presets.length <= 1);
@@ -1471,25 +1116,19 @@ async function onPresetSelected(targetName) {
 
 async function executePresetSwitch(targetName) {
   try {
-    const res = await fetch('/api/matrix/presets/select', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: targetName, ip: selectedMatrixDeviceIp })
-    });
+    const res = await fetch(`/api/matrix/presets?name=${encodeURIComponent(targetName)}`);
     const data = await res.json();
     if (data.status === 'ok') {
-      appState.active_profile = data.active_profile;
+      appState.active_profile = targetName;
       appState.profile = data.profile;
       setMatrixDirty(false);
       renderEffectsTable();
-      await renderPresetDropdown();
-      showToast(`Loaded preset '${data.active_profile}'`, 'info');
     } else {
-      showToast(`Failed to switch preset: ${data.message}`, 'error');
+      showToast(`Failed to open preset: ${data.message}`, 'error');
       await renderPresetDropdown();
     }
   } catch (err) {
-    showToast(`Error switching preset: ${err.message || err}`, 'error');
+    showToast(`Error opening preset: ${err.message || err}`, 'error');
     await renderPresetDropdown();
   }
 }
@@ -1542,7 +1181,6 @@ async function submitNewPreset() {
     profileData = {
       name: name,
       events: {},
-      device_events: {},
       player_slots: JSON.parse(JSON.stringify(DEFAULT_PLAYER_SLOTS))
     };
   } else {
@@ -1559,8 +1197,7 @@ async function submitNewPreset() {
       body: JSON.stringify({
         name: name,
         profile: profileData,
-        set_active: true,
-        ip: selectedMatrixDeviceIp
+        set_active: false
       })
     });
     const data = await res.json();
@@ -1571,7 +1208,7 @@ async function submitNewPreset() {
       closePresetModal();
       renderEffectsTable();
       await renderPresetDropdown();
-      showToast(`Preset '${name}' created and activated.`, 'success');
+      showToast(`Preset '${name}' created. Assign it to a controller in the Hub.`, 'success');
     } else {
       showToast(`Failed to create preset: ${data.message}`, 'error');
     }
@@ -1614,15 +1251,15 @@ async function submitRenamePreset() {
     const res = await fetch('/api/matrix/presets/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ old_name: oldName, new_name: newName, ip: selectedMatrixDeviceIp })
+      body: JSON.stringify({ old_name: oldName, new_name: newName })
     });
     const data = await res.json();
     if (data.status === 'ok') {
-      appState.active_profile = data.active_profile;
-      if (appState.profile) appState.profile.name = data.active_profile;
+      appState.active_profile = newName;
+      if (appState.profile) appState.profile.name = newName;
       closePresetModal();
       await renderPresetDropdown();
-      showToast(`Preset renamed to '${data.active_profile}'.`, 'success');
+      showToast(`Preset renamed to '${newName}'.`, 'success');
     } else {
       showToast(`Failed to rename preset: ${data.message}`, 'error');
     }
@@ -1648,7 +1285,7 @@ async function submitDeletePreset() {
     const res = await fetch('/api/matrix/presets', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: target, ip: selectedMatrixDeviceIp })
+      body: JSON.stringify({ name: target })
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -1658,7 +1295,7 @@ async function submitDeletePreset() {
       closePresetModal();
       renderEffectsTable();
       await renderPresetDropdown();
-      showToast(`Preset '${target}' deleted. Active preset is now '${data.active_profile}'.`, 'info');
+      showToast(`Preset '${target}' deleted. Controllers that used it now use '${data.active_profile}'.`, 'info');
     } else {
       showToast(`Failed to delete preset: ${data.message}`, 'error');
     }
@@ -1720,8 +1357,7 @@ async function handlePresetFileImport(event) {
       return;
     }
 
-    const query = selectedMatrixDeviceIp ? `?ip=${encodeURIComponent(selectedMatrixDeviceIp)}` : '';
-    const res = await fetch(`/api/matrix/presets/import${query}`, {
+    const res = await fetch('/api/matrix/presets/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -1734,7 +1370,7 @@ async function handlePresetFileImport(event) {
       setMatrixDirty(false);
       renderEffectsTable();
       await renderPresetDropdown();
-      showToast(`Preset '${result.active_profile}' imported and activated.`, 'success');
+      showToast(`Preset '${result.active_profile}' imported.`, 'success');
     } else {
       showToast(`Import failed: ${result.message}`, 'error');
     }
@@ -1744,7 +1380,6 @@ async function handlePresetFileImport(event) {
 }
 
 async function saveEffectsProfile() {
-  if (!selectedMatrixDeviceIp) return false;
   EVENT_DEFS.forEach(def => updateEventConfig(def.key));
   for (let i = 1; i <= 10; i++) {
     updatePlayerSlotConfig(i);
@@ -1758,8 +1393,7 @@ async function saveEffectsProfile() {
       body: JSON.stringify({
         name: currentPresetName,
         profile: appState.profile,
-        set_active: true,
-        ip: selectedMatrixDeviceIp
+        set_active: false
       })
     });
     const data = await res.json();
@@ -1781,8 +1415,10 @@ async function saveEffectsProfile() {
 }
 
 async function triggerEffectTest(eventKey) {
-  const currentSeg = getDeviceSegments(selectedMatrixDeviceIp).find(s => s.id === selectedMatrixSegmentId);
-  const isPwm = currentSeg ? (String(currentSeg.type || '').toLowerCase().includes('pwm') || String(currentSeg.name || '').toLowerCase().includes('pwm')) : false;
+  if (!selectedMatrixDeviceIp) {
+    showToast('Add a controller in Setup to test effects.', 'info');
+    return;
+  }
 
   const animElem = document.getElementById(`anim_${eventKey}`);
   const durElem = document.getElementById(`dur_${eventKey}`);
@@ -1802,20 +1438,12 @@ async function triggerEffectTest(eventKey) {
   let rgbSec = [0, 0, 0];
   let displayLabel = '';
 
-  if (isPwm) {
-    const briElem = document.getElementById(`bri_${eventKey}`);
-    const briPercent = briElem && briElem.value !== '' && !isNaN(parseInt(briElem.value, 10)) ? Math.max(0, Math.min(100, parseInt(briElem.value, 10))) : 0;
-    const rawBri = Math.round(briPercent * 2.55);
-    rgb = [rawBri, rawBri, rawBri];
-    displayLabel = `${briPercent}% Brightness`;
-  } else {
-    const colElem = document.getElementById(`col_${eventKey}`);
-    const colHex = colElem ? colElem.value : (def.defaultCol || "#000000");
-    rgb = hexToRgb(colHex);
-    const colSecHex = colSecElem ? colSecElem.value : "#000000";
-    rgbSec = hexToRgb(colSecHex);
-    displayLabel = colHex.toUpperCase();
-  }
+  const colElem = document.getElementById(`col_${eventKey}`);
+  const colHex = colElem ? colElem.value : (def.defaultCol || "#000000");
+  rgb = hexToRgb(colHex);
+  const colSecHex = colSecElem ? colSecElem.value : "#000000";
+  rgbSec = hexToRgb(colSecHex);
+  displayLabel = colHex.toUpperCase();
 
   // Auto-connect UDP if currently in HTTP idle mode
   if (currentProtocolMode !== 'udp') {
@@ -1843,7 +1471,7 @@ async function triggerEffectTest(eventKey) {
     }
   }
 
-  showToast(`Testing ${def.label || eventKey} (${displayLabel}) on Seg #${selectedMatrixSegmentId ?? 0}...`, 'info');
+  showToast(`Testing ${def.label || eventKey} (${displayLabel})...`, 'info');
   try {
     const res = await fetch('/api/test/effect', {
       method: 'POST',
@@ -1851,14 +1479,12 @@ async function triggerEffectTest(eventKey) {
       body: JSON.stringify({
         event: eventKey,
         ip: selectedMatrixDeviceIp,
-        segment_id: selectedMatrixSegmentId,
         previous_color: prevColor,
         effect: {
           animation: anim,
           color_primary: rgb,
           color_secondary: rgbSec,
           dynamic_secondary: dynSec,
-          brightness: isPwm ? (Math.round((rgb[0] / 255) * 100)) : undefined,
           duration: dur,
           speed: speed,
           fps: 50,
@@ -1912,15 +1538,12 @@ function updateProtocolUI(mode) {
 
 if (typeof window !== "undefined") {
   window.selectMatrixDevice = selectMatrixDevice;
-  window.selectMatrixSegment = selectMatrixSegment;
-  window.renderMatrixDeviceLanding = renderMatrixDeviceLanding;
   window.renderEffectsTable = renderEffectsTable;
   window.renderMatrixForDevice = renderMatrixForDevice;
   window.toggleMatrixLivePreview = toggleMatrixLivePreview;
   window.toggleHideDisabledTriggers = toggleHideDisabledTriggers;
   window.updateCategoryCountBadge = updateCategoryCountBadge;
   window.getPlayerSlotConfig = getPlayerSlotConfig;
-  window.getSegmentPlayerSlotConfig = getSegmentPlayerSlotConfig;
   window.updatePlayerSlotConfig = updatePlayerSlotConfig;
   window.triggerPlayerSlotTest = triggerPlayerSlotTest;
   window.updateEventConfig = updateEventConfig;
@@ -1930,6 +1553,12 @@ if (typeof window !== "undefined") {
   window.toggleProtocolMode = toggleProtocolMode;
   window.updateProtocolUI = updateProtocolUI;
   window.setMatrixDirty = setMatrixDirty;
+  window.matrixPage = {
+    isDirty: () => matrixDirty,
+    save: saveEffectsProfile,
+    // Back to the saved version of the active preset
+    discard: () => executePresetSwitch(appState.active_profile || 'Default')
+  };
   window.renderPresetDropdown = renderPresetDropdown;
   window.onPresetSelected = onPresetSelected;
   window.getMatrixDeviceIp = () => selectedMatrixDeviceIp;

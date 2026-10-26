@@ -12,6 +12,7 @@ import { initModeSwitch, setLightingMode } from '../components/mode-switch.js';
 import { initShell } from '../components/shell.js';
 import { initControllers } from '../features/controllers.js';
 import { initHub } from '../features/hub.js';
+import { initLightingGuard } from '../features/lighting-guard.js';
 import { initSettings } from '../features/settings.js';
 
 Object.assign(window, {
@@ -33,3 +34,4 @@ initModeSwitch();
 initControllers();
 initHub();
 initSettings();
+initLightingGuard();

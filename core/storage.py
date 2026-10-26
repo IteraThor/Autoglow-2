@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = str(PROJECT_ROOT / "config.json")
 BACKUPS_CONFIG_DIR = PROJECT_ROOT / "backups" / "configs"
 PRESETS_DIR = PROJECT_ROOT / "presets"
+DEFAULT_PROFILES_DIR = PROJECT_ROOT / "defaults" / "profiles"
 
 
 def resolve_config_path(config_path: Optional[str] = None) -> str:
@@ -67,7 +68,11 @@ def load_app_config(config_path: Optional[str] = None) -> AppConfig:
     # Tier 1: Try primary config file
     raw_config = _read_json_file(target_path)
     if raw_config is not None:
-        return AppConfig.from_dict(raw_config)
+        cfg = AppConfig.from_dict(raw_config)
+        if any(isinstance(p, dict) and p.get("device_events") for p in raw_config.get("profiles") or []):
+            # Pre-2.3 per-controller effects were split into profiles; save so the split happens only once
+            save_app_config(cfg, target_path)
+        return cfg
 
     # If primary file exists but failed validation (corrupt / 0-bytes), quarantine it
     if os.path.exists(target_path):
@@ -231,6 +236,43 @@ def delete_preset_file(name: str, presets_dir: Optional[str] = None) -> bool:
         return False
 
 
+def seed_default_profiles(cfg: AppConfig, defaults_dir: Optional[str] = None) -> bool:
+    """
+    Add the profiles shipped in defaults/profiles/ once per installation. The names already seeded are
+    remembered in cfg.extra, so a shipped profile that the user deleted or renamed does not come back.
+    Returns True if any profile was added.
+    """
+    d_dir = Path(defaults_dir) if defaults_dir else DEFAULT_PROFILES_DIR
+    if not d_dir.is_dir():
+        return False
+    seeded = cfg.extra.get("seeded_default_profiles")
+    seeded = [str(n) for n in seeded] if isinstance(seeded, list) else []
+    existing_names = {p.name.lower() for p in cfg.profiles}
+    changed = False
+    for file in sorted(d_dir.glob("*.json")):
+        try:
+            raw = _read_json_file(str(file))
+            if not (raw and isinstance(raw, dict)):
+                continue
+            name = str(raw.get("name", file.stem)).strip() or file.stem
+            if name in seeded:
+                continue
+            seeded.append(name)
+            changed = True
+            if name.lower() in existing_names:
+                continue
+            profile = ProfileConfig.from_dict(raw)
+            profile.name = name
+            cfg.add_or_update_profile(profile, set_active=False)
+            existing_names.add(name.lower())
+            logger.info(f"Added shipped profile '{name}'")
+        except Exception as e:
+            logger.warning(f"Failed to load shipped profile {file.name}: {e}")
+    if changed:
+        cfg.extra["seeded_default_profiles"] = seeded
+    return changed
+
+
 def sync_presets_with_disk(cfg: AppConfig, presets_dir: Optional[str] = None) -> bool:
     """
     Bi-directionally synchronize presets between AppConfig and the presets/ folder:
@@ -239,7 +281,7 @@ def sync_presets_with_disk(cfg: AppConfig, presets_dir: Optional[str] = None) ->
     Returns True if any new presets were added from disk.
     """
     p_dir = ensure_presets_dir(presets_dir)
-    changed = False
+    changed = seed_default_profiles(cfg)
 
     # 1. Export current in-memory profiles to presets folder
     for prof in cfg.profiles:

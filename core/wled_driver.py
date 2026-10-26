@@ -294,6 +294,7 @@ class WLEDDriver:
                 "start": seg_start,
                 "stop": seg_stop,
                 "len": seg_len,
+                "of": s.get("of", 0),
                 "on": seg_on,
                 "bri": seg_bri,
                 "type": hw_type,
@@ -730,6 +731,21 @@ class WLEDDriver:
             return (pwm_idx, pwm_idx + 1)
         return (0, self.config.rgb_count)
 
+    def _get_segment_offset(self, seg_id: int) -> int:
+        """LEDs after the segment start where its effects begin (WLED's "of"), 0 if none."""
+        target_seg = next((s for s in self.config.segments if s.id == seg_id), None)
+        return target_seg.offset if target_seg else 0
+
+    @staticmethod
+    def _apply_offset(seg_rendered: bytes, offset: int) -> bytes:
+        """Rotate a segment frame so its first LED lands offset LEDs after the segment start."""
+        seg_len = len(seg_rendered) // 3
+        offset = offset % seg_len if seg_len else 0
+        if not offset:
+            return seg_rendered
+        cut = (seg_len - offset) * 3
+        return seg_rendered[cut:] + seg_rendered[:cut]
+
     def _get_pwm_seg_id(self) -> Optional[int]:
         """
         Dynamically lookup the segment ID corresponding to the PWM White output, or None if no PWM output.
@@ -816,6 +832,7 @@ class WLEDDriver:
                                 "id": s.id,
                                 "start": s.start,
                                 "stop": s.start + s.length,
+                                "of": s.offset,
                                 "n": sanitize_wled_name(s.name),
                                 "on": True,
                                 "bri": 255 if s.id == 0 else self.config.default_pwm_brightness
@@ -961,7 +978,7 @@ class WLEDDriver:
                         base_elapsed = t0 - ch.get("baseline_start_time", t0)
                         b_buf = self._render_frame(baseline_eff, frame, base_elapsed, seg_len, s_id=s_id)
                         seg_rendered = blend_frames(t_buf, b_buf, blend_factor, transient_eff.transition)
-                        master_buffer[start_idx * 3 : stop_idx * 3] = seg_rendered
+                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
                     elif active_eff.animation == AnimationType.SOLID:
                         c = active_eff.color_primary
                         if (c.r, c.g, c.b) != (0, 0, 0):
@@ -972,7 +989,7 @@ class WLEDDriver:
                             master_buffer[idx * 3 + 2] = c.b
                     else:
                         seg_rendered = self._render_frame(active_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
-                        master_buffer[start_idx * 3 : stop_idx * 3] = seg_rendered
+                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
 
                 # If PWM channel had no active matrix event, maintain default spotlight brightness
                 has_pwm = (pwm_seg_id is not None and self.config.pwm_index is not None)

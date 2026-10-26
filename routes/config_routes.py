@@ -43,6 +43,11 @@ async def handle_post_config(request: web.Request) -> web.Response:
         # Profile choices are made on the Hub / Lighting pages; a settings save that omits them keeps them
         if "device_profiles" not in data:
             cfg.device_profiles = {ip: n for ip, n in existing_cfg.device_profiles.items() if cfg.get_profile(n)}
+        if "segment_profiles" not in data:
+            cfg.segment_profiles = {
+                ip: {sid: n for sid, n in segs.items() if cfg.get_profile(n)}
+                for ip, segs in existing_cfg.segment_profiles.items()
+            }
         if not cfg.autodarts_user and existing_cfg.autodarts_user:
             cfg.autodarts_user = existing_cfg.autodarts_user
         if not cfg.autodarts_board_id and existing_cfg.autodarts_board_id:

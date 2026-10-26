@@ -9,6 +9,7 @@ import { MODE_LABELS } from '../components/mode-switch.js';
 import { toast } from '../core/toast.js';
 
 const POLL_MS = 10000;
+const AUTODARTS_URL = 'https://play.autodarts.com';
 const HIDE_CHECKLIST_KEY = 'autoglow_hide_checklist';
 
 const STEPS = {
@@ -60,6 +61,62 @@ function renderChecklist(checklist) {
   );
 }
 
+// What still blocks effects, in the order to fix it. Empty list = only a game is missing.
+function missingForEffects(status = {}, checklist = {}) {
+  const done = id => checklist.steps?.find(s => s.id === id)?.done;
+  const devices = status.devices || [];
+  const autodarts = status.autodarts || {};
+  const missing = [];
+  if (!done('controller')) {
+    missing.push({ text: 'Add a WLED controller', href: STEPS.controller.href });
+  } else if (!devices.some(d => d.enabled && (d.online || d.streaming))) {
+    const dev = devices.find(d => d.enabled);
+    missing.push({ text: dev ? `${dev.name || dev.ip} is offline` : 'Enable a WLED controller', href: STEPS.controller.href });
+  }
+  if (!autodarts.connected) {
+    missing.push({ text: 'AutoGlow Bridge extension not connected', href: STEPS.autodarts.href });
+  } else if (autodarts.tab_attached === false) {
+    missing.push({ text: 'Open play.autodarts.com in your browser', href: STEPS.autodarts.href });
+  }
+  if (!done('lighting')) missing.push({ text: 'No effects switched on yet', href: STEPS.lighting.href });
+  if (status.engine && !status.engine.running) missing.push({ text: 'AutoGlow engine is stopped', href: '/hub' });
+  return missing;
+}
+
+function renderReadiness(status, checklist) {
+  const host = document.getElementById('hubReadiness');
+  if (!host) return;
+  const missing = missingForEffects(status, checklist);
+  const { engine = {}, autodarts = {} } = status;
+  const startMatch = h('a', { class: 'ui-btn ui-btn-sm hub-ready-start', href: AUTODARTS_URL, target: '_blank', rel: 'noopener noreferrer' }, 'Start a match');
+  host.hidden = false;
+  host.dataset.tone = missing.length ? 'warn' : 'ok';
+  if (missing.length) {
+    host.replaceChildren(
+      h('div', { class: 'hub-ready-head' },
+        h('span', { class: 'status-dot', dataset: { tone: 'warn' } }),
+        h('h2', { class: 'card-title' }, missing.length === 1 ? '1 thing missing' : `${missing.length} things missing`),
+        startMatch
+      ),
+      h('ul', { class: 'hub-steps' }, missing.map(item =>
+        h('li', { class: 'hub-step' }, h('a', { class: 'hub-step-label', href: item.href, 'data-link': true }, item.text))))
+    );
+    return;
+  }
+  const note = autodarts.match_active ? 'Match running'
+    : engine.power_state === 'off' ? 'Lights are off and wake when a game starts'
+    : engine.power_state === 'dimmed' ? 'Lights are dimmed and wake when a game starts'
+    : '';
+  host.replaceChildren(
+    h('div', { class: 'hub-ready-head' },
+      h('span', { class: 'status-dot', dataset: { tone: 'ok' } }),
+      h('h2', { class: 'card-title' }, autodarts.match_active ? 'Ready. Effects are running' : 'Ready. Waiting for a game to start'),
+      !autodarts.match_active && startMatch
+    ),
+    note && h('p', { class: 'hub-ready-note' }, note)
+  );
+}
+
 let idleDeadline = null;
 
 function renderIdleCountdown() {
@@ -87,49 +144,6 @@ function renderMatch(engine = {}, autodarts = {}) {
   document.getElementById('hubMatchPhase').textContent = engine.flow_phase || 'idle';
 }
 
-function profileSelect(dev, presets = {}) {
-  const active = presets.device_profiles?.[dev.ip] || presets.active_profile || 'Default';
-  const names = presets.presets?.length ? [...presets.presets] : ['Default'];
-  if (!names.includes(active)) names.unshift(active);
-  const select = h('select', {
-    class: 'select-ide hub-profile',
-    'aria-label': `Profile for ${dev.name || dev.ip}`,
-    onchange: () => switchProfile(dev, select, active)
-  }, names.map(name => h('option', { value: name }, name)));
-  select.value = active;
-  return select;
-}
-
-async function switchProfile(dev, select, current) {
-  const target = select.value;
-  const name = dev.name || dev.ip;
-  // Unsaved Lighting edits are lost only when that page is editing this controller
-  const editingHere = window.getMatrixDeviceIp?.() === dev.ip;
-  if (editingHere && window.matrixDirty && !await confirmDialog({
-    title: `Switch ${name} to ${target}?`,
-    body: `The Lighting page has unsaved changes to ${current}. Switching discards them.`,
-    confirmLabel: 'Switch and discard',
-    danger: true
-  })) {
-    select.value = current;
-    return;
-  }
-  try {
-    const data = await api.post('/api/matrix/presets/select', { name: target, ip: dev.ip });
-    if (editingHere) {
-      // The Lighting page reloads this controller's profile when it sees the new choice
-      window.setMatrixDirty?.(false);
-      window.renderPresetDropdown?.();
-    }
-    toast.success(`${name} now uses ${data.active_profile}`);
-  } catch (err) {
-    select.value = current;
-    toast.error(err, { onRetry: () => { select.value = target; switchProfile(dev, select, current); } });
-  }
-  select.blur();
-  refreshHub();
-}
-
 function deviceState(dev) {
   if (!dev.enabled) return { tone: 'off', text: 'Disabled' };
   if (dev.streaming) return { tone: 'ok', text: 'Streaming' };
@@ -140,11 +154,9 @@ function deviceState(dev) {
 
 const PLAYING_LABELS = { effects: 'Playing: Effects', idle: 'Playing: Idle', off: 'Lights off' };
 
-function renderDevices(devices = [], presets = {}) {
+function renderDevices(devices = []) {
   const host = document.getElementById('hubDevices');
   if (!host) return;
-  // Rebuilding the rows would close a profile list the user has open
-  if (host.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
   if (!devices.length) {
     host.replaceChildren(h('div', { class: 'hub-empty' }, 'No controllers yet. ', h('a', { href: '/setup/controllers', 'data-link': true }, 'Add one')));
     return;
@@ -158,7 +170,6 @@ function renderDevices(devices = [], presets = {}) {
         PLAYING_LABELS[dev.playing] && h('span', { class: 'hub-device-playing', dataset: { playing: dev.playing } }, PLAYING_LABELS[dev.playing]),
         h('span', { class: 'hub-device-state' }, state.text),
         h('a', { class: 'ctl-ip', href: `http://${dev.ip}`, target: '_blank', rel: 'noopener noreferrer' }, dev.ip),
-        dev.enabled && profileSelect(dev, presets),
         dev.enabled && h('div', { class: 'hub-device-actions', role: 'group', 'aria-label': `Lights on ${dev.name || dev.ip}` },
           Object.entries(ACTIONS).map(([key, action]) =>
             h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: () => runAction(key, dev) }, action.label)))
@@ -172,14 +183,14 @@ export async function refreshHub() {
   if (inflight || !isVisible()) return;
   inflight = true;
   try {
-    const [status, checklist, presets] = await Promise.all([
+    const [status, checklist] = await Promise.all([
       api.get('/api/hub/status', { timeout: 10000 }),
-      api.get('/api/setup/checklist'),
-      api.get('/api/matrix/presets')
+      api.get('/api/setup/checklist')
     ]);
+    renderReadiness(status, checklist);
     renderChecklist(checklist);
     renderMatch(status.engine, status.autodarts);
-    renderDevices(status.devices, presets);
+    renderDevices(status.devices);
   } catch (err) {
     // An unreachable backend is already shown by the connection banner
     if (err.code !== 'NETWORK') console.warn('[AutoGlow] Hub refresh failed:', err);

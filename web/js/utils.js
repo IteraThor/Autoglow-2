@@ -10,19 +10,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-function escapeJsString(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '\\"');
-}
-
-function sanitizeWledName(name) {
-  if (!name) return '';
-  return String(name).replace(/[^a-zA-Z0-9 _-]/g, '').substring(0, 32);
-}
-
 function hexToRgb(hex) {
   if (!hex || typeof hex !== 'string') return [255, 255, 255];
   hex = hex.replace('#', '');
@@ -107,8 +94,6 @@ async function pingDeviceCached(ip, force = false) {
 
 if (typeof window !== "undefined") {
   window.escapeHtml = escapeHtml;
-  window.escapeJsString = escapeJsString;
-  window.sanitizeWledName = sanitizeWledName;
   window.hexToRgb = hexToRgb;
   window.rgbToHex = rgbToHex;
   window.showToast = showToast;

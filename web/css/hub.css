@@ -7,6 +7,36 @@
   max-width: 1080px;
 }
 
+/* Readiness */
+.hub-ready {
+  border-left: 3px solid var(--status-warning);
+}
+
+.hub-ready[data-tone="ok"] {
+  border-left-color: var(--status-success);
+}
+
+.hub-ready-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hub-ready-start {
+  margin-left: auto;
+  text-decoration: none;
+}
+
+.hub-ready-note {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.hub-ready .hub-steps {
+  margin-top: var(--space-3);
+}
+
 /* Checklist */
 .hub-steps {
   display: flex;
@@ -91,12 +121,6 @@ a.hub-step-label:hover {
   overflow-wrap: anywhere;
 }
 
-.hub-profile {
-  width: 160px;
-  max-width: 100%;
-  font-weight: 600;
-}
-
 .hub-player + .hub-player::before {
   content: " vs ";
   color: var(--text-muted);
@@ -175,10 +199,6 @@ a.hub-step-label:hover {
 }
 
 @media (max-width: 560px) {
-  .hub-profile {
-    flex: 1;
-  }
-
   .hub-device-actions {
     flex-basis: 100%;
   }
