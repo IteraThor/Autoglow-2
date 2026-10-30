@@ -120,12 +120,25 @@ async def _async_sync_hardware_on_boot(app: web.Application):
     from core.models import SegmentConfig
     from core.storage import save_app_config
 
+    # Query every controller first; this can take seconds per offline controller
+    live_info = {}
+    for ip in {dev.ip.strip() for dev in cfg.devices if dev.ip and dev.ip.strip()}:
+        try:
+            live_info[ip] = await asyncio.to_thread(WLEDDriver.fetch_live_device_info, ip)
+        except Exception as e:
+            logger.warning(f"Hardware sync check failed for {ip}: {e}")
+
+    # Apply to the config as it is now: the user may have saved during the queries.
+    # No awaits from here on, so nothing can replace the config mid-update.
+    cfg = app.get("current_app_config")
+    if not cfg:
+        return
     changed = False
     for dev in cfg.devices:
-        if not dev.ip or not dev.ip.strip():
+        info = live_info.get((dev.ip or "").strip())
+        if not info:
             continue
         try:
-            info = await asyncio.to_thread(WLEDDriver.fetch_live_device_info, dev.ip.strip())
             if info.get("online") and info.get("segments"):
                 live_segs = [
                     SegmentConfig(

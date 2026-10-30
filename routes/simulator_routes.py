@@ -162,13 +162,20 @@ async def handle_simulator_cable_offset(request: web.Request) -> web.Response:
         offset = int(data.get("offset", 0))
         sim.set_led0_offset(offset)
 
+    # The saved config is the source of truth; the engine may still hold an older copy
     engine = request.app.get("engine")
-    if engine and hasattr(engine, "app_config"):
-        for dev in engine.app_config.devices:
-            dev.led_rotation = sim.led_rotation
-            dev.led0_offset = sim.led0_offset
+    cfg = request.app.get("current_app_config") or getattr(engine, "app_config", None)
+    if cfg:
+        configs = [cfg]
+        engine_cfg = getattr(engine, "app_config", None)
+        if engine_cfg is not None and engine_cfg is not cfg:
+            configs.append(engine_cfg)
+        for c in configs:
+            for dev in c.devices:
+                dev.led_rotation = sim.led_rotation
+                dev.led0_offset = sim.led0_offset
         from core.storage import save_app_config
-        save_app_config(engine.app_config)
+        save_app_config(cfg, request.app.get("config_path"))
 
     return web.json_response({
         "status": "ok",

@@ -10,12 +10,12 @@ import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 import { closeDetail, initControllerDetail, openDetail } from './controller-detail.js';
 import { runControllerSetup } from './controller-setup.js';
+import { isPwmOutput as isPwmBus } from './led-layout.js';
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const HOSTNAME = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
 
 export const devices = () => (Array.isArray(window.appState?.devices) ? window.appState.devices : []);
-const isPwmBus = bus => Number(bus.type) >= 40;
 const detailPath = ip => `/setup/controllers/${encodeURIComponent(ip)}`;
 
 export function validateAddress(value, existing = devices()) {

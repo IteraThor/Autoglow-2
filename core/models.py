@@ -17,6 +17,10 @@ def _safe_int(val: Any, default: int = 0) -> int:
     except (ValueError, TypeError):
         return default
 
+def is_pwm_output(hw: Any) -> bool:
+    """WLED analog (PWM) outputs are types 40-49; 50+ are SPI strips and network buses."""
+    return isinstance(hw, dict) and 40 <= _safe_int(hw.get("type"), 22) < 50
+
 def profile_dict_for_device(raw: Dict[str, Any], ip: str) -> Dict[str, Any]:
     """Flatten one controller's per-segment effects from a pre-2.3 profile into a plain profile dict.
 

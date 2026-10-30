@@ -44,6 +44,8 @@ class AutodartsBridgeClient(AutodartsClient):
     def __init__(self, board_id: Optional[str] = None, on_event=None):
         super().__init__(board_id=board_id, on_event=on_event)
         self._sources: List[Any] = []
+        # Last hello/tab state per connection, so a standby connection can take over without a gap
+        self._source_state: Dict[Any, Dict[str, Any]] = {}
         self.extension_version: str = ""
         self.tab_url: str = ""
         self.tab_attached: bool = False
@@ -64,6 +66,7 @@ class AutodartsBridgeClient(AutodartsClient):
     def attach(self, source: Any) -> None:
         """Register an extension connection. Only the oldest one is used, so two browsers never double-fire events."""
         self._sources.append(source)
+        self._source_state[source] = {"version": "", "attached": False, "url": ""}
         self.is_connected = True
         logger.info(f"AutoGlow Chrome extension connected ({len(self._sources)} active connection(s))")
 
@@ -71,16 +74,22 @@ class AutodartsBridgeClient(AutodartsClient):
         was_primary = bool(self._sources) and self._sources[0] is source
         if source in self._sources:
             self._sources.remove(source)
+        self._source_state.pop(source, None)
         if was_primary:
-            self.tab_attached = False
-            self.tab_url = ""
-            self.extension_version = ""
+            # The next connection takes over with the tab state it last reported
+            self._apply_source_state(self._sources[0] if self._sources else None)
         self.is_connected = bool(self._sources)
         logger.info(f"AutoGlow Chrome extension disconnected ({len(self._sources)} active connection(s))")
         self._check_source_lost()
 
     def is_primary(self, source: Any) -> bool:
         return bool(self._sources) and self._sources[0] is source
+
+    def _apply_source_state(self, source: Any) -> None:
+        state = self._source_state.get(source) or {}
+        self.extension_version = state.get("version", "")
+        self.tab_attached = bool(state.get("attached"))
+        self.tab_url = state.get("url", "") if self.tab_attached else ""
 
     # -------------------------------------------------------------------------
     # Cloud REST calls are replaced by data observed in the browser
@@ -112,15 +121,22 @@ class AutodartsBridgeClient(AutodartsClient):
         if msg_type == "ping":
             return {"type": "pong", "ts": time.time()}
 
+        # Every connection's hello/tab state is kept; only the primary's is live
+        state = self._source_state.get(source)
+        if state is not None and msg_type == "hello":
+            state["version"] = str(message.get("version", ""))[:32]
+        elif state is not None and msg_type == "tab":
+            state["attached"] = bool(message.get("attached"))
+            state["url"] = str(message.get("url", ""))[:300] if state["attached"] else ""
+
         if not self.is_primary(source):
             return None
 
         if msg_type == "hello":
-            self.extension_version = str(message.get("version", ""))[:32]
+            self._apply_source_state(source)
             logger.info(f"Extension handshake: AutoGlow Bridge v{self.extension_version}")
         elif msg_type == "tab":
-            self.tab_attached = bool(message.get("attached"))
-            self.tab_url = str(message.get("url", ""))[:300] if self.tab_attached else ""
+            self._apply_source_state(source)
             self._check_source_lost()
         elif msg_type == "ws":
             relayed = message.get("message")

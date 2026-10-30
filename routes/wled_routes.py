@@ -10,7 +10,7 @@ from aiohttp import web
 from core.errors import DeviceUnreachable, NotFound, PersistenceError, ServiceUnavailable, ValidationError, read_json
 from core.models import (
     DeviceConfig, SegmentConfig, EffectConfig, AnimationType,
-    RGBColor, ProtocolMode, _safe_int
+    RGBColor, ProtocolMode, _safe_int, is_pwm_output
 )
 from core.storage import load_app_config, save_app_config
 from core.engine import _is_pwm_segment
@@ -43,6 +43,12 @@ async def handle_ping_device(request: web.Request) -> web.Response:
         })
 
 
+def _rgb_count(hw_ins) -> int:
+    """LED count of the first RGB output, wherever it sits; PWM outputs are skipped."""
+    rgb_hw = next((h for h in (hw_ins or []) if isinstance(h, dict) and not is_pwm_output(h)), None)
+    return _safe_int(rgb_hw.get("len"), 45) if rgb_hw else 45
+
+
 async def handle_wled_update(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
     data = await read_json(request)
@@ -70,8 +76,7 @@ async def handle_wled_update(request: web.Request) -> web.Response:
             if hw_ins and isinstance(hw_ins, list) and len(hw_ins) > 0:
                 cum_start = 0
                 for b_idx, hw in enumerate(hw_ins):
-                    hw_type = _safe_int(hw.get("type"), 22)
-                    is_pwm = (hw_type >= 40)
+                    is_pwm = is_pwm_output(hw)
                     if is_pwm:
                         hw["len"] = max(1, _safe_int(hw.get("len"), 1))
                     else:
@@ -84,8 +89,8 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                     state["seg"] = seg_data
 
                 dev.hw_ins = hw_ins
-                dev.rgb_count = _safe_int(hw_ins[0].get("len"), 45)
-                pwm_hw = next((h for h in hw_ins if _safe_int(h.get("type"), 22) >= 40), None)
+                dev.rgb_count = _rgb_count(hw_ins)
+                pwm_hw = next((h for h in hw_ins if is_pwm_output(h)), None)
                 if pwm_hw:
                     dev.pwm_index = _safe_int(pwm_hw.get("start"), dev.rgb_count)
                 else:
@@ -98,7 +103,7 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                         name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
                         start=_safe_int(s.get("start"), 0),
                         length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                        type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
+                        type="PWM White" if any(is_pwm_output(h) and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
                         offset=max(0, _safe_int(s.get("of"), 0))
                     )
                     for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
@@ -111,20 +116,20 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                 name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
                 start=_safe_int(s.get("start"), 0),
                 length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                type="PWM White" if any(_safe_int(h.get("type"), 22) >= 40 and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
+                type="PWM White" if any(is_pwm_output(h) and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
                 offset=max(0, _safe_int(s.get("of"), 0))
             )
             for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
         ] if seg_data else []
 
-        pwm_hw = next((h for h in hw_ins if _safe_int(h.get("type"), 22) >= 40), None) if (hw_ins and isinstance(hw_ins, list)) else None
+        pwm_hw = next((h for h in hw_ins if is_pwm_output(h)), None) if (hw_ins and isinstance(hw_ins, list)) else None
         pwm_idx = _safe_int(pwm_hw.get("start"), 45) if pwm_hw else None
 
         cfg.devices.append(DeviceConfig(
             ip=ip,
             name=name or "WLED Controller",
             udp_port=_safe_int(udp_port, 21324),
-            rgb_count=_safe_int(hw_ins[0].get("len"), 45) if hw_ins and len(hw_ins) > 0 else 45,
+            rgb_count=_rgb_count(hw_ins),
             pwm_index=pwm_idx if pwm_idx is not None else None,
             segments=segments,
             hw_ins=hw_ins if hw_ins and isinstance(hw_ins, list) else []

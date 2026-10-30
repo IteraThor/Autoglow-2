@@ -6,6 +6,7 @@
 import { api } from '../core/api.js';
 import { h, showFieldError, clearFieldError } from '../core/dom.js';
 import { toast } from '../core/toast.js';
+import { isPwmOutput as isPwmBus } from './led-layout.js';
 
 const PWM_WHITE = 41;
 const COLOR_ORDERS = ['GRB', 'RGB', 'BRG', 'RBG', 'BGR', 'GBR'];
@@ -21,7 +22,6 @@ const MAX_ZONES = 12;
 const AURORA = { fx: 38, pal: 50, sx: 128, ix: 128 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-const isPwmBus = bus => Number(bus?.type) >= 40;
 const firstPin = bus => (Array.isArray(bus?.pin) ? bus.pin[0] : bus?.pin);
 const rgb = color => [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
 

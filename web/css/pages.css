@@ -231,6 +231,7 @@ input.ui-input:focus {
 }
 
 .ctl-list-view {
+  max-width: 1080px;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);

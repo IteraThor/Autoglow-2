@@ -7,6 +7,9 @@ export const OUTPUT_TYPES = [
   { value: 41, label: 'Light strip (PWM)' }
 ];
 
+// Label for any WLED output type, including ones AutoGlow has no name for
+export const outputTypeLabel = type => OUTPUT_TYPES.find(t => t.value === type)?.label || `Other (WLED type ${type})`;
+
 export const COLOR_ORDERS = [
   { value: 0, label: 'GRB' },
   { value: 1, label: 'RGB' },
@@ -24,7 +27,8 @@ const int = (value, fallback = 0) => {
   return Number.isNaN(n) ? fallback : n;
 };
 
-export const isPwmOutput = output => int(output?.type, 22) >= 40;
+// WLED analog (PWM) outputs are types 40-49; 50+ are SPI strips and network buses
+export const isPwmOutput = output => { const t = int(output?.type, 22); return t >= 40 && t < 50; };
 export const pinOf = output => int(Array.isArray(output.pin) ? output.pin[0] : output.pin);
 
 // WLED names allow letters, digits, spaces, _ and - only

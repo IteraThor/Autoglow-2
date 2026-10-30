@@ -15,7 +15,7 @@ import urllib.request
 import re
 from typing import Optional, List, Tuple, Dict, Any, Callable
 
-from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode
+from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
 from core.animations import render_animation_frame, blend_frames
 
 logger = logging.getLogger("autoglow.wled_driver")
@@ -481,7 +481,7 @@ class WLEDDriver:
     def _normalize_pwm_outputs(hw_ins: List[dict]) -> None:
         """PWM outputs need a white-balance mode, or WLED leaves the channel dark."""
         for ins in hw_ins:
-            if isinstance(ins, dict) and ins.get("type", 0) >= 40:
+            if is_pwm_output(ins):
                 if ins.get("rgbwm") not in (1, 2, 3, 4):
                     ins["rgbwm"] = 4
 
@@ -751,7 +751,7 @@ class WLEDDriver:
         Dynamically lookup the segment ID corresponding to the PWM White output, or None if no PWM output.
         """
         if self.config.hw_ins:
-            has_pwm = any(int(h.get("type", 22)) >= 40 for h in self.config.hw_ins)
+            has_pwm = any(is_pwm_output(h) for h in self.config.hw_ins)
             if not has_pwm:
                 return None
         if self.config.segments:
@@ -788,8 +788,8 @@ class WLEDDriver:
             # 2. Ensure PWM outputs have rgbwm: 4 (Max) so they respond to DRGB values during live mode
             hw_ins = cfg.get("hw", {}).get("led", {}).get("ins", [])
             for ins in hw_ins:
-                # Type 41 (PWM 1CH White) or Type 40+
-                if ins.get("type", 0) >= 40 and ins.get("rgbwm") not in (1, 2, 3, 4):
+                # Analog types 40-49 (e.g. 41 = PWM 1CH White)
+                if is_pwm_output(ins) and ins.get("rgbwm") not in (1, 2, 3, 4):
                     ins["rgbwm"] = 4
                     payload.setdefault("hw", {}).setdefault("led", {})["ins"] = hw_ins
                     needs_update = True

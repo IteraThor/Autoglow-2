@@ -11,7 +11,7 @@ import { runControllerSetup } from './controller-setup.js';
 import { applySetup, devices, layoutSummary, saveDevices } from './controllers.js';
 import { createIdleEditor } from './idle-lighting.js';
 import {
-  COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicatePins, isPwmOutput, pinOf,
+  COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicatePins, isPwmOutput, outputTypeLabel, pinOf,
   removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
 } from './led-layout.js';
 import { confirmLeave } from './lighting-guard.js';
@@ -80,7 +80,6 @@ function notice(text, action) {
 function buildHeaderControls() {
   const name = h('input', {
     type: 'text', class: 'detail-name', maxlength: 32, spellcheck: 'false', 'aria-label': 'Controller name',
-    title: 'Rename. Also changes the name shown in WLED.',
     oninput: () => {
       const clean = cleanName(name.value);
       if (clean !== name.value) {
@@ -131,7 +130,6 @@ function stripBar(layout) {
 // Read-only view of the layout. The guided setup is the normal way to change it; the editor is for experts.
 function renderLedSummary(body) {
   const { layout } = page;
-  const typeLabel = hw => OUTPUT_TYPES.find(t => t.value === hw.type)?.label || `WLED type ${hw.type}`;
   const order = hw => COLOR_ORDERS.find(o => o.value === hw.order)?.label;
   body.replaceChildren(
     stripBar(layout),
@@ -141,7 +139,7 @@ function renderLedSummary(body) {
       return h('li', {},
         h('div', { class: 'led-summary-output' },
           h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
-          h('strong', {}, typeLabel(hw)),
+          h('strong', {}, outputTypeLabel(hw.type)),
           h('span', {}, [`GPIO ${pinOf(hw)}`, !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · '))),
         h('div', { class: 'led-summary-segs' }, segs.map(seg => h('span', { class: 'led-summary-seg' },
           `#${seg.id} ${seg.name}`, !pwm && h('span', {}, ` · LEDs ${seg.start + 1}–${seg.stop}`)))));
@@ -165,8 +163,21 @@ async function openLedEditor() {
   renderLeds(page.bodies.leds);
 }
 
+function segName(seg) {
+  const input = h('input', {
+    type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
+    oninput: () => {
+      seg.name = cleanName(input.value);
+      if (seg.name !== input.value) input.value = seg.name;
+      sync();
+    }
+  });
+  return input;
+}
+
 function renderLeds(body) {
   const { layout } = page;
+  page.closeEditorBtn = null;
   if (!layout) {
     body.replaceChildren(offlineNotice('to edit its LEDs'));
     return;
@@ -184,7 +195,7 @@ function renderLeds(body) {
   const outputCards = layout.outputs.map((hw, busIdx) => {
     const pwm = isPwmOutput(hw);
     const own = layout.segments.map((seg, segIdx) => ({ seg, segIdx })).filter(x => x.seg.busIdx === busIdx);
-    const types = OUTPUT_TYPES.some(t => t.value === hw.type) ? OUTPUT_TYPES : [...OUTPUT_TYPES, { value: hw.type, label: `Other (WLED type ${hw.type})` }];
+    const types = OUTPUT_TYPES.some(t => t.value === hw.type) ? OUTPUT_TYPES : [...OUTPUT_TYPES, { value: hw.type, label: outputTypeLabel(hw.type) }];
     const isLast = busIdx === layout.outputs.length - 1 && layout.outputs.length > 1;
 
     const pin = numberInput(pinOf(hw), {
@@ -192,18 +203,6 @@ function renderLeds(body) {
       'aria-invalid': dupes.has(pinOf(hw)) ? 'true' : null,
       onchange: () => { hw.pin = Number(pin.value) || 0; redraw(); }
     });
-
-    const segName = seg => {
-      const input = h('input', {
-        type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
-        oninput: () => {
-          seg.name = cleanName(input.value);
-          if (seg.name !== input.value) input.value = seg.name;
-          sync();
-        }
-      });
-      return input;
-    };
 
     // A light strip is one channel with one segment: only its name can change, next to the output's fields
     const head = h('div', { class: 'output-head' },
@@ -346,11 +345,15 @@ function renderHead() {
   const tone = dev.enabled === false ? 'off' : online === null ? 'pending' : online ? 'ok' : 'error';
   page.dot.dataset.tone = tone;
   page.pill.dataset.tone = tone;
+  page.title.textContent = `Controller ${dev.name || dev.ip}`;
   page.pill.textContent = dev.enabled === false ? 'Disabled' : online === null ? 'Checking…' : online ? 'Online' : 'Offline';
-  page.meta.replaceChildren(
+  // replaceChildren would print false/null as text, so drop them
+  page.meta.replaceChildren(...[
     h('a', { class: 'ctl-ip', href: `http://${dev.ip}`, target: '_blank', rel: 'noopener noreferrer', title: 'Open the WLED web interface' }, `${dev.ip} ↗`),
     online && h('span', {}, layoutSummary(live)),
-    online && live.version && h('span', {}, `WLED ${live.version}`));
+    online && live.version && h('span', {}, `WLED ${live.version}`)].filter(Boolean));
+  // save() only renames in WLED when the controller is reachable
+  page.nameInput.title = page.layout && online ? 'Rename. Also changes the name shown in WLED.' : 'Rename.';
 }
 
 // Mark dirty parts, lock what depends on the saved LED layout, show or hide the save bar
@@ -375,8 +378,18 @@ async function save() {
   if (!page || page.saving) return false;
   const { ip, layout, general, online } = page;
   const parts = dirtyParts();
+  if (!general.name.trim()) {
+    toast.error('Give the controller a name.');
+    page.nameInput.focus();
+    return false;
+  }
   if (layout && duplicatePins(layout).size) {
     toast.error('Two outputs use the same GPIO pin. Give each output its own pin.');
+    // The summary does not show the pin error, so open the editor where it can be fixed
+    if (!page.ledsAdvanced) {
+      page.ledsAdvanced = true;
+      renderLeds(page.bodies.leds);
+    }
     page.sections.leds.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return false;
   }
@@ -384,9 +397,14 @@ async function save() {
   sync();
   try {
     const nameChanged = general.name !== JSON.parse(page.savedGeneral).name;
+    // LED edits the controller did not take stay as a draft, so they can be saved again
+    let ledsPending = false;
     if (layout && online && (parts.includes('leds') || nameChanged)) {
       const result = await api.post('/api/wled/update', toPayload(ip, { ...layout, name: general.name }), { timeout: 15000 });
-      if (!result.hardware_applied) toast.warning('Saved in AutoGlow, but the controller did not take the new LED layout.');
+      if (!result.hardware_applied) {
+        ledsPending = parts.includes('leds');
+        if (!ledsPending) toast.warning('Saved in AutoGlow, but the controller did not take the new name.');
+      }
       delete window.lastFetchedLiveDeviceData[ip];
       await window.loadConfig();
     }
@@ -401,6 +419,13 @@ async function save() {
         if (saved[key] === name) continue;
         await api.post('/api/matrix/presets/select', { name, ip, ...(key === 'all' ? {} : { segment_id: Number(key) }) });
       }
+    }
+    if (ledsPending) {
+      // Everything else is saved; reloading the page now would throw the LED draft away
+      page.savedGeneral = snapshot(page.general);
+      if (page.profiles) page.savedProfiles = snapshot(page.profiles);
+      toast.warning('The controller did not respond, so the LED layout was not applied. Your LED changes are kept: save again when it is back online.');
+      return false;
     }
     toast.success(`${general.name || ip} saved`);
     page.saving = false;
@@ -421,7 +446,6 @@ function discard() {
   if (!page) return;
   page.general = JSON.parse(page.savedGeneral);
   if (page.layout) page.layout = JSON.parse(page.savedLayout);
-  page.ledsAdvanced = false;
   if (page.profiles) page.profiles = JSON.parse(page.savedProfiles);
   page.idle?.discard();
   renderGeneral();
@@ -508,7 +532,10 @@ export async function openDetail(ip, { force = false } = {}) {
   page.dot = h('span', { class: 'status-dot' });
   page.pill = h('span', { class: 'status-pill' });
   page.meta = h('div', { class: 'detail-meta' });
+  // The name is an input, so screen readers get the page heading from this
+  page.title = h('h1', { class: 'visually-hidden' });
   page.head = h('header', { class: 'detail-head' },
+    page.title,
     h('div', { class: 'detail-title' }, page.dot, page.nameInput, page.pill, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
     h('div', { class: 'detail-actions' },
       page.enabledToggle,
