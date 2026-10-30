@@ -75,7 +75,7 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                 dev.udp_port = _safe_int(udp_port, 21324)
             if hw_ins and isinstance(hw_ins, list) and len(hw_ins) > 0:
                 cum_start = 0
-                for b_idx, hw in enumerate(hw_ins):
+                for hw in hw_ins:
                     is_pwm = is_pwm_output(hw)
                     if is_pwm:
                         hw["len"] = max(1, _safe_int(hw.get("len"), 1))
@@ -236,7 +236,7 @@ async def handle_save_wled_preset(request: web.Request) -> web.Response:
                     if int(stop) <= int(start):
                         raise ValidationError(f"Invalid segment bounds: stop ({stop}) must be greater than start ({start})")
                 except (ValueError, TypeError):
-                    raise ValidationError("Segment start and stop must be valid integers")
+                    raise ValidationError("Segment start and stop must be valid integers") from None
 
         # Protect against saving single segment when device has multiple segments configured
         cfg = request.app.get("current_app_config") or load_app_config(config_path)
@@ -389,15 +389,16 @@ async def handle_test_effect(request: web.Request) -> web.Response:
         if ch and ch.get("last_active_color"):
             prev_color = ch["last_active_color"]
         else:
-            p1 = cfg.profile_for(target_ip, segment_id).get_player_slot(1)
+            profile = cfg.profile_for(target_ip, segment_id)
+            p1 = next((s for s in profile.player_slots if s.id == 1), None)
             if p1 and p1.effect and p1.effect.color_primary and p1.effect.color_primary.to_tuple() != (0, 0, 0):
                 prev_color = p1.effect.color_primary
             else:
-                th = cfg.profile_for(target_ip, segment_id).get_effect("throw")
+                th = profile.get_effect("throw")
                 if th and th.color_primary and th.color_primary.to_tuple() != (0, 0, 0):
                     prev_color = th.color_primary
                 else:
-                    gs = cfg.profile_for(target_ip, segment_id).get_effect("game_start")
+                    gs = profile.get_effect("game_start")
                     if gs and gs.color_primary and gs.color_primary.to_tuple() != (0, 0, 0):
                         prev_color = gs.color_primary
 
@@ -428,7 +429,7 @@ async def handle_test_light(request: web.Request) -> web.Response:
     try:
         bri = int(data.get("brightness", 200))
     except (TypeError, ValueError):
-        raise ValidationError("Brightness must be a number", field="brightness")
+        raise ValidationError("Brightness must be a number", field="brightness") from None
     target_ip = data.get("ip")
     engine.lighting_test_active = True
     ok = await engine.set_board_light(bri, target_ip=target_ip)

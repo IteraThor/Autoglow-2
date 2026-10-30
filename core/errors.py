@@ -89,7 +89,7 @@ async def read_json(request: web.Request) -> Dict[str, Any]:
     try:
         data = await request.json()
     except Exception:
-        raise ValidationError("Invalid JSON payload")
+        raise ValidationError("Invalid JSON payload") from None
     if not isinstance(data, dict):
         raise ValidationError("Expected a JSON object")
     return data

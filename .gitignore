@@ -38,11 +38,14 @@ chrome_extension.key
 AGENTS.md
 CLAUDE.md
 .mcp.json
+.claude/
 .playwright-mcp/
 docs/superpowers/
 
 # Tool caches
 .ruff_cache/
+.pytest_cache/
+.coverage
 
 # Local copies of old releases kept for reference
 old autoglow version/

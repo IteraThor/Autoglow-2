@@ -245,7 +245,7 @@ class AutodartsClient:
                     self.access_token = res.get("access_token")
                     self.refresh_token = res.get("refresh_token") or self.refresh_token
                     self.token_expires_at = time.time() + res.get("expires_in", 900)
-                    if self.on_token_refreshed:
+                    if self.on_token_refreshed and self.access_token and self.refresh_token:
                         try:
                             await self.on_token_refreshed(self.access_token, self.refresh_token, self.token_expires_at)
                         except Exception as e:
@@ -260,7 +260,7 @@ class AutodartsClient:
                     self.access_token = res.get("access_token")
                     self.refresh_token = res.get("refresh_token") or self.refresh_token
                     self.token_expires_at = time.time() + res.get("expires_in", 900)
-                    if self.on_token_refreshed:
+                    if self.on_token_refreshed and self.access_token and self.refresh_token:
                         try:
                             await self.on_token_refreshed(self.access_token, self.refresh_token, self.token_expires_at)
                         except Exception as e:
@@ -363,10 +363,11 @@ class AutodartsClient:
 
             # Check if any board already has active match from board service
             for b in boards:
-                if b.get("matchId"):
-                    self._active_match_id = b.get("matchId")
-                    logger.info(f"Discovered active match on board '{b.get('name', b.get('id'))}': {self._active_match_id}")
-                    self._spawn(self._fetch_and_parse_match(self._active_match_id))
+                match_id = b.get("matchId")
+                if match_id:
+                    self._active_match_id = match_id
+                    logger.info(f"Discovered active match on board '{b.get('name', b.get('id'))}': {match_id}")
+                    self._spawn(self._fetch_and_parse_match(match_id))
                     break
 
             ticket = await self._async_fetch_ws_ticket(token)

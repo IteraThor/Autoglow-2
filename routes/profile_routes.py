@@ -9,7 +9,7 @@ Profiles are one shared list; each controller picks the one it uses. Calls that 
 import json
 import logging
 from pathlib import Path
-from aiohttp import web
+from aiohttp import BodyPartReader, web
 
 from core.errors import Conflict, NotFound, PersistenceError, ValidationError, read_json
 from core.models import ProfileConfig
@@ -279,12 +279,12 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     if request.content_type.startswith("multipart/"):
         reader = await request.multipart()
         part = await reader.next()
-        if part is None:
+        if not isinstance(part, BodyPartReader):
             raise ValidationError("No file uploaded", field="file")
         try:
             data = json.loads((await part.read()).decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            raise ValidationError("Preset file is not valid JSON", field="file")
+            raise ValidationError("Preset file is not valid JSON", field="file") from None
         filename_stem = Path(part.filename).stem if part.filename else "Imported Preset"
     else:
         data = await read_json(request)

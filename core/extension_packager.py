@@ -187,5 +187,5 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["id"]:
         print(extension_id(load_or_create_key()))
     else:
-        print(__doc__.strip())
+        print((__doc__ or "").strip())
         sys.exit(2)

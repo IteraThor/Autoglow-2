@@ -13,7 +13,7 @@ import json
 import logging
 import urllib.request
 import re
-from typing import Optional, List, Tuple, Dict, Any, Callable
+from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
 from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
 from core.animations import render_animation_frame, blend_frames
@@ -737,7 +737,7 @@ class WLEDDriver:
         return target_seg.offset if target_seg else 0
 
     @staticmethod
-    def _apply_offset(seg_rendered: bytes, offset: int) -> bytes:
+    def _apply_offset(seg_rendered: Union[bytes, bytearray], offset: int) -> Union[bytes, bytearray]:
         """Rotate a segment frame so its first LED lands offset LEDs after the segment start."""
         seg_len = len(seg_rendered) // 3
         offset = offset % seg_len if seg_len else 0
@@ -973,7 +973,7 @@ class WLEDDriver:
                     if pwm_seg_id is not None and s_id == pwm_seg_id:
                         pwm_channel_rendered = True
 
-                    if blend_with_baseline and baseline_eff:
+                    if blend_with_baseline and transient_eff and baseline_eff:
                         t_buf = self._render_frame(transient_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
                         base_elapsed = t0 - ch.get("baseline_start_time", t0)
                         b_buf = self._render_frame(baseline_eff, frame, base_elapsed, seg_len, s_id=s_id)
@@ -992,12 +992,13 @@ class WLEDDriver:
                         master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
 
                 # If PWM channel had no active matrix event, maintain default spotlight brightness
-                has_pwm = (pwm_seg_id is not None and self.config.pwm_index is not None)
-                if has_pwm and not pwm_channel_rendered and self.config.pwm_index < total_led_count:
+                pwm_index = self.config.pwm_index
+                has_pwm = (pwm_seg_id is not None and pwm_index is not None)
+                if has_pwm and pwm_index is not None and not pwm_channel_rendered and pwm_index < total_led_count:
                     pwm_val = self._current_pwm_brightness
-                    master_buffer[self.config.pwm_index * 3 + 0] = pwm_val
-                    master_buffer[self.config.pwm_index * 3 + 1] = pwm_val
-                    master_buffer[self.config.pwm_index * 3 + 2] = pwm_val
+                    master_buffer[pwm_index * 3 + 0] = pwm_val
+                    master_buffer[pwm_index * 3 + 1] = pwm_val
+                    master_buffer[pwm_index * 3 + 2] = pwm_val
 
                 packet = self._create_drgb_packet(bytes(master_buffer), timeout_sec=2)
 

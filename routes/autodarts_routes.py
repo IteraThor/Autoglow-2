@@ -118,9 +118,10 @@ async def handle_autodarts_device_poll(request: web.Request) -> web.Response:
                     cfg.extra["autodarts_client_id"] = DEVICE_CLIENT_ID
                     cfg.extra["autodarts_username"] = account_name
                     cfg.extra["autodarts_name"] = account_name
-                    if u_info.get("email"):
-                        cfg.extra["autodarts_email"] = u_info.get("email")
-                        cfg.autodarts_user = u_info.get("email")
+                    email = u_info.get("email")
+                    if email:
+                        cfg.extra["autodarts_email"] = email
+                        cfg.autodarts_user = email
                     if board_id:
                         cfg.autodarts_board_id = board_id
                         cfg.extra["autodarts_board_id"] = board_id

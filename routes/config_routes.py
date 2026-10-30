@@ -32,7 +32,7 @@ async def handle_post_config(request: web.Request) -> web.Response:
         cfg = AppConfig.from_dict(data)
     except Exception:
         logger.warning("Rejected unparseable configuration", exc_info=True)
-        raise ValidationError("Configuration is not valid")
+        raise ValidationError("Configuration is not valid") from None
 
     # Merge & preserve sensitive credentials and tokens if omitted or blank in incoming payload
     existing_cfg = request.app.get("current_app_config") or load_app_config(config_path)

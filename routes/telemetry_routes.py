@@ -29,7 +29,7 @@ async def handle_ws_telemetry(request: web.Request) -> web.WebSocketResponse:
             pass
 
     try:
-        async for msg in ws:
+        async for _msg in ws:
             pass
     finally:
         active_ws_clients.discard(ws)

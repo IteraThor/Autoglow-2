@@ -72,7 +72,7 @@ def _get_local_ips() -> set:
         pass
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ips.add(info[4][0])
+            ips.add(str(info[4][0]))
     except Exception:
         pass
     return ips
@@ -114,9 +114,9 @@ async def _async_scan_mdns(timeout: float = 1.0) -> List[Dict[str, Any]]:
     def _sync_mdns():
         zc = None
         try:
-            zc = Zeroconf()
+            zc = Zeroconf()  # pyright: ignore[reportOptionalCall]  # guarded above
             listener = WLEDMdnsListener(zc)
-            _browser = ServiceBrowser(zc, ["_wled._tcp.local."], listener)
+            _browser = ServiceBrowser(zc, ["_wled._tcp.local."], listener)  # pyright: ignore[reportOptionalCall]
             import time
             time.sleep(timeout)
             return listener.discovered

@@ -285,7 +285,7 @@ class PlayerSlotConfig:
             "id": self.id,
             "name_filter": self.name_filter,
             "match_type": self.match_type.value if hasattr(self.match_type, "value") else str(self.match_type),
-            "effect": self.effect.to_dict() if hasattr(self.effect, "to_dict") else dict(self.effect),
+            "effect": self.effect.to_dict() if hasattr(self.effect, "to_dict") else dict(self.effect),  # pyright: ignore[reportCallIssue, reportArgumentType]
             "enabled": self.enabled
         }
 
@@ -410,7 +410,7 @@ class DeviceConfig:
             "enabled": self.enabled,
             "led_rotation": self.led_rotation,
             "led0_offset": self.led0_offset,
-            "segments": [s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in self.segments],
+            "segments": [s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in self.segments],  # pyright: ignore[reportCallIssue, reportArgumentType]
             "hw_ins": self.hw_ins
         }
 

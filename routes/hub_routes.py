@@ -85,7 +85,7 @@ async def _device_snapshot(dev, engine) -> Dict[str, Any]:
     if streaming:
         # Protocol exclusivity (ADR-001): no HTTP polling while the UDP stream owns the controller
         out.update({"online": None, "streaming": True, "warnings": [],
-                    "playing": "effects" if drv.is_playing_effects else "idle"})
+                    "playing": "effects" if (drv and drv.is_playing_effects) else "idle"})
         return out
     loop = asyncio.get_running_loop()
     health = await loop.run_in_executor(None, WLEDDriver.fetch_device_health, dev.ip)

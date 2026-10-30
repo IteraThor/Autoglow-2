@@ -78,7 +78,7 @@ class VirtualWLEDServer:
             self.led0_offset = 0
             self.led_rotation = 0
 
-    def subscribe(self, callback: Callable[[bytes, Dict[str, Any]], None]) -> None:
+    def subscribe(self, callback: Callable[[bytes, Dict[str, Any]], Any]) -> None:
         """Register a frame consumer."""
         self._subscribers.add(callback)
 

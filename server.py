@@ -74,8 +74,8 @@ WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 # Global In-Memory Singletons (for inspection / tests)
 engine: Optional[AutoGlowEngine] = None
 current_app_config: Optional[AppConfig] = None
-zc_instance: Optional[Zeroconf] = None
-zc_service_info: Optional[ServiceInfo] = None
+zc_instance: Optional[Zeroconf] = None  # pyright: ignore[reportInvalidTypeForm]
+zc_service_info: Optional[ServiceInfo] = None  # pyright: ignore[reportInvalidTypeForm]
 
 
 def _sync_register_mdns():
@@ -102,7 +102,7 @@ def _sync_register_mdns():
             server="autoglow.local.",
             properties={b"path": b"/"}
         )
-        zc_instance.register_service(zc_service_info)
+        zc_instance.register_service(zc_service_info)  # pyright: ignore[reportOptionalMemberAccess]
         logger.info(f"Registered mDNS: http://autoglow.local:{PORT} on {', '.join(local_ips)}")
     except Exception as e:
         logger.warning(f"Failed to register mDNS service: {e}")
