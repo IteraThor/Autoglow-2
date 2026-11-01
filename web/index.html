@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/shell.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/layout.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/components.css?v=2.2-p25">
-  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p25">
+  <link rel="stylesheet" href="/css/tabs.css?v=2.2-p27">
   <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p25">
   <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
   <link rel="stylesheet" href="/css/pages.css?v=2.2-p25">
@@ -796,220 +796,6 @@
             </div>
           </div>
 
-          <div class="sim-container">
-            
-            <!-- Left Column: Stage & Telemetry Inspector -->
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-              <div class="sim-stage-card">
-                <div class="sim-stage-header">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="panel-title" style="margin: 0; font-size: 13px;">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
-                      <span>WLED Hardware Simulator</span>
-                    </span>
-                    <span id="simWsStatusBadge" style="font-family: var(--font-mono); font-size: 11px; display: inline-flex; align-items: center; gap: 5px;">
-                      <span class="dot dot-gray"></span><span>Connecting...</span>
-                    </span>
-                  </div>
-
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <!-- LED 0 / Cable Start Position (Snapped to one of the 3 cameras, 120° steps) -->
-                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Physical LED 0 entry point (always starts on one of the 3 cameras, 120° spacing)">
-                      <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span>LED 0:</span>
-                      </span>
-                      <div class="sim-dest-pills" id="simLed0CamPills">
-                        <button class="sim-dest-pill" id="btnRotateLed120" onclick="rotateSimulatorLed120()" title="Rotate LED 0 by 120° to next camera" style="padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                          <span>120°</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Camera Orientation Switcher -->
-                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Autodarts camera mount orientation">
-                      <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Cameras:</span>
-                      </span>
-                      <div class="sim-dest-pills" id="simCamPills">
-                        <button class="sim-dest-pill" id="btnCycleCameraOrientation" onclick="cycleSimulatorCameraOrientation()" title="Camera mount orientation (Click to cycle)" style="padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
-                          <span id="simCamOrientationLabel">Default</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Live Stream Hardware Toggle -->
-                    <div class="sim-dest-pills" title="Toggle live streaming to physical WLED hardware">
-                      <button class="sim-dest-pill active" id="btnToggleLiveStream" onclick="toggleSimulatorLiveStream()" style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;">
-                        <span class="dot dot-green" id="liveStreamDot" style="width: 6px; height: 6px;"></span>
-                        <span>Live Stream</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Canvas Viewport — Dual Board Layout -->
-                <div class="sim-canvas-viewport sim-dual-viewport">
-                  <!-- Live Board -->
-                  <div class="sim-board-wrap">
-                    <div class="sim-board-label">
-                      <span class="sim-board-label-dot sim-board-label-dot--live"></span>
-                      <span>LIVE</span>
-                      <span class="sim-board-label-count" id="simLiveLedBadge">45 LEDs</span>
-                    </div>
-                    <canvas id="simulatorCanvas"></canvas>
-                  </div>
-                  <!-- Dummy Board -->
-                  <div class="sim-board-wrap">
-                    <div class="sim-board-label sim-board-label--dummy">
-                      <span class="sim-board-label-dot sim-board-label-dot--dummy"></span>
-                      <span>DUMMY</span>
-                      <span class="sim-board-label-count sim-board-label-count--editable" title="Click to edit dummy strip LED count">
-                        <input type="number" id="dummyLedInput" min="1" max="2000" step="1" value="130" onchange="setSimulatorDummyLedCount(this.value)" oninput="handleSimulatorDummyLedInput(this.value)">
-                        <span>LEDs</span>
-                      </span>
-                    </div>
-                    <canvas id="dummySimulatorCanvas"></canvas>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right Column: Effect & Transition Parameters -->
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              
-              <!-- Effect Parameters Card -->
-              <div class="sim-studio-card">
-                <div class="sim-studio-header">
-                  <span class="panel-title">
-                    <span>Effect: </span><strong id="studioHeaderPhaseName">Game Start</strong>
-                  </span>
-                  <div class="param-btn-group">
-                    <button class="btn-param-action" id="btnTestStudioEffect" onclick="testStudioEffect()" title="Test Effect">▶ Test</button>
-                    <button class="btn-param-action" id="btnStopStudioEffect" onclick="stopStudioEffect()" title="Stop Effect">■ Stop</button>
-                  </div>
-                </div>
-
-                <div class="sim-studio-body">
-                  <div class="input-group">
-                    <label class="input-label" for="studioAnimSelect" id="studioAnimLabel">Animation</label>
-                    <select id="studioAnimSelect" class="select-ide" style="width: 100%; height: 28px;">
-                      <option value="solid">Solid Color</option>
-                      <option value="chase" selected>Chase</option>
-                      <option value="rainbow">Rainbow</option>
-                      <option value="pulse">Pulse</option>
-                      <option value="flash">Flash</option>
-                      <option value="wipe">Wipe</option>
-                      <option value="breathe">Breathe</option>
-                      <option value="scan">Scan (Cylon)</option>
-                      <option value="comet">Comet</option>
-                    </select>
-                    <!-- Preserved hidden select for target strip backwards-compatibility -->
-                    <select id="studioSegSelect" style="display: none;">
-                      <option value="0" selected>Segment 0</option>
-                    </select>
-                  </div>
-
-                  <div id="studioColorGrid" style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                    <div class="input-group">
-                      <label class="input-label">Primary Color</label>
-                      <div class="param-color-row">
-                        <input type="color" id="studioColPrimary" value="#00f0ff" class="param-color-input" onchange="document.getElementById('studioColPrimaryHex').textContent=this.value.toUpperCase()">
-                        <span class="param-hex-label" id="studioColPrimaryHex">#00F0FF</span>
-                      </div>
-                    </div>
-                    <div class="input-group" id="studioColSecondaryGroup" style="display: none;">
-                      <label class="input-label">Secondary Color</label>
-                      <div class="param-color-row">
-                        <input type="color" id="studioColSecondary" value="#000000" class="param-color-input" onchange="document.getElementById('studioColSecondaryHex').textContent=this.value.toUpperCase()">
-                        <span class="param-hex-label" id="studioColSecondaryHex">#000000</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div id="studioTimingGrid" style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                    <div class="input-group" id="studioSpeedGroup" style="display: none;">
-                      <label class="input-label" for="studioSpeedInput">Speed (<span id="studioSpeedVal">1.0</span>x)</label>
-                      <input type="range" id="studioSpeedInput" class="range-param" min="0.2" max="4.0" step="0.1" value="1.0" oninput="document.getElementById('studioSpeedVal').textContent=parseFloat(this.value).toFixed(1)">
-                    </div>
-                    <div class="input-group">
-                      <label class="input-label" for="studioDurInput">Duration (<span id="studioDurVal">Continuous</span>)</label>
-                      <input type="range" id="studioDurInput" class="range-param" min="0.0" max="10.0" step="0.5" value="2.0" oninput="document.getElementById('studioDurVal').textContent=parseFloat(this.value) === 0 ? 'Continuous' : (parseFloat(this.value).toFixed(1) + 's')">
-                    </div>
-                  </div>
-
-                  <div id="studioReverseRow" style="display: none; align-items: center; padding-top: 4px; border-top: 1px solid var(--border-subtle);">
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px; color: var(--text-secondary);">
-                      <input type="checkbox" id="studioReverseToggle" style="accent-color: var(--accent-primary);">
-                      <span>Reverse Direction</span>
-                    </label>
-                  </div>
-
-                  <!-- In-Turn Throw Celebrations (Visible when Turn Player 1/2 or hit event is selected) -->
-                  <div id="studioTurnEventsRow" style="display: none; padding-top: 6px; margin-top: 2px; border-top: 1px solid var(--border-subtle);">
-                    <div style="font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 5px;">
-                      In-Turn Hit Celebrations
-                    </div>
-                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                      <button class="flow-event-chip" data-event-key="single" onclick="selectEventChip(event, 'single')" style="padding: 2px 7px; font-size: 10px;" title="Single Hit (1x)">1x</button>
-                      <button class="flow-event-chip" data-event-key="double" onclick="selectEventChip(event, 'double')" style="padding: 2px 7px; font-size: 10px;" title="Double Hit (2x)">2x</button>
-                      <button class="flow-event-chip" data-event-key="triple" onclick="selectEventChip(event, 'triple')" style="padding: 2px 7px; font-size: 10px;" title="Triple Hit (3x)">3x</button>
-                      <button class="flow-event-chip chip-gold" data-event-key="180" onclick="selectEventChip(event, '180')" style="padding: 2px 7px; font-size: 10px;" title="180 (Maximum!)">180</button>
-                      <button class="flow-event-chip chip-red" data-event-key="bullseye" onclick="selectEventChip(event, 'bullseye')" style="padding: 2px 7px; font-size: 10px;" title="Bullseye (Bull)">Bull</button>
-                      <button class="flow-event-chip chip-muted" data-event-key="bust" onclick="selectEventChip(event, 'bust')" style="padding: 2px 7px; font-size: 10px;" title="Bust / Miss (Bust)">Bust</button>
-                      <button class="flow-event-chip chip-calib" data-event-key="calibrating" onclick="selectEventChip(event, 'calibrating')" style="padding: 2px 7px; font-size: 10px;" title="Board Calibration (Calib)">Calib</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Transition Parameters Card -->
-              <div class="sim-studio-card" id="transitionStudioCard">
-                <div class="sim-studio-header">
-                  <span class="panel-title" id="transPanelTitle">
-                    <span>Transition: </span><strong id="transFromToText">IDLE ➔ Game Start</strong>
-                  </span>
-                  <div class="param-btn-group">
-                    <button class="btn-param-action" id="btnTestTransition" onclick="testCurrentTransition()" title="Test Transition">▶ Test</button>
-                  </div>
-                </div>
-
-                <div class="sim-studio-body">
-                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div class="input-group">
-                      <label class="input-label" for="transStyleSelect">Style</label>
-                      <select id="transStyleSelect" class="select-ide" style="width: 100%; height: 28px;">
-                        <option value="crossfade">Smooth Crossfade</option>
-                        <option value="wipe">Directional Wipe</option>
-                        <option value="pulse">Pulse Dissolve</option>
-                        <option value="flash">Flash Burst</option>
-                        <option value="curtain">Curtain Wipe</option>
-                        <option value="instant">Instant Cut</option>
-                      </select>
-                    </div>
-
-                    <div class="input-group">
-                      <label class="input-label" for="transDurInput">Duration (<span id="transDurVal">0.6s</span>)</label>
-                      <input type="range" id="transDurInput" class="range-param" min="0.1" max="3.0" step="0.1" value="0.6">
-                    </div>
-                  </div>
-
-                  <div class="input-group" id="transAccentGroup" style="display: none;">
-                    <label class="input-label">Accent / Morph Color</label>
-                    <div class="param-color-row">
-                      <input type="color" id="transAccentCol" value="#00f0ff" class="param-color-input">
-                      <span class="param-hex-label" id="transAccentHex">#00F0FF</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-
           <!-- Game Flow Simulator (Simplified Pipeline) -->
           <div id="gameFlowPlannerContainer" class="game-flow-panel">
             <div class="flow-header">
@@ -1056,6 +842,85 @@
             </div>
           </div>
 
+          <!-- WLED Hardware Simulator (collapsible, hidden by default) -->
+          <div class="sim-stage-card" id="hwSimCard">
+            <div class="sim-stage-header">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" class="sim-collapse-btn" id="btnToggleHwSim" aria-expanded="false" aria-controls="hwSimBody" onclick="toggleHardwareSimulator()" title="Show or hide the hardware simulator">
+                  <svg class="sim-collapse-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 6 15 12 9 18"/></svg>
+                </button>
+                <span class="panel-title" style="margin: 0; font-size: 13px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
+                  <span>WLED Hardware Simulator</span>
+                </span>
+                <span id="simWsStatusBadge" style="font-family: var(--font-mono); font-size: 11px; display: inline-flex; align-items: center; gap: 5px;">
+                  <span class="dot dot-gray"></span><span>Connecting...</span>
+                </span>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <!-- LED 0 / Cable Start Position (Snapped to one of the 3 cameras, 120° steps) -->
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Physical LED 0 entry point (always starts on one of the 3 cameras, 120° spacing)">
+                  <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>LED 0:</span>
+                  </span>
+                  <div class="sim-dest-pills" id="simLed0CamPills">
+                    <button class="sim-dest-pill" id="btnRotateLed120" onclick="rotateSimulatorLed120()" title="Rotate LED 0 by 120° to next camera" style="padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                      <span>120°</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Camera Orientation Switcher -->
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Autodarts camera mount orientation">
+                  <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>Cameras:</span>
+                  </span>
+                  <div class="sim-dest-pills" id="simCamPills">
+                    <button class="sim-dest-pill" id="btnCycleCameraOrientation" onclick="cycleSimulatorCameraOrientation()" title="Camera mount orientation (Click to cycle)" style="padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                      <span id="simCamOrientationLabel">Default</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Live Stream Hardware Toggle -->
+                <div class="sim-dest-pills" title="Toggle live streaming to physical WLED hardware">
+                  <button class="sim-dest-pill active" id="btnToggleLiveStream" onclick="toggleSimulatorLiveStream()" style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;">
+                    <span class="dot dot-green" id="liveStreamDot" style="width: 6px; height: 6px;"></span>
+                    <span>Live Stream</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Canvas Viewport — Dual Board Layout (collapsed by default, a nice-to-have preview) -->
+            <div class="sim-canvas-viewport sim-dual-viewport" id="hwSimBody" hidden>
+              <!-- Live Board -->
+              <div class="sim-board-wrap">
+                <div class="sim-board-label">
+                  <span class="sim-board-label-dot sim-board-label-dot--live"></span>
+                  <span>LIVE</span>
+                  <span class="sim-board-label-count" id="simLiveLedBadge">45 LEDs</span>
+                </div>
+                <canvas id="simulatorCanvas"></canvas>
+              </div>
+              <!-- Dummy Board -->
+              <div class="sim-board-wrap">
+                <div class="sim-board-label sim-board-label--dummy">
+                  <span class="sim-board-label-dot sim-board-label-dot--dummy"></span>
+                  <span>DUMMY</span>
+                  <span class="sim-board-label-count sim-board-label-count--editable" title="Click to edit dummy strip LED count">
+                    <input type="number" id="dummyLedInput" min="1" max="2000" step="1" value="130" onchange="setSimulatorDummyLedCount(this.value)" oninput="handleSimulatorDummyLedInput(this.value)">
+                    <span>LEDs</span>
+                  </span>
+                </div>
+                <canvas id="dummySimulatorCanvas"></canvas>
+              </div>
+            </div>
+          </div>
         </section>
 
 
@@ -1198,8 +1063,8 @@
   <script defer src="/js/autodarts.js?v=2.2-p25"></script>
   <script defer src="/js/matrix.js?v=2.2-p25"></script>
   <script defer src="/js/power.js?v=2.2-p25"></script>
-  <script defer src="/js/simulator.js?v=2.2-p25"></script>
-  <script defer src="/js/flow_planner.js?v=2.2-p25"></script>
+  <script defer src="/js/simulator.js?v=2.2-p27"></script>
+  <script defer src="/js/flow_planner.js?v=2.2-p27"></script>
   <script defer src="/app.js?v=2.2-p25"></script>
 
 </body>

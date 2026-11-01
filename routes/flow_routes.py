@@ -4,7 +4,6 @@ REST API endpoints for Game Flow Simulator, visual phase planning, and custom tr
 """
 
 import asyncio
-import json
 import logging
 from aiohttp import web
 from typing import Optional
@@ -234,6 +233,11 @@ async def handle_play_phase(request: web.Request) -> web.Response:
             await engine._broadcast_telemetry({"type": "power_state", "state": "off"})
             return web.json_response({"status": "ok", "message": "Standby auto-off executed (Lights off)."})
 
+        # IDLE has no flow effect: show the idle look saved in the Setup tab (WLED preset 1)
+        if phase_id == "idle":
+            await engine.set_protocol_mode(ProtocolMode.IDLE_HTTP)
+            return web.json_response({"status": "ok", "message": "Idle look from Setup restored."})
+
         raw_eff = data.get("effect", {})
         effect = EffectConfig.from_dict(raw_eff)
         target_ip = data.get("ip")
@@ -244,43 +248,6 @@ async def handle_play_phase(request: web.Request) -> web.Response:
             if drv.protocol_mode != ProtocolMode.ACTIVE_UDP:
                 await drv.transition_to_udp_mode()
             await drv.play_effect(effect, segment_id=segment_id, force_enable=True)
-
-        # If IDLE phase has a native WLED effect ID and physical device is configured,
-        # also send HTTP mutation to WLED hardware
-        if phase_id == "idle" and effect.wled_effect_id is not None:
-            cfg = getattr(engine, "config", None)
-            dev = getattr(cfg, "primary_device", None) if cfg else None
-            ip = getattr(dev, "ip", None) if dev else (engine.driver.config.ip if engine.driver.config else None)
-            if ip:
-                loop = asyncio.get_running_loop()
-                def _send_wled_idle():
-                    try:
-                        import urllib.request
-                        wled_payload = json.dumps({
-                            "on": True,
-                            "lor": 0,
-                            "seg": [{
-                                "id": segment_id,
-                                "fx": effect.wled_effect_id,
-                                "col": [
-                                    effect.color_primary.to_list(),
-                                    effect.color_secondary.to_list(),
-                                    [0, 0, 0]
-                                ],
-                                "sx": int(min(255, max(0, effect.speed * 128)))
-                            }]
-                        }).encode("utf-8")
-                        req = urllib.request.Request(
-                            f"http://{ip}/json/state",
-                            data=wled_payload,
-                            headers={"Content-Type": "application/json"},
-                            method="POST"
-                        )
-                        with urllib.request.urlopen(req, timeout=0.8):
-                            pass
-                    except Exception as err:
-                        logger.debug(f"Could not push native WLED idle state to {ip}: {err}")
-                await loop.run_in_executor(None, _send_wled_idle)
 
         return web.json_response({"status": "ok", "effect": effect.to_dict()})
     except AppError:

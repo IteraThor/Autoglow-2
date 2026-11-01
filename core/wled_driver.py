@@ -4,6 +4,7 @@ Handles DRGB UDP real-time streaming (port 21324) and HTTP JSON segment control
 for dual WS281x (RGB) + PWM White setups with zero protocol collisions.
 """
 
+import dataclasses
 import os
 import asyncio
 import socket
@@ -17,6 +18,10 @@ from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
 from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
 from core.animations import render_animation_frame, blend_frames
+
+# WLED realtime UDP limits: one DRGB packet holds 490 LEDs, one DNRGB packet 489 (it spends 2 bytes on the start index)
+DRGB_MAX_LEDS = 490
+DNRGB_MAX_LEDS = 489
 
 logger = logging.getLogger("autoglow.wled_driver")
 
@@ -930,6 +935,21 @@ class WLEDDriver:
         packet.extend(rgb_bytes)
         return bytes(packet)
 
+    def _create_udp_packets(self, rgb_bytes: bytes, timeout_sec: int = 2) -> List[bytes]:
+        """
+        The UDP packets for one frame. WLED takes at most 490 LEDs in a DRGB packet, so a longer
+        frame goes out as DNRGB packets (0x04) of up to 489 LEDs, each carrying its start index.
+        """
+        timeout = min(255, max(1, timeout_sec))
+        if len(rgb_bytes) <= DRGB_MAX_LEDS * 3:
+            return [self._create_drgb_packet(rgb_bytes, timeout_sec=timeout)]
+        packets = []
+        chunk = DNRGB_MAX_LEDS * 3
+        for offset in range(0, len(rgb_bytes), chunk):
+            start = offset // 3
+            packets.append(bytes([0x04, timeout, (start >> 8) & 0xFF, start & 0xFF]) + bytes(rgb_bytes[offset:offset + chunk]))
+        return packets
+
     async def _run_master_broadcast_loop(self):
         """
         Unified 50 FPS real-time broadcast loop.
@@ -1025,7 +1045,7 @@ class WLEDDriver:
                     master_buffer[pwm_index * 3 + 1] = pwm_val
                     master_buffer[pwm_index * 3 + 2] = pwm_val
 
-                packet = self._create_drgb_packet(bytes(master_buffer), timeout_sec=2)
+                packets = self._create_udp_packets(bytes(master_buffer), timeout_sec=2)
 
                 if self._frame_tap_callback:
                     try:
@@ -1034,7 +1054,8 @@ class WLEDDriver:
                         pass
                 for ip in ips_to_stream:
                     try:
-                        sock.sendto(packet, (ip, port))
+                        for packet in packets:
+                            sock.sendto(packet, (ip, port))
                     except Exception as send_err:
                         dropped_packets[ip] = dropped_packets.get(ip, 0) + 1
                         now = time.time()
@@ -1066,7 +1087,7 @@ class WLEDDriver:
         """
         Send a single raw RGB byte frame immediately over UDP to all targets and tap into WebSocket.
         """
-        packet = self._create_drgb_packet(rgb_bytes, timeout_sec=2)
+        packets = self._create_udp_packets(rgb_bytes, timeout_sec=2)
         if self._frame_tap_callback:
             try:
                 self._frame_tap_callback(rgb_bytes)
@@ -1077,7 +1098,8 @@ class WLEDDriver:
         ips = [ip for ip in (self.target_ips if self.target_ips else [self.config.ip]) if ip]
         for ip in ips:
             try:
-                sock.sendto(packet, (ip, port))
+                for packet in packets:
+                    sock.sendto(packet, (ip, port))
             except Exception:
                 pass
 
@@ -1117,23 +1139,7 @@ class WLEDDriver:
         if not dyn_bg:
             dyn_bg = RGBColor(0, 0, 0)
 
-        return EffectConfig(
-            animation=effect.animation,
-            color_primary=effect.color_primary,
-            color_secondary=dyn_bg,
-            color_tertiary=effect.color_tertiary,
-            dynamic_secondary=True,
-            duration=effect.duration,
-            speed=effect.speed,
-            fps=effect.fps,
-            reverse=effect.reverse,
-            enabled=effect.enabled,
-            brightness=effect.brightness,
-            transition=effect.transition,
-            transition_duration=effect.transition_duration,
-            wled_effect_id=effect.wled_effect_id,
-            wled_effect_name=effect.wled_effect_name
-        )
+        return dataclasses.replace(effect, color_secondary=dyn_bg)
 
     def _render_frame(
         self,

@@ -21,6 +21,7 @@ from core.effects.fire import render_fire
 from core.effects.radar import render_radar
 from core.effects.breathe import render_breathe
 from core.effects.transitions import blend_frames
+from core.effects.flow import render_flow_frame
 
 
 def _render_legacy_pulse(effect: EffectConfig, frame: int, elapsed: float, count: int) -> bytearray:
@@ -156,6 +157,10 @@ def render_animation_frame(
     """
     if count <= 0:
         return bytearray(0)
+
+    # Flow Matrix effects carry options and use the curated, LED-count independent looks
+    if effect.options is not None:
+        return render_flow_frame(effect, elapsed, count)
 
     anim = effect.animation
     renderer = EFFECT_REGISTRY.get(anim)

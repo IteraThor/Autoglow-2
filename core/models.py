@@ -213,6 +213,9 @@ class EffectConfig:
     transition_duration: float = 0.0        # seconds for reversion blend
     wled_effect_id: Optional[int] = None    # Native WLED HTTP effect ID (e.g. 2 for Breathe)
     wled_effect_name: Optional[str] = None  # Native WLED HTTP effect name (e.g. "Breathe")
+    # Flow Matrix effects carry their look options here (e.g. {"tail": "long"}) and render with the
+    # curated renderers in core/effects/flow. None = a legacy Event Matrix effect.
+    options: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         out = {
@@ -235,6 +238,8 @@ class EffectConfig:
             out["wled_effect_id"] = int(self.wled_effect_id)
         if self.wled_effect_name is not None:
             out["wled_effect_name"] = str(self.wled_effect_name)
+        if self.options is not None:
+            out["options"] = dict(self.options)
         return out
 
     @classmethod
@@ -269,7 +274,8 @@ class EffectConfig:
             transition=str(data.get("transition", "instant")),
             transition_duration=_safe_float(data.get("transition_duration"), 0.0),
             wled_effect_id=_safe_int(raw_wled_id) if raw_wled_id is not None else None,
-            wled_effect_name=str(raw_wled_name) if raw_wled_name is not None else None
+            wled_effect_name=str(raw_wled_name) if raw_wled_name is not None else None,
+            options=dict(data["options"]) if isinstance(data.get("options"), dict) else None
         )
 
 

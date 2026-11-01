@@ -24,41 +24,6 @@
     selectedFlowSegmentId = 0;
   }
 
-  var wledEffectsCatalog = [
-    { id: 0, name: 'Solid' },
-    { id: 1, name: 'Blink' },
-    { id: 2, name: 'Breathe' },
-    { id: 3, name: 'Wipe' },
-    { id: 4, name: 'Wipe Random' },
-    { id: 5, name: 'Random Colors' },
-    { id: 6, name: 'Sweep' },
-    { id: 7, name: 'Dynamic' },
-    { id: 8, name: 'Colorloop' },
-    { id: 9, name: 'Rainbow' },
-    { id: 10, name: 'Scan' },
-    { id: 11, name: 'Dual Scan' },
-    { id: 12, name: 'Fade' },
-    { id: 13, name: 'Chase' },
-    { id: 14, name: 'Running' },
-    { id: 15, name: 'Fire Flicker' },
-    { id: 16, name: 'Aurora' },
-    { id: 17, name: 'Sinelon' },
-    { id: 18, name: 'Palette' },
-    { id: 19, name: 'Popcorn' }
-  ];
-
-  var standardUdpAnimations = [
-    { id: 'solid', name: 'Solid Color' },
-    { id: 'chase', name: 'Chase' },
-    { id: 'rainbow', name: 'Rainbow' },
-    { id: 'pulse', name: 'Pulse' },
-    { id: 'flash', name: 'Flash' },
-    { id: 'wipe', name: 'Wipe' },
-    { id: 'breathe', name: 'Breathe' },
-    { id: 'scan', name: 'Scan (Cylon)' },
-    { id: 'comet', name: 'Comet' }
-  ];
-
   var DEFAULT_IN_TURN_EVENTS = {
     'single': {
       id: 'single',
@@ -104,55 +69,11 @@
     }
   };
 
-  function isEventChip(key) {
-    return !!(DEFAULT_IN_TURN_EVENTS[key] || key === 'calibration');
-  }
-
-  function mapWledEffectToSimAnimation(wledFxName) {
-    var name = (wledFxName || '').toLowerCase();
-    if (name.indexOf('breathe') !== -1 || name.indexOf('fade') !== -1) return 'breathe';
-    if (name.indexOf('rainbow') !== -1 || name.indexOf('colorloop') !== -1) return 'rainbow';
-    if (name.indexOf('chase') !== -1 || name.indexOf('running') !== -1) return 'chase';
-    if (name.indexOf('scan') !== -1 || name.indexOf('cylon') !== -1 || name.indexOf('sinelon') !== -1) return 'scan';
-    if (name.indexOf('wipe') !== -1 || name.indexOf('sweep') !== -1) return 'wipe';
-    if (name.indexOf('pulse') !== -1 || name.indexOf('blink') !== -1) return 'pulse';
-    if (name.indexOf('sparkle') !== -1 || name.indexOf('popcorn') !== -1 || name.indexOf('fire') !== -1 || name.indexOf('flash') !== -1) return 'flash';
-    if (name.indexOf('comet') !== -1 || name.indexOf('aurora') !== -1) return 'comet';
-    return 'solid';
-  }
-  window.mapWledEffectToSimAnimation = mapWledEffectToSimAnimation;
-
-  function fetchWledEffectsCatalog() {
-    fetch('/api/wled/effects')
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data && Array.isArray(data.effects) && data.effects.length > 0) {
-          wledEffectsCatalog = data.effects;
-          if (selectedPhaseId === 'idle') {
-            var p = getPhaseById('idle');
-            if (p) syncPhaseToStudio(p);
-          }
-        }
-      })
-      .catch(function (err) {
-        console.debug('Using fallback WLED effects catalog:', err);
-      });
-  }
-
   function rgbToHex(r, g, b) {
     return '#' + [r, g, b].map(function (x) {
       var hex = Math.max(0, Math.min(255, Math.round(x || 0))).toString(16);
       return hex.length === 1 ? '0' + hex : hex;
     }).join('');
-  }
-
-  function hexToRgb(hex) {
-    var clean = (hex || '').replace('#', '');
-    if (clean.length === 3) {
-      clean = clean.split('').map(function (c) { return c + c; }).join('');
-    }
-    var num = parseInt(clean, 16) || 0;
-    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
   }
 
   function escapeHtml(str) {
@@ -161,10 +82,8 @@
   }
 
   window.initFlowPlanner = function () {
-    fetchWledEffectsCatalog();
     renderFlowHardwareToolbar();
     loadCurrentFlow();
-    hookStudioSync();
   };
 
   function renderFlowHardwareToolbar() {
@@ -375,12 +294,8 @@
     var eff = phase.effect || {};
     var col1 = eff.color_primary || [0, 240, 255];
     var hex1 = rgbToHex(col1[0], col1[1], col1[2]);
-    var animName = (eff.animation || 'solid').toUpperCase();
-    if (isIdle) {
-      var fxName = eff.wled_effect_name || 'Breathe';
-      animName = fxName.toUpperCase();
-    }
-    var durStr = isIdle ? 'Native' : ((eff.duration === 0) ? 'Cont' : (eff.duration || 2.0).toFixed(1) + 's');
+    var animName = isIdle ? 'SET IN SETUP' : (eff.animation || 'solid').toUpperCase();
+    var durStr = ((eff.duration === 0) ? 'Cont' : (eff.duration || 2.0).toFixed(1) + 's');
 
     var headerHtml = '<div class="phase-card-header">' +
         '<span class="phase-card-name">' + escapeHtml(phase.name) + '</span>' +
@@ -389,9 +304,9 @@
     card.innerHTML =
       headerHtml +
       '<div class="phase-effect-summary">' +
-        '<div class="phase-color-chip" style="background: ' + hex1 + ';"></div>' +
+        (isIdle ? '' : '<div class="phase-color-chip" style="background: ' + hex1 + ';"></div>') +
         '<span>' + escapeHtml(animName) + '</span>' +
-        '<span style="color: var(--text-muted); font-size: 8.5px; margin-left: 2px;">• ' + durStr + '</span>' +
+        (isIdle ? '' : '<span style="color: var(--text-muted); font-size: 8.5px; margin-left: 2px;">• ' + durStr + '</span>') +
       '</div>';
 
     card.addEventListener('click', (function (pId) {
@@ -584,13 +499,13 @@
         loopHeader.className = 'flow-loop-header';
         loopHeader.innerHTML =
           '<div class="flow-loop-events">' +
-            '<button class="flow-event-chip' + (selectedPhaseId === 'single' ? ' selected' : '') + '" data-event-key="single" onclick="selectEventChip(event, \'single\')" title="Single Hit (1x) - Click to configure in Studio">1x</button>' +
-            '<button class="flow-event-chip' + (selectedPhaseId === 'double' ? ' selected' : '') + '" data-event-key="double" onclick="selectEventChip(event, \'double\')" title="Double Hit (2x) - Click to configure in Studio">2x</button>' +
-            '<button class="flow-event-chip' + (selectedPhaseId === 'triple' ? ' selected' : '') + '" data-event-key="triple" onclick="selectEventChip(event, \'triple\')" title="Triple Hit (3x) - Click to configure in Studio">3x</button>' +
-            '<button class="flow-event-chip chip-gold' + (selectedPhaseId === '180' ? ' selected' : '') + '" data-event-key="180" onclick="selectEventChip(event, \'180\')" title="180 (Maximum!) - Click to configure in Studio">180</button>' +
-            '<button class="flow-event-chip chip-red' + (selectedPhaseId === 'bullseye' ? ' selected' : '') + '" data-event-key="bullseye" onclick="selectEventChip(event, \'bullseye\')" title="Bullseye (Bull) - Click to configure in Studio">Bull</button>' +
-            '<button class="flow-event-chip chip-muted' + (selectedPhaseId === 'bust' ? ' selected' : '') + '" data-event-key="bust" onclick="selectEventChip(event, \'bust\')" title="Bust / Miss (Bust) - Click to configure in Studio">Bust</button>' +
-            '<button class="flow-event-chip chip-calib' + (selectedPhaseId === 'calibrating' || selectedPhaseId === 'calibration' ? ' selected' : '') + '" data-event-key="calibrating" onclick="selectEventChip(event, \'calibrating\')" title="Board Calibration (Calib) - Click to configure in Studio">Calib</button>' +
+            '<button class="flow-event-chip' + (selectedPhaseId === 'single' ? ' selected' : '') + '" data-event-key="single" onclick="selectEventChip(event, \'single\')" title="Single Hit (1x) - Click to play">1x</button>' +
+            '<button class="flow-event-chip' + (selectedPhaseId === 'double' ? ' selected' : '') + '" data-event-key="double" onclick="selectEventChip(event, \'double\')" title="Double Hit (2x) - Click to play">2x</button>' +
+            '<button class="flow-event-chip' + (selectedPhaseId === 'triple' ? ' selected' : '') + '" data-event-key="triple" onclick="selectEventChip(event, \'triple\')" title="Triple Hit (3x) - Click to play">3x</button>' +
+            '<button class="flow-event-chip chip-gold' + (selectedPhaseId === '180' ? ' selected' : '') + '" data-event-key="180" onclick="selectEventChip(event, \'180\')" title="180 (Maximum!) - Click to play">180</button>' +
+            '<button class="flow-event-chip chip-red' + (selectedPhaseId === 'bullseye' ? ' selected' : '') + '" data-event-key="bullseye" onclick="selectEventChip(event, \'bullseye\')" title="Bullseye (Bull) - Click to play">Bull</button>' +
+            '<button class="flow-event-chip chip-muted' + (selectedPhaseId === 'bust' ? ' selected' : '') + '" data-event-key="bust" onclick="selectEventChip(event, \'bust\')" title="Bust / Miss (Bust) - Click to play">Bust</button>' +
+            '<button class="flow-event-chip chip-calib' + (selectedPhaseId === 'calibrating' || selectedPhaseId === 'calibration' ? ' selected' : '') + '" data-event-key="calibrating" onclick="selectEventChip(event, \'calibrating\')" title="Board Calibration (Calib) - Click to play">Calib</button>' +
           '</div>';
         loopGroup.appendChild(loopHeader);
 
@@ -958,7 +873,7 @@
     if (window.alignFlowWires) window.alignFlowWires();
   });
 
-  // --- Select & Sync with Effect Studio ---
+  // --- Select a phase (highlight it, optionally play it live) ---
   window.selectPhase = function (phaseId, triggerLive) {
     selectedPhaseId = phaseId;
     if (phaseId === 'turn_p1' || phaseId === 'turn_p2') {
@@ -996,15 +911,6 @@
     var phase = getPhaseById(phaseId);
     if (!phase) return;
 
-    syncPhaseToStudio(phase);
-    if (!isEventChip(phaseId)) {
-      autoSelectTransitionForPhase(phaseId);
-    }
-    var transCard = document.getElementById('transitionStudioCard');
-    if (transCard) {
-      transCard.style.display = isEventChip(phaseId) ? 'none' : '';
-    }
-
     if (triggerLive) {
       playPhaseEffect(phase);
       var normK = (phaseId === 'calibration') ? 'calibrating' : phaseId;
@@ -1032,52 +938,8 @@
       }
     });
 
-    var idleSleep = (currentFlow && currentFlow.idle_sleep) || {};
-    var inactMin = idleSleep.inactivity_minutes || 5;
-    var dimPct = (idleSleep.dim_percent !== undefined) ? idleSleep.dim_percent : (Math.round((idleSleep.dim_brightness_raw || 50) / 255 * 100) || 20);
-
-    var studioHeader = document.querySelector('.sim-studio-header .panel-title span');
-    var animLabel = document.getElementById('studioAnimLabel');
-    var animSelect = document.getElementById('studioAnimSelect');
-    var durInput = document.getElementById('studioDurInput');
-    var durVal = document.getElementById('studioDurVal');
-    var studioTurnRow = document.getElementById('studioTurnEventsRow');
-    if (studioTurnRow) studioTurnRow.style.display = 'none';
-
-    var revRow = document.getElementById('studioReverseRow');
-    if (revRow) revRow.style.display = 'none';
-    var secGroup = document.getElementById('studioColSecondaryGroup');
-    if (secGroup) secGroup.style.display = 'none';
-    var spdGroup = document.getElementById('studioSpeedGroup');
-    if (spdGroup) spdGroup.style.display = 'none';
-
-    if (phaseId === 'idle_timeout') {
-      var studioStrong = document.getElementById('studioHeaderPhaseName');
-      if (studioStrong) {
-        studioStrong.textContent = 'Inactivity Timeout';
-      } else if (studioHeader) {
-        studioHeader.textContent = 'Inactivity Timeout';
-      }
-      if (animLabel) animLabel.innerHTML = 'Power State <span style="font-size: 9.5px; color: #f59e0b; font-weight: 500;">(Dimming)</span>';
-      if (animSelect) {
-        animSelect.innerHTML = '<option value="dim">Inactivity Dim (' + dimPct + '% Brightness)</option>';
-        animSelect.value = 'dim';
-      }
-      if (durInput) {
-        durInput.disabled = true;
-        durInput.style.opacity = '0.45';
-        durInput.style.cursor = 'not-allowed';
-      }
-      if (durVal) durVal.textContent = inactMin + 'm threshold';
-
-      var col1 = document.getElementById('studioColPrimary');
-      var col1Hex = document.getElementById('studioColPrimaryHex');
-      if (col1) col1.value = '#f59e0b';
-      if (col1Hex) col1Hex.textContent = 'DIM ' + dimPct + '%';
-
-      if (triggerLive) {
-        playSleepEffect('idle_timeout');
-      }
+    if (phaseId === 'idle_timeout' && triggerLive) {
+      playSleepEffect('idle_timeout');
     }
   };
 
@@ -1110,43 +972,6 @@
         .catch(function (err) {
           console.debug('Auto-Off preview error:', err);
         });
-    }
-  }
-
-  function autoSelectTransitionForPhase(phaseId) {
-    if (!currentFlow || !currentFlow.phases || currentFlow.phases.length < 2) return;
-    var pTakeout = currentFlow.phases && currentFlow.phases.some(function (p) { return p.id === 'takeout'; });
-    if (phaseId === 'turn_p1') {
-      selectTransition(null, 'turn_p1', pTakeout ? 'takeout' : 'turn_p2');
-      return;
-    }
-    if (phaseId === 'takeout') {
-      selectTransition(null, 'takeout', 'turn_p2');
-      return;
-    }
-    if (phaseId === 'turn_p2') {
-      selectTransition(null, 'turn_p2', pTakeout ? 'takeout' : 'turn_p1');
-      return;
-    }
-    if (phaseId === 'leg_won') {
-      selectTransition(null, 'turn_p2', 'leg_won');
-      return;
-    }
-    if (phaseId === 'match_won') {
-      selectTransition(null, 'turn_p2', 'match_won');
-      return;
-    }
-    var phases = currentFlow.phases;
-    var idx = -1;
-    for (var i = 0; i < phases.length; i++) {
-      if (phases[i].id === phaseId) { idx = i; break; }
-    }
-    if (idx === -1) return;
-
-    if (idx < phases.length - 1) {
-      selectTransition(null, phases[idx].id, phases[idx + 1].id);
-    } else if (idx > 0) {
-      selectTransition(null, phases[idx - 1].id, phases[idx].id);
     }
   }
 
@@ -1200,308 +1025,6 @@
     return null;
   }
 
-  function updateDynamicStudioControls(animValue, isIdle) {
-    // Reverse Direction toggle
-    var revRow = document.getElementById('studioReverseRow');
-    if (revRow) {
-      var supportsReverse = !isIdle && (['chase', 'wipe', 'scan', 'comet'].indexOf(animValue) !== -1);
-      revRow.style.display = supportsReverse ? 'flex' : 'none';
-    }
-
-    // Secondary Color picker
-    var secGroup = document.getElementById('studioColSecondaryGroup');
-    var colGrid = document.getElementById('studioColorGrid');
-    if (secGroup) {
-      var supportsSecondary = isIdle || (['pulse', 'breathe', 'wipe', 'scan', 'comet'].indexOf(animValue) !== -1);
-      secGroup.style.display = supportsSecondary ? 'block' : 'none';
-      if (colGrid) {
-        colGrid.style.gridTemplateColumns = supportsSecondary ? '1fr 1fr' : '1fr';
-      }
-    }
-
-    // Speed slider
-    var spdGroup = document.getElementById('studioSpeedGroup');
-    var timingGrid = document.getElementById('studioTimingGrid');
-    if (spdGroup) {
-      var supportsSpeed = (animValue !== 'solid');
-      spdGroup.style.display = supportsSpeed ? 'block' : 'none';
-      if (timingGrid) {
-        timingGrid.style.gridTemplateColumns = supportsSpeed ? '1fr 1fr' : '1fr';
-      }
-    }
-  }
-
-  function syncPhaseToStudio(phase) {
-    if (!phase) return;
-    var eff = phase.effect || {};
-    var isIdle = (phase.id === 'idle');
-
-    var animLabel = document.getElementById('studioAnimLabel');
-    var animSelect = document.getElementById('studioAnimSelect');
-    var durInput = document.getElementById('studioDurInput');
-    var durVal = document.getElementById('studioDurVal');
-
-    if (isIdle) {
-      if (animLabel) {
-        animLabel.innerHTML = 'Animation <span style="font-size: 9.5px; color: var(--text-muted);">(Native)</span>';
-      }
-      if (animSelect) {
-        animSelect.innerHTML = '';
-        for (var i = 0; i < wledEffectsCatalog.length; i++) {
-          var wEff = wledEffectsCatalog[i];
-          var opt = document.createElement('option');
-          opt.value = wEff.id;
-          opt.textContent = wEff.name + ' (fx #' + wEff.id + ')';
-          animSelect.appendChild(opt);
-        }
-        var targetFxId = (eff.wled_effect_id !== undefined && eff.wled_effect_id !== null) ? eff.wled_effect_id : 2;
-        animSelect.value = targetFxId;
-      }
-      if (durInput) {
-        durInput.value = 0.0;
-        durInput.disabled = true;
-        durInput.style.opacity = '0.45';
-        durInput.style.cursor = 'not-allowed';
-      }
-      if (durVal) {
-        durVal.textContent = 'Continuous';
-      }
-      updateDynamicStudioControls(eff.animation || 'breathe', true);
-    } else {
-      if (animLabel) {
-        animLabel.textContent = 'Animation';
-      }
-      if (animSelect) {
-        animSelect.innerHTML = '';
-        for (var j = 0; j < standardUdpAnimations.length; j++) {
-          var uAnim = standardUdpAnimations[j];
-          var opt2 = document.createElement('option');
-          opt2.value = uAnim.id;
-          opt2.textContent = uAnim.name;
-          animSelect.appendChild(opt2);
-        }
-        animSelect.value = eff.animation || 'solid';
-      }
-      if (durInput) {
-        durInput.disabled = false;
-        durInput.style.opacity = '';
-        durInput.style.cursor = '';
-        var dur = eff.duration !== undefined ? eff.duration : 2.0;
-        durInput.value = dur;
-        if (durVal) durVal.textContent = dur === 0 ? 'Continuous' : (dur.toFixed(1) + 's');
-      }
-      updateDynamicStudioControls(eff.animation || 'solid', false);
-    }
-
-    var c1 = eff.color_primary || [0, 240, 255];
-    var h1 = rgbToHex(c1[0], c1[1], c1[2]);
-    var col1 = document.getElementById('studioColPrimary');
-    var col1Hex = document.getElementById('studioColPrimaryHex');
-    if (col1) col1.value = h1;
-    if (col1Hex) col1Hex.textContent = h1.toUpperCase();
-
-    var c2 = eff.color_secondary || [0, 0, 0];
-    var h2 = rgbToHex(c2[0], c2[1], c2[2]);
-    var col2 = document.getElementById('studioColSecondary');
-    var col2Hex = document.getElementById('studioColSecondaryHex');
-    if (col2) col2.value = h2;
-    if (col2Hex) col2Hex.textContent = h2.toUpperCase();
-
-    var speed = eff.speed || 1.0;
-    var speedInput = document.getElementById('studioSpeedInput');
-    var speedVal = document.getElementById('studioSpeedVal');
-    if (speedInput) speedInput.value = speed;
-    if (speedVal) speedVal.textContent = speed.toFixed(1);
-
-    var rev = document.getElementById('studioReverseToggle');
-    if (rev) rev.checked = !!eff.reverse;
-
-    // Update Studio header subtitle to show currently selected phase
-    var studioStrong = document.getElementById('studioHeaderPhaseName');
-    if (studioStrong) {
-      studioStrong.textContent = phase.name;
-    } else {
-      var studioHeader = document.querySelector('.sim-studio-header .panel-title span');
-      if (studioHeader) {
-        studioHeader.textContent = phase.name;
-      }
-    }
-
-    // Toggle in-turn celebration buttons in studio if Turn Player 1 or 2 is selected OR if an in-turn event is selected
-    var studioTurnRow = document.getElementById('studioTurnEventsRow');
-    if (studioTurnRow) {
-      var showTurn = (phase.id === 'turn_p1' || phase.id === 'turn_p2' || isEventChip(phase.id));
-      studioTurnRow.style.display = showTurn ? 'block' : 'none';
-    }
-  }
-
-  function updatePhaseCardInPipeline(phase) {
-    if (!phase) return;
-    var card = document.getElementById('flowCard_' + phase.id);
-    if (!card) {
-      renderFlowPipeline();
-      return;
-    }
-    var isIdle = (phase.id === 'idle');
-    var eff = phase.effect || {};
-    var col1 = eff.color_primary || [0, 240, 255];
-    var hex1 = rgbToHex(col1[0], col1[1], col1[2]);
-    var animName = (eff.animation || 'solid').toUpperCase();
-    if (isIdle) {
-      var fxName = eff.wled_effect_name || 'Breathe';
-      animName = fxName.toUpperCase();
-    }
-    var durStr = isIdle ? 'Native' : ((eff.duration === 0) ? 'Cont' : (eff.duration || 2.0).toFixed(1) + 's');
-
-    var chip = card.querySelector('.phase-color-chip');
-    if (chip) chip.style.background = hex1;
-
-    var summaryDiv = card.querySelector('.phase-effect-summary');
-    if (summaryDiv) {
-      var spans = summaryDiv.querySelectorAll('span');
-      if (spans.length >= 2) {
-        spans[0].textContent = animName;
-        spans[1].textContent = '• ' + durStr;
-      }
-    }
-  }
-
-  // Hook changes in the right Studio back into the selected phase or event
-  function hookStudioSync() {
-    var anim = document.getElementById('studioAnimSelect');
-    var col1 = document.getElementById('studioColPrimary');
-    var col2 = document.getElementById('studioColSecondary');
-    var dur = document.getElementById('studioDurInput');
-    var spd = document.getElementById('studioSpeedInput');
-    var rev = document.getElementById('studioReverseToggle');
-
-    function syncFromStudio() {
-      var phase = getPhaseById(selectedPhaseId);
-      if (!phase) return;
-      if (!phase.effect) phase.effect = {};
-
-      var isIdle = (phase.id === 'idle');
-
-      if (anim) {
-        if (isIdle) {
-          var fxId = parseInt(anim.value, 10);
-          var selOption = anim.options[anim.selectedIndex];
-          var fxName = selOption ? selOption.text.replace(/ \(fx #\d+\)$/, '') : 'Breathe';
-          phase.effect.wled_effect_id = fxId;
-          phase.effect.wled_effect_name = fxName;
-          phase.effect.animation = mapWledEffectToSimAnimation(fxName);
-          phase.effect.duration = 0.0;
-          updateDynamicStudioControls(phase.effect.animation, true);
-        } else {
-          phase.effect.animation = anim.value;
-          delete phase.effect.wled_effect_id;
-          delete phase.effect.wled_effect_name;
-          updateDynamicStudioControls(anim.value, false);
-        }
-      }
-      if (col1) phase.effect.color_primary = hexToRgb(col1.value);
-      if (col2) phase.effect.color_secondary = hexToRgb(col2.value);
-      if (dur && !isIdle) phase.effect.duration = parseFloat(dur.value) || 0.0;
-      if (spd) phase.effect.speed = parseFloat(spd.value) || 1.0;
-      if (rev) phase.effect.reverse = rev.checked;
-
-      var normKey = (selectedPhaseId === 'calibration') ? 'calibrating' : selectedPhaseId;
-      if (isEventChip(normKey)) {
-        if (!currentFlow.events) currentFlow.events = {};
-        currentFlow.events[normKey] = phase;
-      } else {
-        updatePhaseCardInPipeline(phase);
-      }
-    }
-
-    if (anim) anim.addEventListener('change', syncFromStudio);
-    if (col1) col1.addEventListener('input', syncFromStudio);
-    if (col2) col2.addEventListener('input', syncFromStudio);
-    if (dur) dur.addEventListener('input', syncFromStudio);
-    if (spd) spd.addEventListener('input', syncFromStudio);
-    if (rev) rev.addEventListener('change', syncFromStudio);
-
-    // Transition Studio inputs live sync
-    var tStyle = document.getElementById('transStyleSelect');
-    var tDur = document.getElementById('transDurInput');
-    var tAcc = document.getElementById('transAccentCol');
-
-    function syncTransitionSettings() {
-      if (!activeTransitionKey || !currentFlow) return;
-      if (!currentFlow.transitions) currentFlow.transitions = {};
-      var parts = activeTransitionKey.split('->');
-      if (!currentFlow.transitions[activeTransitionKey]) {
-        currentFlow.transitions[activeTransitionKey] = {
-          from_phase_id: parts[0],
-          to_phase_id: parts[1]
-        };
-      }
-      var trans = currentFlow.transitions[activeTransitionKey];
-
-      if (tStyle) {
-        trans.style = tStyle.value;
-        var accGroup = document.getElementById('transAccentGroup');
-        if (accGroup) {
-          var isAccentStyle = (trans.style === 'pulse' || trans.style === 'flash');
-          accGroup.style.display = isAccentStyle ? 'block' : 'none';
-        }
-        var activeBtn = document.querySelector('.flow-connector-btn[data-trans-key="' + activeTransitionKey + '"] span, .flow-loop-return-btn[data-trans-key="' + activeTransitionKey + '"], .flow-match-overhead-badge[data-trans-key="' + activeTransitionKey + '"], .flow-leg-bottom-badge[data-trans-key="' + activeTransitionKey + '"], .flow-dual-lane-btn[data-trans-key="' + activeTransitionKey + '"]');
-        if (activeBtn) {
-          if (activeBtn.classList.contains('flow-dual-lane-btn')) {
-            var styleName = trans.style.charAt(0).toUpperCase() + trans.style.slice(1);
-            activeBtn.textContent = styleName;
-          } else if (activeBtn.tagName === 'BUTTON') {
-            activeBtn.textContent = trans.style.charAt(0).toUpperCase() + trans.style.slice(1) + ' • ' + (trans.duration || 0.6).toFixed(1) + 's';
-          } else {
-            activeBtn.textContent = trans.style.charAt(0).toUpperCase() + trans.style.slice(1);
-          }
-        }
-      }
-
-      if (tDur) {
-        var dVal = parseFloat(tDur.value) || 0.6;
-        trans.duration = dVal;
-        var durValEl = document.getElementById('transDurVal');
-        if (durValEl) durValEl.textContent = dVal.toFixed(1) + 's';
-
-        var returnOrOverheadBtn = document.querySelector('.flow-loop-return-btn[data-trans-key="' + activeTransitionKey + '"], .flow-match-overhead-badge[data-trans-key="' + activeTransitionKey + '"], .flow-leg-bottom-badge[data-trans-key="' + activeTransitionKey + '"]');
-        if (returnOrOverheadBtn) {
-          returnOrOverheadBtn.textContent = (trans.style.charAt(0).toUpperCase() + trans.style.slice(1)) + ' • ' + dVal.toFixed(1) + 's';
-        }
-      }
-
-      if (tAcc) {
-        trans.accent_color = hexToRgb(tAcc.value);
-        var hexEl = document.getElementById('transAccentHex');
-        if (hexEl) hexEl.textContent = tAcc.value.toUpperCase();
-      }
-    }
-
-    if (tStyle) {
-      tStyle.addEventListener('change', function () {
-        syncTransitionSettings();
-        if (activeTransitionKey) {
-          var parts = activeTransitionKey.split('->');
-          if (parts.length >= 2) {
-            playTransitionVisualization(parts[0], parts[1]);
-          }
-        }
-      });
-    }
-    if (tDur) tDur.addEventListener('input', syncTransitionSettings);
-    if (tAcc) {
-      tAcc.addEventListener('input', syncTransitionSettings);
-      tAcc.addEventListener('change', function () {
-        if (activeTransitionKey) {
-          var parts = activeTransitionKey.split('->');
-          if (parts.length >= 2) {
-            playTransitionVisualization(parts[0], parts[1]);
-          }
-        }
-      });
-    }
-  }
-
   function playPhaseEffect(phase) {
     if (!phase || !phase.effect) return;
     fetch('/api/flow/play_phase', {
@@ -1517,7 +1040,7 @@
     });
   }
 
-  // --- Transition Studio (Inline 2nd Menu) ---
+  // --- Transitions (click a connector to highlight and play it) ---
   window.selectTransition = function (e, fromId, toId, triggerLive) {
     if (e) e.stopPropagation();
     activeTransitionKey = fromId + '->' + toId;
@@ -1585,97 +1108,11 @@
       }
     }
 
-    // Ensure Transition Studio card is visible
-    var transCard = document.getElementById('transitionStudioCard');
-    if (transCard) {
-      transCard.style.display = '';
-    }
-
-    syncTransitionToStudio(fromId, toId);
-
     // Play visualization when user explicitly clicked a transition
     if (triggerLive !== false && (e !== null || triggerLive === true)) {
       playTransitionVisualization(fromId, toId);
     }
   };
-
-  // Backwards compatibility alias
-  window.openTransitionDesigner = function (e, fromId, toId) {
-    window.selectTransition(e, fromId, toId);
-  };
-
-  function syncTransitionToStudio(fromId, toId) {
-    var pA = getPhaseById(fromId);
-    var pB = getPhaseById(toId);
-    if (!pA || !pB) return;
-
-    var isSleepTrans = (toId === 'idle_timeout' || toId === 'idle_off');
-
-    if (!currentFlow.transitions) currentFlow.transitions = {};
-    if (!currentFlow.transitions[activeTransitionKey]) {
-      currentFlow.transitions[activeTransitionKey] = {
-        from_phase_id: fromId,
-        to_phase_id: toId,
-        style: isSleepTrans ? (toId === 'idle_timeout' ? 'dim' : 'off') : 'crossfade',
-        duration: 0.6,
-        accent_color: [0, 240, 255]
-      };
-    }
-    var trans = currentFlow.transitions[activeTransitionKey];
-
-    var fromToEl = document.getElementById('transFromToText');
-    if (fromToEl) fromToEl.textContent = pA.name + ' ➔ ' + pB.name;
-
-    var tStyle = document.getElementById('transStyleSelect');
-    if (tStyle) {
-      if (isSleepTrans) {
-        tStyle.innerHTML = (toId === 'idle_timeout')
-          ? '<option value="dim">Inactivity Dimming</option>'
-          : '<option value="off">Standby Auto-Off</option>';
-        tStyle.value = (toId === 'idle_timeout') ? 'dim' : 'off';
-      } else {
-        tStyle.innerHTML =
-          '<option value="crossfade">Smooth Crossfade</option>' +
-          '<option value="wipe">Directional Wipe</option>' +
-          '<option value="pulse">Pulse Dissolve</option>' +
-          '<option value="flash">Flash Burst</option>' +
-          '<option value="curtain">Curtain Wipe</option>' +
-          '<option value="instant">Instant Cut</option>';
-        tStyle.value = (trans.style === 'cut') ? 'instant' : (trans.style || 'crossfade');
-      }
-    }
-
-    var dur = (trans.duration !== undefined) ? trans.duration : 0.6;
-    var tDur = document.getElementById('transDurInput');
-    var durVal = document.getElementById('transDurVal');
-    if (tDur) {
-      tDur.disabled = isSleepTrans;
-      tDur.style.opacity = isSleepTrans ? '0.45' : '';
-      tDur.value = dur;
-    }
-    if (durVal) {
-      if (isSleepTrans) {
-        var idleSleep = (currentFlow && currentFlow.idle_sleep) || {};
-        var mins = (toId === 'idle_timeout') ? (idleSleep.inactivity_minutes || 5) : (idleSleep.standby_minutes || 30);
-        durVal.textContent = mins + 'm delay';
-      } else {
-        durVal.textContent = dur.toFixed(1) + 's';
-      }
-    }
-
-    var acc = trans.accent_color || [0, 240, 255];
-    var hexAcc = rgbToHex(acc[0], acc[1], acc[2]);
-    var tAcc = document.getElementById('transAccentCol');
-    var tHex = document.getElementById('transAccentHex');
-    if (tAcc) tAcc.value = hexAcc;
-    if (tHex) tHex.textContent = hexAcc.toUpperCase();
-
-    var accGroup = document.getElementById('transAccentGroup');
-    if (accGroup) {
-      var isAccentStyle = !isSleepTrans && (trans.style === 'pulse' || trans.style === 'flash');
-      accGroup.style.display = isAccentStyle ? 'block' : 'none';
-    }
-  }
 
   window.playTransitionVisualization = function (fromId, toId) {
     if (!fromId || !toId || !currentFlow) return;
@@ -1753,29 +1190,6 @@
       console.warn('Error running transition visualization:', err);
     });
   };
-
-  window.testCurrentTransition = function () {
-    if (!activeTransitionKey || !currentFlow) return;
-    var parts = activeTransitionKey.split('->');
-    if (parts.length < 2) return;
-
-    var btn = document.getElementById('btnTestTransition');
-    var trans = (currentFlow.transitions && currentFlow.transitions[activeTransitionKey]) || { duration: 0.6 };
-    var dur = (trans.duration !== undefined) ? parseFloat(trans.duration) : 0.6;
-
-    if (btn) {
-      btn.innerHTML = '<span>Testing...</span>';
-      btn.disabled = true;
-      setTimeout(function () {
-        btn.innerHTML = '<span>▶ Test</span>';
-        btn.disabled = false;
-      }, Math.max(800, (dur + 1.2) * 1000));
-    }
-
-    playTransitionVisualization(parts[0], parts[1]);
-  };
-
-  window.testActiveTransition = window.testCurrentTransition;
 
   // --- Playback Engine ---
   function getFlowPlaySequence() {

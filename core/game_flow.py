@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 
 from core.models import EffectConfig, AnimationType, RGBColor, _safe_float, _safe_int
+from core.effects.flow import normalize_transition_style, to_flow_effect
 
 logger = logging.getLogger("autoglow.game_flow")
 
@@ -28,9 +29,12 @@ DEFAULT_FLOW_TEMPLATE = os.path.join(PROJECT_ROOT, "defaults", "game_flows.json"
 class FlowTransition:
     from_phase_id: str
     to_phase_id: str
-    style: str = "crossfade"  # "crossfade", "wipe", "pulse", "flash", "curtain", "instant"
+    style: str = "crossfade"  # one of core.effects.flow.FLOW_TRANSITIONS: instant (Cut), crossfade (Fade), wipe, curtain, flash
     duration: float = 0.6     # seconds
     accent_color: Optional[RGBColor] = None
+
+    def __post_init__(self) -> None:
+        self.style = normalize_transition_style(self.style)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -52,7 +56,7 @@ class FlowTransition:
         return cls(
             from_phase_id=str(data.get("from_phase_id", "")),
             to_phase_id=str(data.get("to_phase_id", "")),
-            style=str(data.get("style", "crossfade")),
+            style=normalize_transition_style(data.get("style", "crossfade")),
             duration=max(0.05, _safe_float(data.get("duration"), 0.6)),
             accent_color=RGBColor.from_dict(acc) if acc else None
         )
@@ -66,6 +70,10 @@ class FlowPhase:
     effect: EffectConfig = field(default_factory=EffectConfig)
     order_index: int = 0
     is_baseline: bool = False
+
+    def __post_init__(self) -> None:
+        # Every flow step uses the curated Flow Matrix looks; older effects are converted once here
+        self.effect = to_flow_effect(self.effect)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -296,7 +304,7 @@ def create_default_game_flow() -> GameFlow:
     phases = [p_idle, p_game_start, p_turn_p1, p_takeout, p_turn_p2, p_leg_won, p_match_won]
 
     transitions = {
-        "idle->game_start": FlowTransition("idle", "game_start", style="pulse", duration=0.8, accent_color=RGBColor(0, 240, 255)),
+        "idle->game_start": FlowTransition("idle", "game_start", style="curtain", duration=0.8),
         "game_start->turn_p1": FlowTransition("game_start", "turn_p1", style="curtain", duration=0.6),
         "turn_p1->takeout": FlowTransition("turn_p1", "takeout", style="wipe", duration=0.6),
         "takeout->turn_p2": FlowTransition("takeout", "turn_p2", style="wipe", duration=0.6),
@@ -310,7 +318,7 @@ def create_default_game_flow() -> GameFlow:
         "turn_p1->match_won": FlowTransition("turn_p1", "match_won", style="flash", duration=0.6, accent_color=RGBColor(245, 158, 11)),
         "leg_won->turn_p1": FlowTransition("leg_won", "turn_p1", style="curtain", duration=0.6),
         "leg_won->idle": FlowTransition("leg_won", "idle", style="crossfade", duration=1.0),
-        "match_won->idle": FlowTransition("match_won", "idle", style="cut", duration=0.0),
+        "match_won->idle": FlowTransition("match_won", "idle", style="instant", duration=0.0),
     }
 
     events = {

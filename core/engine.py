@@ -5,6 +5,7 @@ profile-driven lighting effects, and real-time UI telemetry dispatching.
 """
 
 import asyncio
+import dataclasses
 import logging
 import time
 from typing import Optional, Set, Callable, Awaitable, Dict, Any
@@ -667,14 +668,7 @@ class AutoGlowEngine:
             target_phase_id = "turn_p1" if p_idx == 0 else "turn_p2"
             p = flow.get_phase(target_phase_id)
             if p and p.effect and p.effect.enabled:
-                return EffectConfig(
-                    animation=p.effect.animation,
-                    color_primary=p.effect.color_primary,
-                    color_secondary=p.effect.color_secondary,
-                    duration=0.0,
-                    speed=p.effect.speed,
-                    enabled=True
-                )
+                return dataclasses.replace(p.effect, duration=0.0, enabled=True)
             return None
 
         key_map = {
@@ -709,10 +703,7 @@ class AutoGlowEngine:
             p = flow.get_phase("match_won")
             return p.effect if (p and p.effect and p.effect.enabled) else None
 
-        if event.event_type in [DartEventType.GAME_IDLE, DartEventType.MANUAL_RESET]:
-            p = flow.get_phase("idle")
-            return p.effect if (p and p.effect and p.effect.enabled) else None
-
+        # GAME_IDLE / MANUAL_RESET have no flow effect: the idle look comes from the Setup tab (WLED preset 1)
         return None
 
     async def _dispatch_flow_event(self, event: DartEvent) -> None:
@@ -740,6 +731,12 @@ class AutoGlowEngine:
             self.flow_active_phase = "match_won"
         elif event.event_type in [DartEventType.GAME_IDLE, DartEventType.MANUAL_RESET]:
             self.flow_active_phase = "idle"
+            if self._flow_advance_task and not self._flow_advance_task.done():
+                self._flow_advance_task.cancel()
+            # Hand the strips back to the idle look saved in the Setup tab (WLED preset 1)
+            if any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in self.drivers.values()):
+                await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
+            return
 
         for dev in self._active_devices():
             drv = self.get_driver(dev.ip)
@@ -782,27 +779,13 @@ class AutoGlowEngine:
                         seg_flow = self.game_flow_storage.get_for_segment(dev.ip, seg_id)
                         p = seg_flow.get_phase(target_phase_id)
                         if p and p.effect and p.effect.enabled:
-                            baseline_eff = EffectConfig(
-                                animation=p.effect.animation,
-                                color_primary=p.effect.color_primary,
-                                color_secondary=p.effect.color_secondary,
-                                duration=0.0,
-                                speed=p.effect.speed,
-                                enabled=True
-                            )
+                            baseline_eff = dataclasses.replace(p.effect, duration=0.0, enabled=True)
                             await drv.play_effect(baseline_eff, segment_id=seg_id, force_enable=True)
                 else:
                     seg_flow = self.game_flow_storage.get_for_segment(dev.ip, None)
                     p = seg_flow.get_phase(target_phase_id)
                     if p and p.effect and p.effect.enabled:
-                        baseline_eff = EffectConfig(
-                            animation=p.effect.animation,
-                            color_primary=p.effect.color_primary,
-                            color_secondary=p.effect.color_secondary,
-                            duration=0.0,
-                            speed=p.effect.speed,
-                            enabled=True
-                        )
+                        baseline_eff = dataclasses.replace(p.effect, duration=0.0, enabled=True)
                         await drv.play_effect(baseline_eff, force_enable=True)
 
             await self._broadcast_telemetry({

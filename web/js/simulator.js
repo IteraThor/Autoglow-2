@@ -1,5 +1,5 @@
 /**
- * AutoGlow 2 - Digital LED Hardware Simulator & Effect Studio
+ * AutoGlow 2 - Digital LED Hardware Simulator
  * Real-time 50 FPS Canvas visualizer for WS281x addressable LED strips.
  */
 
@@ -77,19 +77,6 @@
   }
 
   var simLedRotation = getLedRotationForCurrentCam().deg;
-
-  // Active Studio Effect State
-  var studioState = {
-    animation: 'chase',
-    color_primary: '#00f0ff',
-    color_secondary: '#000000',
-    speed: 1.0,
-    duration: 2.0,
-    reverse: false,
-    transition: 'crossfade',
-    transition_duration: 0.5,
-    segment_id: 0
-  };
 
   function initSimulatorWebSocket() {
     if (simWs && (simWs.readyState === WebSocket.OPEN || simWs.readyState === WebSocket.CONNECTING)) {
@@ -841,7 +828,7 @@
 
   window.adjustSimulatorZoom = function () {};
 
-  // --- Studio Actions & Controls ---
+  // --- Simulator Controls ---
   window.setSimulatorViewMode = function () {};
 
   window.toggleSimulatorLiveStream = function () {
@@ -870,84 +857,31 @@
       });
   };
 
-  window.testStudioEffect = function () {
-    var animSelectEl = document.getElementById('studioAnimSelect');
-    var animVal = animSelectEl ? animSelectEl.value : 'solid';
-    var wledId = null;
-    var wledName = null;
-    var anim = animVal;
+  // The hardware simulator under the game flow is a nice-to-have preview: collapsed unless the viewer opened it
+  var HW_SIM_OPEN_KEY = 'autoglow_hw_sim_open';
 
-    if (!isNaN(parseInt(animVal, 10)) && isFinite(animVal)) {
-      wledId = parseInt(animVal, 10);
-      var selOpt = animSelectEl.options[animSelectEl.selectedIndex];
-      wledName = selOpt ? selOpt.text.replace(/ \(fx #\d+\)$/, '') : 'Breathe';
-      if (typeof window.mapWledEffectToSimAnimation === 'function') {
-        anim = window.mapWledEffectToSimAnimation(wledName);
-      } else {
-        anim = 'breathe';
-      }
-    }
+  function setHardwareSimulatorOpen(open) {
+    var body = document.getElementById('hwSimBody');
+    var card = document.getElementById('hwSimCard');
+    var btn = document.getElementById('btnToggleHwSim');
+    if (!body) return;
+    body.hidden = !open;
+    if (card) card.classList.toggle('is-collapsed', !open);
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
 
-    var col1 = document.getElementById('studioColPrimary').value;
-    var col2 = document.getElementById('studioColSecondary').value;
-    var speed = parseFloat(document.getElementById('studioSpeedInput').value) || 1.0;
-    var dur = parseFloat(document.getElementById('studioDurInput').value) || 2.0;
-    var reverse = document.getElementById('studioReverseToggle').checked;
-    var transEl = document.getElementById('studioTransitionSelect');
-    var transition = transEl ? transEl.value : 'instant';
-    var transDurEl = document.getElementById('studioTransDurInput');
-    var transitionDur = transDurEl ? (parseFloat(transDurEl.value) || 0.0) : 0.0;
-    var segId = parseInt(document.getElementById('studioSegSelect').value, 10) || 0;
-
-    var effPayload = {
-      animation: anim,
-      color_primary: hexToRgb(col1),
-      color_secondary: hexToRgb(col2),
-      speed: speed,
-      duration: dur,
-      reverse: reverse,
-      transition: transition,
-      transition_duration: transitionDur
-    };
-    if (wledId !== null) {
-      effPayload.wled_effect_id = wledId;
-      effPayload.wled_effect_name = wledName;
-    }
-
-    var payload = {
-      effect: effPayload,
-      segment_id: segId
-    };
-
-    fetch('/api/simulator/test_effect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.status === 'ok') {
-          showToast('Playing ' + anim.toUpperCase() + ' effect', 'info');
-        } else {
-          showToast(d.message || 'Error executing effect', 'error');
-        }
-      }).catch(function (e) {
-        showToast('Failed to trigger effect: ' + e, 'error');
-      });
+  window.toggleHardwareSimulator = function () {
+    var body = document.getElementById('hwSimBody');
+    var open = !!(body && body.hidden);
+    setHardwareSimulatorOpen(open);
+    try { localStorage.setItem(HW_SIM_OPEN_KEY, open ? '1' : '0'); } catch (e) { /* storage unavailable */ }
   };
 
-  window.stopStudioEffect = function () {
-    fetch('/api/test/effect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        effect: { animation: 'off', duration: 0.1 }
-      })
-    }).then(function () {
-      showToast('Simulator channels cleared', 'info');
-    }).catch(function (e) {
-      console.error(e);
-    });
-  };
+  (function restoreHardwareSimulatorState() {
+    var open = false;
+    try { open = localStorage.getItem(HW_SIM_OPEN_KEY) === '1'; } catch (e) { /* storage unavailable */ }
+    setHardwareSimulatorOpen(open);
+  })();
 
   window.triggerGameplayEvent = function (eventKey) {
     fetch('/api/test/effect', {
@@ -966,15 +900,6 @@
       });
   };
 
-
-  function hexToRgb(hex) {
-    var clean = hex.replace('#', '');
-    if (clean.length === 3) {
-      clean = clean[0] + clean[0] + clean[1] + clean[1] + clean[2] + clean[2];
-    }
-    var num = parseInt(clean, 16);
-    return [ (num >> 16) & 255, (num >> 8) & 255, num & 255 ];
-  }
 
   function updateLedCamUI() {
     var btn = document.getElementById('btnRotateLed120');
