@@ -19,6 +19,12 @@ from core.game_flow import GameFlowStorageManager, GameFlow, create_default_game
 
 logger = logging.getLogger("autoglow.engine")
 
+# Events that end a held bull-off animation: the bull-off is decided, or the match starts or ends
+BULL_OFF_HOLD_ENDS = (
+    DartEventType.BULL_OFF_WON, DartEventType.GAME_START, DartEventType.GAME_IDLE,
+    DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_FINISH,
+)
+
 
 def _seg_attr(seg: Any, name: str, default: Any = None) -> Any:
     """Read a segment field from either a SegmentConfig or a raw dict."""
@@ -84,6 +90,8 @@ class AutoGlowEngine:
         self._match_end_task: Optional[asyncio.Task] = None
         self._telemetry_subscribers: Set[Callable[[Dict[str, Any]], Awaitable[None]]] = set()
         self._pending_throw_event: Optional[DartEvent] = None
+        # A held Bull-off Started effect (duration 0) stays on through the bull-off instead of the turn colors
+        self._bull_off_hold = False
         # Set when the Lighting page plays a test effect, so leaving the page can restore idle
         self.lighting_test_active = False
 
@@ -399,6 +407,21 @@ class AutoGlowEngine:
                 max_dur = fallback_eff.duration
         return max_dur
 
+    def _is_event_enabled(self, event_key: str) -> bool:
+        """True when any segment's profile plays an effect for the event (Event Matrix only)."""
+        if self._is_flow_mode():
+            return False
+        devices = self._active_devices()
+        if not devices:
+            eff = self.profile.get_effect(event_key)
+            return bool(eff and eff.enabled)
+        for dev in devices:
+            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+                eff = self._profile_for(dev.ip, seg_id).get_effect(event_key)
+                if eff and eff.enabled:
+                    return True
+        return False
+
     async def _await_game_start_transition(self, duration: float) -> None:
         try:
             await asyncio.sleep(duration)
@@ -406,7 +429,7 @@ class AutoGlowEngine:
             if self._pending_throw_event:
                 pending = self._pending_throw_event
                 self._pending_throw_event = None
-                logger.info("Game Started intro animation finished -> transitioning to active player throw color")
+                logger.info("Intro animation finished -> transitioning to active player throw color")
                 await self.process_event(pending)
         except asyncio.CancelledError:
             pass
@@ -434,8 +457,8 @@ class AutoGlowEngine:
         event_key = event.event_type.value
         logger.info(f"AutoGlow Engine processing event: '{event_key}' (player='{event.player_name}', score={event.score}, seg='{event.segment_name}')")
 
-        # Game Started duration gating
-        if event.event_type == DartEventType.GAME_START:
+        # Intro duration gating (Game Started, Bull-off Started): the turn color waits for the intro to finish
+        if event.event_type in (DartEventType.GAME_START, DartEventType.BULL_OFF_START):
             if self._game_start_task and not self._game_start_task.done():
                 self._game_start_task.cancel()
             if self._flow_advance_task and not self._flow_advance_task.done():
@@ -445,7 +468,7 @@ class AutoGlowEngine:
                 self._match_end_task = None
             self._pending_throw_event = None
 
-            max_game_start_dur = self._get_max_effect_duration("game_start")
+            max_game_start_dur = self._get_max_effect_duration(event_key)
 
             if max_game_start_dur > 0.0:
                 self._game_start_end_time = time.time() + max_game_start_dur
@@ -457,7 +480,8 @@ class AutoGlowEngine:
             DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
             DartEventType.BULLSEYE, DartEventType.BUST, DartEventType.SCORE_180,
             DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS,
-            DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_IDLE
+            DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_IDLE,
+            DartEventType.BULL_OFF_WON
         ]:
             if self._game_start_task and not self._game_start_task.done():
                 self._game_start_task.cancel()
@@ -466,9 +490,27 @@ class AutoGlowEngine:
             self._game_start_end_time = 0.0
             self._pending_throw_event = None
 
+        if event.event_type == DartEventType.BULL_OFF_START:
+            self._bull_off_hold = self._is_event_enabled(event_key) and self._get_max_effect_duration(event_key) <= 0.0
+        elif event.event_type in BULL_OFF_HOLD_ENDS:
+            self._bull_off_hold = False
+
+        if event.event_type == DartEventType.THROW and self._bull_off_hold:
+            logger.info("Bull-off animation held -> skipping the turn color until the bull-off is decided")
+            await self._broadcast_telemetry({
+                "type": "game_event",
+                "event": event_key,
+                "player_name": event.player_name,
+                "player_index": event.player_index,
+                "score": event.score,
+                "multiplier": event.multiplier,
+                "segment": event.segment_name or ""
+            })
+            return
+
         if event.event_type == DartEventType.THROW and time.time() < self._game_start_end_time:
             remaining = self._game_start_end_time - time.time()
-            logger.info(f"Game Started intro animation playing ({remaining:.1f}s remaining) -> queued player throw color")
+            logger.info(f"Intro animation playing ({remaining:.1f}s remaining) -> queued player throw color")
             self._pending_throw_event = event
             await self._broadcast_telemetry({
                 "type": "game_event",
@@ -498,7 +540,7 @@ class AutoGlowEngine:
             if self.autodarts and getattr(self.autodarts, "_active_match_id", None) is None:
                 # Autodarts client attached, but no active match in progress
                 is_active_game = (
-                    event.event_type == DartEventType.GAME_START
+                    event.event_type in (DartEventType.GAME_START, DartEventType.BULL_OFF_START)
                     or event.event_type in [
                         DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
                         DartEventType.BULLSEYE, DartEventType.SCORE_180, DartEventType.BUST

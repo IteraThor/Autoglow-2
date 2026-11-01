@@ -4,7 +4,9 @@
 // --- Pane rendering ---
 // URLs, the rail and sub-tabs belong to web/js/core/router.js; it calls this to show and refresh a pane.
 function activatePane(targetId) {
+  const studioOpen = !!document.querySelector('.studio-page.active');
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  if (studioOpen && !targetId.startsWith('tab-studio') && window.leaveStudio) window.leaveStudio();
 
   const pane = document.getElementById(targetId);
   if (pane) pane.classList.add('active');
@@ -13,6 +15,7 @@ function activatePane(targetId) {
   if (targetId === 'tab-devices') renderDevicesTab();
   if (targetId === 'tab-autodarts') renderAutodartsTab();
   if (targetId === 'tab-effects') renderEffectsTable();
+  if (targetId.startsWith('tab-studio') && window.renderStudio) window.renderStudio(targetId);
   if (targetId === 'tab-simulator') {
     if (window.renderSimulatorTab) renderSimulatorTab();
     if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();

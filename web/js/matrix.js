@@ -700,7 +700,8 @@ const SMART_EVENT_COLORS = {
   match_won: "#ffd700", leg_won: "#00ff64", "180": "#ffc800", single: "#00c8ff",
   double: "#00ffb4", triple: "#ff7800", bullseye: "#ff1428", bust: "#ff0000",
   game_start: "#00f0ff", throw: "#00a0ff", takeout_in_progress: "#ffa000",
-  takeout: "#ffffff", manual_reset: "#a855f7", calibrating: "#a855f7"
+  takeout: "#ffffff", manual_reset: "#a855f7", calibrating: "#a855f7",
+  bull_off_start: "#ff1428", bull_off_won: "#00ff64"
 };
 const SMART_PLAYER_COLORS = ["#00a0ff", "#ff3c3c", "#00ff64", "#ffc800", "#a855f7", "#ff7800", "#00f0ff", "#ff50b4", "#b4ff00", "#ffffff"];
 

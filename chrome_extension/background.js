@@ -11,6 +11,7 @@ const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 const QUEUE_LIMIT = 50;
 const QUEUE_MAX_AGE_MS = 5000; // Older game data would light the board for something already over
+const SNAPSHOT_MAX_AGE_MS = 30 * 60 * 1000;
 
 let socket = null;
 let socketOpen = false;
@@ -19,6 +20,11 @@ let reconnectDelay = RECONNECT_MIN_MS;
 let reconnectTimer = null;
 let pingTimer = null;
 let queue = [];
+// Newest match state of the primary tab. Resent (as a replay, so it lights nothing) whenever AutoGlow
+// connects, so the Studio scoreboard is complete right away instead of after the next dart.
+let matchSnapshot = null; // { at, payload }
+// Same for the lobby the tab has open, so the Studio shows the picked players after a reconnect
+let lobbySnapshot = null; // { at, payload }
 
 const tabs = new Map(); // tabId -> { port, url }
 let primaryTabId = null;
@@ -41,6 +47,9 @@ function connect() {
     sendNow({ type: 'hello', version: chrome.runtime.getManifest().version });
     sendNow(primaryTabState());
     const now = Date.now();
+    for (const snap of [lobbySnapshot, matchSnapshot]) {
+      if (snap && now - snap.at <= SNAPSHOT_MAX_AGE_MS) sendNow({ ...snap.payload, replay: true });
+    }
     for (const item of queue) {
       if (now - item.at <= QUEUE_MAX_AGE_MS) sendNow(item.payload);
     }
@@ -104,6 +113,23 @@ function relay(payload) {
   connect();
 }
 
+function rememberSnapshot(msg) {
+  const m = msg.type === 'ws' ? msg.message : null;
+  if (m && m.channel === 'autodarts.matches' && typeof m.topic === 'string' && m.topic.endsWith('.state')) {
+    matchSnapshot = { at: Date.now(), payload: msg };
+  } else if (m && m.channel === 'autodarts.lobbies' && typeof m.topic === 'string' && m.topic.endsWith('.state')) {
+    lobbySnapshot = { at: Date.now(), payload: msg };
+  } else if (msg.type === 'http' && /\/gs\/v\d+\/lobbies\/[^/?#]+\/?(\?|$)/.test(msg.url || '') && msg.body && msg.body.id) {
+    lobbySnapshot = { at: Date.now(), payload: msg };
+  } else if (msg.type === 'http' && /\/gs\/v\d+\/matches\/[^/?#]+\/?(\?|$)/.test(msg.url || '') && msg.body && msg.body.id) {
+    // The match the Autodarts app loaded, e.g. after a page reload in the middle of a game
+    matchSnapshot = {
+      at: Date.now(),
+      payload: { type: 'ws', message: { channel: 'autodarts.matches', topic: `${msg.body.id}.state`, data: msg.body } }
+    };
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Autodarts tabs
 // -----------------------------------------------------------------------------
@@ -125,6 +151,7 @@ chrome.runtime.onConnect.addListener((port) => {
       if (tab) tab.url = msg.url || tab.url;
     }
     if (tabId !== primaryTabId) return;
+    rememberSnapshot(msg);
     relay(msg);
     updateBadge();
   });
@@ -134,6 +161,8 @@ chrome.runtime.onConnect.addListener((port) => {
     if (tab && tab.port === port) tabs.delete(tabId);
     if (primaryTabId === tabId && !tabs.has(tabId)) {
       primaryTabId = tabs.size ? tabs.keys().next().value : null;
+      matchSnapshot = null;
+      lobbySnapshot = null;
       relay(primaryTabState());
     }
     updateBadge();

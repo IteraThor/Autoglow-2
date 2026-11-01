@@ -117,6 +117,8 @@ class DartEventType(str, Enum):
     MATCH_WON = "match_won"
     TURN_CHANGE = "turn_change"
     GAME_START = "game_start"
+    BULL_OFF_START = "bull_off_start"
+    BULL_OFF_WON = "bull_off_won"
     GAME_FINISH = "game_finish"
     GAME_IDLE = "game_idle"
     CALIBRATING = "calibrating"
@@ -690,6 +692,20 @@ class ProfileConfig:
                 enabled=False
             ),
             DartEventType.GAME_START.value: EffectConfig(
+                animation=AnimationType.SOLID,
+                color_primary=RGBColor(0, 0, 0),
+                duration=0.0,
+                speed=1.0,
+                enabled=False
+            ),
+            DartEventType.BULL_OFF_START.value: EffectConfig(
+                animation=AnimationType.SOLID,
+                color_primary=RGBColor(0, 0, 0),
+                duration=0.0,
+                speed=1.0,
+                enabled=False
+            ),
+            DartEventType.BULL_OFF_WON.value: EffectConfig(
                 animation=AnimationType.SOLID,
                 color_primary=RGBColor(0, 0, 0),
                 duration=0.0,

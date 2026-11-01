@@ -80,6 +80,12 @@
   box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.15);
 }
 
+/* Locked fields must look locked, or they read as broken when a click does nothing */
+.input-text:disabled, .select-ide:disabled, select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 select option,
 select.form-control option,
 .select-ide option {

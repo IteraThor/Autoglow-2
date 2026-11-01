@@ -36,6 +36,15 @@ else
     exit 1
 fi
 
+# Studio cameras (/dev/video*) and the H.264 encoder (/dev/dri/renderD*): the service runs without a
+# desktop login, so it only gets these devices through the video and render groups
+for GROUP in video render; do
+    if getent group "$GROUP" >/dev/null 2>&1 && ! id -nG "$ORIGINAL_USER" | grep -qw "$GROUP"; then
+        echo "--> Adding $ORIGINAL_USER to the $GROUP group (Studio cameras)..."
+        usermod -aG "$GROUP" "$ORIGINAL_USER"
+    fi
+done
+
 # Dynamically determine the project path
 PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 

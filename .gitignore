@@ -29,6 +29,8 @@ config.json.*
 /game_flows.json
 /game_flows.json.*
 /presets/
+# Studio players and pictures
+/studio/
 
 # Chrome extension signing key (defines this installation's extension ID)
 chrome_extension.key

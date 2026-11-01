@@ -36,6 +36,7 @@ from routes.simulator_routes import (
     handle_simulator_test_effect, handle_simulator_cable_offset
 )
 from routes.flow_routes import register_flow_routes
+from routes.studio_routes import register_studio_routes
 from routes.hub_routes import handle_hub_status, handle_status, handle_setup_checklist
 from routes.extension_routes import (
     UPDATE_XML_PATH, CRX_PATH, handle_extension_update_xml, handle_extension_crx
@@ -49,7 +50,8 @@ from routes.auth_routes import (
 # that web/js/core/router.js redirects to their canonical page.
 SPA_PATHS = [
     "/", "/hub", "/setup", "/setup/controllers", "/setup/connection",
-    "/lighting", "/lighting/matrix", "/lighting/flow", "/power", "/settings",
+    "/lighting", "/lighting/matrix", "/lighting/flow", "/studio", "/studio/broadcast", "/studio/match",
+    "/studio/players", "/studio/cameras", "/power", "/settings",
     "/index.html", "/home", "/dashboard", "/devices", "/wled-devices", "/autodarts", "/autodarts-account",
     "/matrix", "/event-matrix", "/simulator", "/led-simulator", "/power-timers", "/idle", "/idle-mode",
     "/updates", "/updates-backups", "/backups",
@@ -142,5 +144,35 @@ def register_routes(app: web.Application, web_dir: str):
     # Game Flow Simulator & Visual Planner Routes
     register_flow_routes(app)
 
+    # Studio: broadcast overlay settings, players and live scoreboard
+    register_studio_routes(app)
+
+    async def handle_studio_live(request: web.Request) -> web.FileResponse:
+        return web.FileResponse(
+            os.path.join(web_dir, "studio", "live.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
+    app.router.add_get("/studio/live", handle_studio_live)
+
+    # The output's script modules are not versioned in their URLs; TVs must revalidate them after an update
+    studio_js_dir = os.path.join(web_dir, "studio", "js")
+    studio_modules = {n for n in os.listdir(studio_js_dir) if n.endswith(".js")} if os.path.isdir(studio_js_dir) else set()
+
+    async def handle_studio_module(request: web.Request) -> web.StreamResponse:
+        name = request.match_info["name"]
+        if name not in studio_modules:
+            raise web.HTTPNotFound()
+        return web.FileResponse(os.path.join(studio_js_dir, name),
+                                headers={"Cache-Control": "no-cache", "Content-Type": "text/javascript"})
+    app.router.add_get("/studio/js/{name}", handle_studio_module)
+
     # Static Assets Directory
     app.router.add_static("/", web_dir)
+
+    # Script and style URLs are not versioned either: without a Cache-Control header browsers reuse a
+    # cached copy without asking (heuristic freshness), so an update reached them only much later.
+    # "no-cache" makes them ask each time; an unchanged file costs a 304 (ETag/Last-Modified).
+    async def revalidate_static(request: web.Request, response: web.StreamResponse) -> None:
+        if isinstance(response, web.FileResponse) and "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-cache"
+    app.on_response_prepare.append(revalidate_static)

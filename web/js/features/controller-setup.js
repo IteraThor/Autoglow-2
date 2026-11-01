@@ -14,10 +14,12 @@ const COLOR_ORDERS = ['GRB', 'RGB', 'BRG', 'RBG', 'BGR', 'GBR'];
 const STRIP_TYPES = [
   { value: 22, label: 'WS281x' }
 ];
-const LIGHT_SEGMENT = 'Light strip';
 // Same order as the zone preview, so the strip and the screen show the same colors
 const ZONE_COLORS = ['#22d3ee', '#f59e0b', '#a855f7', '#22c55e', '#ef4444', '#3b82f6', '#ec4899', '#eab308', '#14b8a6', '#f97316', '#8b5cf6', '#84cc16'];
 const MAX_ZONES = 12;
+// Outputs per controller the guide offers; WLED on an ESP32 drives up to 10
+const MAX_STRIPS = 4;
+const MAX_LIGHTS = 4;
 // WLED's Aurora effect (38) with its own Aurora palette (50): the RGB strip's look once it is set up
 const AURORA = { fx: 38, pal: 50, sx: 128, ix: 128 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -58,40 +60,60 @@ export function deriveColorOrder(code, seenForRed, seenForGreen) {
   return index < 0 ? null : (code & ~0x0f) | index;
 }
 
-// The light strip counts once its pin is known (the RGB strip is tested before the light strip step)
-const hasLightStrip = plan => plan.lightStrip && Number.isInteger(plan.lightPin) && plan.lightPin >= 0;
+// Each output needs its own data pin; strips without one yet (set up in a later step) are left out of the layout
+const validPin = pin => Number.isInteger(pin) && pin >= 0;
+const readyStrips = plan => plan.strips.filter(s => validPin(s.pin) && s.count >= 1);
+const readyLights = plan => plan.lights.filter(l => validPin(l.pin));
 
-// WLED outputs (/json/cfg hw.led.ins) for the answers. Fields the guide does not ask about are kept.
+export const stripLabel = (plan, k) => (plan.strips.length === 1 ? 'RGB strip' : `RGB strip ${k + 1}`);
+export const lightLabel = (plan, j) => (plan.lights.length === 1 ? 'Light strip' : `Light strip ${j + 1}`);
+
+// WLED outputs (/json/cfg hw.led.ins) for the answers: the RGB strips, then the light strips. Fields the guide does not ask about are kept.
 export function buildOutputs(plan) {
-  const outputs = [{
-    ...plan.stripBus,
-    start: 0,
-    len: plan.count,
-    pin: [plan.stripPin],
-    type: plan.stripType,
-    order: plan.order,
-    rev: Boolean(plan.stripBus?.rev),
-    skip: Number(plan.stripBus?.skip) || 0
-  }];
-  if (hasLightStrip(plan)) {
-    outputs.push({ ...plan.lightBus, start: plan.count, len: 1, pin: [plan.lightPin], type: PWM_WHITE, order: 0, rev: false, skip: 0 });
-  }
+  let start = 0;
+  const outputs = readyStrips(plan).map(s => {
+    const out = { ...s.bus, start, len: s.count, pin: [s.pin], type: s.type, order: s.order, rev: Boolean(s.bus?.rev), skip: Number(s.bus?.skip) || 0 };
+    start += s.count;
+    return out;
+  });
+  readyLights(plan).forEach(l => {
+    outputs.push({ ...l.bus, start, len: 1, pin: [l.pin], type: PWM_WHITE, order: 0, rev: false, skip: 0 });
+    start += 1;
+  });
   return outputs;
 }
 
 // How many LEDs after a zone's first LED its effects start (WLED's segment offset "of")
-export function zoneOffset(plan, zone, range) {
-  return (plan.offsets[zone] || 0) % (range.stop - range.start);
+export function zoneOffset(strip, zone, range) {
+  return (strip.offsets[zone] || 0) % (range.stop - range.start);
 }
 
-// WLED segments: the RGB strip's zones, then the light strip as its own segment. Only the saved layout
-// and the idle preview carry the zone offsets; the light tests use none, so their LED numbers are the strip's own.
-export function buildSegments(plan, zones = plan.zones, { offsets = false } = {}) {
-  const ranges = zoneRanges(plan.count, zones);
-  const segs = ranges.map((r, i) => ({ id: i, n: ranges.length === 1 ? 'RGB Strip' : `RGB zone ${i + 1}`, start: r.start, stop: r.stop, of: offsets ? zoneOffset(plan, i, r) : 0, on: true, frz: false }));
-  if (hasLightStrip(plan)) segs.push({ id: segs.length, n: LIGHT_SEGMENT, start: plan.count, stop: plan.count + 1, on: true, frz: false });
-  return segs;
+// WLED segments with what each belongs to: { k, strip, zone, seg } per RGB strip zone, then { j, light, seg } per light strip.
+// whole: one segment per RGB strip, as the light tests use. Only the saved layout and the idle preview carry the zone
+// offsets; the tests use none, so their LED numbers are the strip's own.
+export function layout(plan, { whole = false, offsets = false } = {}) {
+  const entries = [];
+  let base = 0;
+  readyStrips(plan).forEach(strip => {
+    const k = plan.strips.indexOf(strip);
+    const ranges = zoneRanges(strip.count, whole ? 1 : strip.zones);
+    const prefix = plan.strips.length === 1 ? 'RGB' : `RGB ${k + 1}`;
+    ranges.forEach((r, zone) => entries.push({ k, strip, zone, seg: {
+      n: ranges.length === 1 ? `${prefix} Strip` : `${prefix} zone ${zone + 1}`,
+      start: base + r.start, stop: base + r.stop, of: offsets ? zoneOffset(strip, zone, r) : 0, on: true, frz: false
+    } }));
+    base += strip.count;
+  });
+  readyLights(plan).forEach(light => {
+    const j = plan.lights.indexOf(light);
+    entries.push({ j, light, seg: { n: lightLabel(plan, j), start: base, stop: base + 1, on: true, frz: false } });
+    base += 1;
+  });
+  entries.forEach((e, id) => { e.seg = { id, ...e.seg }; });
+  return entries;
 }
+
+export const buildSegments = (plan, options) => layout(plan, options).map(e => e.seg);
 
 // Looks offered for the idle lighting (WLED effects: 9 Rainbow, 38 Aurora, 2 Breathe, 0 Solid)
 export const IDLE_LOOKS = [
@@ -107,8 +129,8 @@ const percentToBri = percent => Math.round((percent / 100) * 255);
 export function idleSegments(plan) {
   const { look: lookId, color, bri, lightBri } = plan.idle;
   const look = IDLE_LOOKS.find(l => l.id === lookId) || IDLE_LOOKS[0];
-  return buildSegments(plan, plan.zones, { offsets: true }).map(s => {
-    if (s.n === LIGHT_SEGMENT) {
+  return layout(plan, { offsets: true }).map(({ light, seg: s }) => {
+    if (light) {
       return lightBri > 0 ? { ...s, bri: percentToBri(lightBri), fx: 0, col: [[255, 255, 255], [0, 0, 0]] } : { ...s, on: false };
     }
     if (!look.fx) return { ...s, on: false };
@@ -119,8 +141,9 @@ export function idleSegments(plan) {
 export function describeIdle(plan) {
   const { look: lookId, color, bri, lightBri } = plan.idle;
   const look = IDLE_LOOKS.find(l => l.id === lookId) || IDLE_LOOKS[0];
-  const parts = [look.fx ? `RGB strip: ${look.label}${look.color ? ` (${color})` : ''}, ${bri}%` : 'RGB strip: off'];
-  if (hasLightStrip(plan)) parts.push(`Light strip: ${lightBri > 0 ? `${lightBri}%` : 'off'}`);
+  const strips = plan.strips.length === 1 ? 'RGB strip' : 'RGB strips';
+  const parts = [look.fx ? `${strips}: ${look.label}${look.color ? ` (${color})` : ''}, ${bri}%` : `${strips}: off`];
+  if (readyLights(plan).length) parts.push(`${plan.lights.length === 1 ? 'Light strip' : 'Light strips'}: ${lightBri > 0 ? `${lightBri}%` : 'off'}`);
   return parts.join('\n');
 }
 
@@ -131,27 +154,39 @@ export function layoutKey(outputs) {
 
 function planFromLive(ip, live) {
   const buses = Array.isArray(live?.hw_ins) ? live.hw_ins : [];
-  const stripBus = buses.find(b => !isPwmBus(b)) || null;
-  const lightBus = buses.find(isPwmBus) || null;
-  const firstSeg = Array.isArray(live?.state?.seg) ? live.state.seg[0] : null;
+  const segs = Array.isArray(live?.state?.seg) ? live.state.seg : [];
+  const rgbBuses = buses.filter(b => !isPwmBus(b));
+  const strips = (rgbBuses.length ? rgbBuses : [null]).map((bus, k) => newStrip(bus, k === 0 ? 16 : ''));
+  // Per zone, the start of its effects as an offset from its first LED; the guide starts with one zone per strip
+  strips.forEach(strip => {
+    const seg = segs.find(s => Number(s?.start) === (Number(strip.bus?.start) || 0));
+    strip.offsets = [Math.max(0, Number(seg?.of) || 0)];
+  });
   return {
     ip,
     name: live?.name || 'WLED Controller',
-    count: Number(stripBus?.len) || 45,
-    stripPin: firstPin(stripBus) ?? 16,
-    stripType: STRIP_TYPES[0].value,
-    order: Number(stripBus?.order) || 0,
-    colorsChecked: false,
-    lightStrip: Boolean(lightBus),
-    lightPin: firstPin(lightBus) ?? '',
-    zones: 1,
-    // Per zone, the start of its effects as an offset from its first LED; the guide starts with one zone
-    offsets: [Math.max(0, Number(firstSeg?.of) || 0)],
+    strips,
+    lights: buses.filter(isPwmBus).map(newLight),
     // Defaults match what the guide saved before it asked: Rainbow, everything at 100%
-    idle: { look: 'rainbow', color: '#00ff9d', bri: 100, lightBri: 100 },
-    stripBus,
-    lightBus
+    idle: { look: 'rainbow', color: '#00ff9d', bri: 100, lightBri: 100 }
   };
+}
+
+function newStrip(bus = null, pin = '') {
+  return {
+    count: Number(bus?.len) || 45,
+    pin: firstPin(bus) ?? pin,
+    type: STRIP_TYPES[0].value,
+    order: Number(bus?.order) || 0,
+    colorsChecked: false,
+    zones: 1,
+    offsets: [],
+    bus
+  };
+}
+
+function newLight(bus = null) {
+  return { pin: firstPin(bus) ?? '', bus };
 }
 
 function svg(tag, attrs) {
@@ -161,17 +196,18 @@ function svg(tag, attrs) {
 }
 
 // The RGB strip as a bar from LED 1 to the last LED, colored by zone, with a white mark where each zone's effects start
-function stripPreview(plan) {
+function stripPreview(strip, k, label) {
   const width = 400;
   const gap = 3;
-  const root = svg('svg', { class: 'setup-strip', id: 'setupStripPreview', viewBox: `0 0 ${width} 18`, role: 'img', 'aria-label': `RGB strip of ${plan.count} LEDs in ${plan.zones} zone${plan.zones === 1 ? '' : 's'}` });
-  zoneRanges(plan.count, plan.zones).forEach((range, zone) => {
-    const x = (range.start / plan.count) * width;
-    const w = ((range.stop - range.start) / plan.count) * width;
-    const first = range.start + zoneOffset(plan, zone, range);
+  const { count, zones } = strip;
+  const root = svg('svg', { class: 'setup-strip', id: `setupStripPreview${k}`, viewBox: `0 0 ${width} 18`, role: 'img', 'aria-label': `${label} of ${count} LEDs in ${zones} zone${zones === 1 ? '' : 's'}` });
+  zoneRanges(count, zones).forEach((range, zone) => {
+    const x = (range.start / count) * width;
+    const w = ((range.stop - range.start) / count) * width;
+    const first = range.start + zoneOffset(strip, zone, range);
     root.append(
       svg('rect', { x, y: 2, width: Math.max(1, w - gap), height: 14, rx: 3, fill: ZONE_COLORS[zone % ZONE_COLORS.length] }),
-      svg('rect', { x: (first / plan.count) * width, y: 0, width: Math.max(3, width / plan.count - 1), height: 18, rx: 1, fill: '#ffffff', stroke: '#000000', 'stroke-width': 0.75 }));
+      svg('rect', { x: (first / count) * width, y: 0, width: Math.max(3, width / count - 1), height: 18, rx: 1, fill: '#ffffff', stroke: '#000000', 'stroke-width': 0.75 }));
   });
   return root;
 }
@@ -194,6 +230,30 @@ function numberInput(value, { min = 0, max = 9999, placeholder = '', onchange })
   return h('input', { class: 'ui-input setup-number', type: 'number', inputmode: 'numeric', min, max, value, placeholder, oninput: event => onchange(event.target) });
 }
 
+// A number with − and + buttons; onchange gets each count inside min..max
+function countStepper(value, { min, max, label, onchange }) {
+  let current = value;
+  const set = n => {
+    current = Math.max(min, Math.min(max, n));
+    input.value = current;
+    onchange(current);
+  };
+  const input = numberInput(value, { min, max, onchange: el => {
+    const n = parseInt(el.value, 10);
+    if (n >= min && n <= max) {
+      current = n;
+      onchange(n);
+    }
+  } });
+  input.setAttribute('aria-label', label);
+  // A number outside min..max is not applied; leaving the field shows the count in use again
+  input.addEventListener('change', () => { input.value = current; });
+  return h('span', { class: 'setup-stepper' },
+    h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': `${label}: one less`, onclick: () => set(current - 1) }, '−'),
+    input,
+    h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': `${label}: one more`, onclick: () => set(current + 1) }, '+'));
+}
+
 function choiceButtons(options, onpick) {
   return h('div', { class: 'setup-choices' }, ...options.map(([value, label, tone]) =>
     h('button', { class: 'ui-btn ui-btn-sm', type: 'button', dataset: tone ? { tone } : {}, onclick: () => onpick(value) }, label)));
@@ -209,8 +269,9 @@ export function runControllerSetup(ip, live) {
   // rebuild its LEDs, which wipes test colors and costs time
   const originalLayout = layoutKey(original.hw_ins);
   let sentOutputs = originalLayout;
+  let stripK = 0;            // the RGB strip whose step is open
   let stripTest = null;      // { kind: 'ends' } or { kind: 'colors', seenForRed, asking }
-  let lightTest = null;     // 'on' | 'ok' | 'dark'
+  const lightTests = [];     // per light strip: 'on' | 'ok' | 'dark'
   let busy = false;
 
   return new Promise(resolve => {
@@ -237,8 +298,8 @@ export function runControllerSetup(ip, live) {
 
     const steps = () => [
       { id: 'basics', title: 'Controller', render: renderBasics, check: checkBasics },
-      { id: 'strip', title: 'RGB strip', render: renderStrip, check: checkStrip },
-      plan.lightStrip && { id: 'light', title: 'Light strip', render: renderLight, check: checkLight },
+      ...plan.strips.map((_, k) => ({ id: 'strip', strip: k, title: stripLabel(plan, k), render: () => renderStrip(k), check: checkStrip })),
+      plan.lights.length > 0 && { id: 'light', title: plan.lights.length === 1 ? 'Light strip' : 'Light strips', render: renderLights, check: checkLights },
       { id: 'zones', title: 'Zones', render: renderZones, check: () => true },
       { id: 'idle', title: 'Idle lighting', render: renderIdle, check: () => true },
       { id: 'review', title: 'Review', render: renderReview, check: () => true }
@@ -267,12 +328,10 @@ export function runControllerSetup(ip, live) {
       }
     }
 
-    // RGB strip in one color, light strip off
-    function stripState(color, extra = {}) {
-      const segs = buildSegments(plan, 1);
-      segs[0] = { ...segs[0], fx: 0, col: [rgb(color), [0, 0, 0]], ...extra };
-      if (segs[1]) segs[1].on = false;
-      return { on: true, bri: 110, transition: 0, seg: segs };
+    // One RGB strip in one color; the other RGB strips and the light strips off
+    function stripState(k, color, extra = {}) {
+      const seg = layout(plan, { whole: true }).map(e => (e.k === k ? { ...e.seg, fx: 0, col: [rgb(color), [0, 0, 0]], ...extra } : { ...e.seg, on: false }));
+      return { on: true, bri: 110, transition: 0, seg };
     }
 
     async function close(result) {
@@ -301,23 +360,33 @@ export function runControllerSetup(ip, live) {
       if (delta > 0 && !step.check()) return;
       // The strip shows the next step's test from here on, not the start LED
       clearTimeout(startTimer);
+      clearTimeout(endsTimer);
       startTest = null;
+      stripTest = null;
       if (delta > 0 && step.id === 'review') {
         close({ name: plan.name, hw_ins: buildOutputs(plan), seg: idleSegments(plan) });
         return;
       }
-      if (delta > 0 && step.id === 'strip') preview(stripState('#000000', AURORA));
+      // A checked RGB strip shows its own look; the next strip's test lights only that one
+      if (delta > 0 && step.id === 'strip') {
+        preview({ on: true, bri: 110, transition: 0, seg: layout(plan, { whole: true }).map(e => (e.light ? { ...e.seg, on: false } : { ...e.seg, ...AURORA })) });
+      }
       // Entering the idle step: show the current idle look on the strip
       if (delta > 0 && step.id === 'zones') previewIdle(0);
       stepIndex = Math.max(0, Math.min(list.length - 1, stepIndex + delta));
       render();
     }
 
+    function renderProgress() {
+      const list = steps();
+      progress.replaceChildren(...list.map((s, i) => h('li', { 'aria-current': i === stepIndex ? 'step' : null, dataset: { done: String(i < stepIndex) } }, s.title)));
+    }
+
     function render() {
       const list = steps();
       stepIndex = Math.min(stepIndex, list.length - 1);
       const step = list[stepIndex];
-      progress.replaceChildren(...list.map((s, i) => h('li', { 'aria-current': i === stepIndex ? 'step' : null, dataset: { done: String(i < stepIndex) } }, s.title)));
+      renderProgress();
       backBtn.hidden = stepIndex === 0;
       nextBtn.textContent = step.id === 'review' ? 'Apply to controller' : 'Next';
       status.hidden = true;
@@ -327,15 +396,24 @@ export function runControllerSetup(ip, live) {
     // --- Step 1: name and what is connected ---
     function renderBasics() {
       const name = h('input', { class: 'ui-input', id: 'setupName', type: 'text', value: plan.name, maxlength: 32, oninput: event => { plan.name = event.target.value; } });
-      const light = h('input', { type: 'checkbox', checked: plan.lightStrip, onchange: event => { plan.lightStrip = event.target.checked; render(); } });
+      // More or fewer strips change the steps; the strips kept keep their answers
+      const resize = (list, n, make) => {
+        while (list.length < n) list.push(make());
+        list.length = n;
+        renderProgress();
+      };
       return [
         h('p', { class: 'setup-lead' }, 'A few questions about what is wired to this controller. AutoGlow then sets up WLED for you.'),
         field('What should this controller be called?', name),
         h('fieldset', { class: 'setup-field' },
           h('legend', { class: 'setup-label' }, 'What is connected to it?'),
-          h('label', { class: 'setup-check' }, h('input', { type: 'checkbox', checked: true, disabled: true }), h('span', {}, 'A WS281x RGB LED strip (every LED can show its own color)')),
-          h('label', { class: 'setup-check' }, light, h('span', {}, 'A regular light strip (one color, only on/off and dimming)')),
-          h('small', { class: 'setup-hint' }, 'Ticked from what the controller reports today.')
+          h('div', { class: 'setup-check' },
+            countStepper(plan.strips.length, { min: 1, max: MAX_STRIPS, label: 'WS281x RGB LED strips', onchange: n => resize(plan.strips, n, () => newStrip()) }),
+            h('span', {}, 'WS281x RGB LED strips (every LED can show its own color)')),
+          h('div', { class: 'setup-check' },
+            countStepper(plan.lights.length, { min: 0, max: MAX_LIGHTS, label: 'Regular light strips', onchange: n => resize(plan.lights, n, () => newLight()) }),
+            h('span', {}, 'Regular light strips (one color, only on/off and dimming)')),
+          h('small', { class: 'setup-hint' }, 'Filled in from what the controller reports today. Each strip is wired to its own data pin (GPIO).')
         ),
         h('button', { class: 'ui-btn ui-btn-sm ui-btn-link', type: 'button', onclick: () => close({ skip: true }) }, 'Skip the guide and keep WLED\'s current setup')
       ];
@@ -351,29 +429,42 @@ export function runControllerSetup(ip, live) {
       return true;
     }
 
-    // --- Step 2: RGB strip ---
-    function renderStrip() {
-      const count = numberInput(plan.count, { min: 1, max: 1500, onchange: input => {
-        plan.count = parseInt(input.value, 10) || 0;
+    // The strip or light strip other than self already on this pin, or null
+    function pinOwner(pin, self) {
+      const k = plan.strips.findIndex(s => s !== self && s.pin === pin);
+      if (k >= 0) return stripLabel(plan, k);
+      const j = plan.lights.findIndex(l => l !== self && l.pin === pin);
+      return j >= 0 ? lightLabel(plan, j) : null;
+    }
+
+    // --- Step 2: each RGB strip ---
+    const strip = () => plan.strips[stripK];
+
+    function renderStrip(k) {
+      stripK = k;
+      const s = strip();
+      const count = numberInput(s.count, { min: 1, max: 1500, onchange: input => {
+        s.count = parseInt(input.value, 10) || 0;
         // Re-light the ends while the user dials the count in
-        if (stripTest?.kind === 'ends' && plan.count > 0) debounceEnds();
+        if (stripTest?.kind === 'ends' && s.count > 0) debounceEnds();
       } });
       count.id = 'setupCount';
       const stepper = h('div', { class: 'setup-stepper' },
         h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'One LED less', onclick: () => bump(-1) }, '−'),
         count,
         h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'One LED more', onclick: () => bump(1) }, '+'));
-      const pin = numberInput(plan.stripPin, { min: 0, max: 48, onchange: input => { plan.stripPin = parseInt(input.value, 10); } });
+      const pin = numberInput(s.pin, { min: 0, max: 48, placeholder: 'e.g. 16', onchange: input => { s.pin = input.value === '' ? '' : parseInt(input.value, 10); } });
       pin.id = 'setupStripPin';
-      const type = h('select', { class: 'ui-input', onchange: event => { plan.stripType = Number(event.target.value); } },
-        ...STRIP_TYPES.map(t => h('option', { value: t.value, selected: t.value === plan.stripType }, t.label)));
+      const type = h('select', { class: 'ui-input', onchange: event => { s.type = Number(event.target.value); } },
+        ...STRIP_TYPES.map(t => h('option', { value: t.value, selected: t.value === s.type }, t.label)));
       const order = h('select', { class: 'ui-input', id: 'setupOrder', onchange: event => setOrder(Number(event.target.value)) },
-        ...COLOR_ORDERS.map((label, value) => h('option', { value, selected: value === (plan.order & 0x0f) }, label)));
+        ...COLOR_ORDERS.map((label, value) => h('option', { value, selected: value === (s.order & 0x0f) }, label)));
+      const which = plan.strips.length === 1 ? 'the RGB strip' : `RGB strip ${k + 1}`;
 
       return [
-        field('How many LEDs does the RGB strip have?', stepper),
+        field(`How many LEDs does ${which} have?`, stepper),
         h('div', { class: 'setup-row' },
-          field('Data pin (GPIO)', pin, 'Filled in from the controller.'),
+          field('Data pin (GPIO)', pin, s.bus ? 'Filled in from the controller.' : null),
           field('LED type', type),
           field('Color order', order)),
         h('div', { class: 'setup-test' },
@@ -388,8 +479,8 @@ export function runControllerSetup(ip, live) {
 
     function bump(delta) {
       const input = document.getElementById('setupCount');
-      plan.count = Math.max(1, (parseInt(input.value, 10) || 0) + delta);
-      input.value = plan.count;
+      strip().count = Math.max(1, (parseInt(input.value, 10) || 0) + delta);
+      input.value = strip().count;
       clearFieldError(input);
       if (stripTest?.kind === 'ends') debounceEnds();
     }
@@ -402,9 +493,9 @@ export function runControllerSetup(ip, live) {
 
     async function testEnds() {
       if (busy || !checkStrip()) return;
-      const last = plan.count - 1;
+      const last = strip().count - 1;
       // White stays white with any color order, so the two ends can't be mixed up before the color check
-      const ok = await preview(stripState('#000000', { i: last === 0 ? [0, 'FFFFFF'] : [0, 'FFFFFF', last, 'FF0000'] }));
+      const ok = await preview(stripState(stripK, '#000000', { i: last === 0 ? [0, 'FFFFFF'] : [0, 'FFFFFF', last, 'FF0000'] }));
       if (ok) {
         stripTest = { kind: 'ends' };
         refreshStripTest();
@@ -414,17 +505,18 @@ export function runControllerSetup(ip, live) {
     // Red, green and blue bands from the start of the strip; the screen shows the same three swatches
     async function testBands() {
       if (busy || !checkStrip()) return;
-      const bands = plan.count >= 3 ? zoneRanges(plan.count, 3) : zoneRanges(plan.count, plan.count);
+      const { count } = strip();
+      const bands = count >= 3 ? zoneRanges(count, 3) : zoneRanges(count, count);
       const i = bands.flatMap((b, n) => [b.start, b.stop, ['FF0000', '00FF00', '0000FF'][n]]);
-      if (await preview(stripState('#000000', { i }))) {
+      if (await preview(stripState(stripK, '#000000', { i }))) {
         stripTest = { kind: 'bands' };
         refreshStripTest();
       }
     }
 
     function setOrder(value) {
-      plan.order = (plan.order & ~0x0f) | value;
-      plan.colorsChecked = false;
+      strip().order = (strip().order & ~0x0f) | value;
+      strip().colorsChecked = false;
       const select = document.getElementById('setupOrder');
       if (select) select.value = String(value);
       // Trying orders one after another: show each one on the strip straight away
@@ -433,7 +525,7 @@ export function runControllerSetup(ip, live) {
 
     async function findOrder() {
       if (busy || !checkStrip()) return;
-      if (await preview(stripState('#ff0000'))) {
+      if (await preview(stripState(stripK, '#ff0000'))) {
         stripTest = { kind: 'colors', asking: 'red' };
         refreshStripTest();
       }
@@ -441,26 +533,26 @@ export function runControllerSetup(ip, live) {
 
     async function answerColor(seen) {
       if (stripTest.asking === 'red') {
-        if (await preview(stripState('#00ff00'))) {
+        if (await preview(stripState(stripK, '#00ff00'))) {
           stripTest = { kind: 'colors', asking: 'green', seenForRed: seen };
           refreshStripTest();
         }
         return;
       }
-      const order = deriveColorOrder(plan.order, stripTest.seenForRed, seen);
+      const order = deriveColorOrder(strip().order, stripTest.seenForRed, seen);
       if (order === null) {
         stripTest = { kind: 'colors', result: 'conflict' };
         refreshStripTest();
         return;
       }
       setOrder(order & 0x0f);
-      plan.colorsChecked = true;
+      strip().colorsChecked = true;
       // Show red, green, blue on the strip as proof
       await testBands();
     }
 
     function confirmColors() {
-      plan.colorsChecked = true;
+      strip().colorsChecked = true;
       refreshStripTest();
     }
 
@@ -472,10 +564,11 @@ export function runControllerSetup(ip, live) {
       const box = h('div', { class: 'setup-test-body', id: 'setupStripTest', 'aria-live': 'polite' });
       const verdict = (tone, text) => h('p', { class: 'setup-verdict', dataset: { tone } }, text);
       if (!stripTest) return box;
+      const s = strip();
 
       if (stripTest.kind === 'ends') {
         if (stripTest.answer === 'ok') {
-          box.append(verdict('ok', `✓ ${plan.count} LEDs`));
+          box.append(verdict('ok', `✓ ${s.count} LEDs`));
           return box;
         }
         box.append(
@@ -494,10 +587,10 @@ export function runControllerSetup(ip, live) {
         }
       } else if (stripTest.kind === 'bands') {
         box.append(h('div', { class: 'setup-bands' },
-          ...[['#ff0000', 'Red'], ['#00ff00', 'Green'], ['#0000ff', 'Blue']].slice(0, Math.min(3, plan.count))
+          ...[['#ff0000', 'Red'], ['#00ff00', 'Green'], ['#0000ff', 'Blue']].slice(0, Math.min(3, s.count))
             .map(([color, label]) => h('span', { class: 'setup-band' }, swatch(color), label))));
-        box.append(plan.colorsChecked
-          ? verdict('ok', `✓ ${COLOR_ORDERS[plan.order & 0x0f]}`)
+        box.append(s.colorsChecked
+          ? verdict('ok', `✓ ${COLOR_ORDERS[s.order & 0x0f]}`)
           : choiceButtons([['ok', 'Matches', 'ok']], confirmColors));
       } else if (stripTest.asking) {
         box.append(
@@ -511,52 +604,69 @@ export function runControllerSetup(ip, live) {
     }
 
     function checkStrip() {
+      const s = strip();
       const count = document.getElementById('setupCount');
       const pin = document.getElementById('setupStripPin');
-      if (!(plan.count >= 1 && plan.count <= 1500)) {
+      if (!(s.count >= 1 && s.count <= 1500)) {
         showFieldError(count, 'Enter a number from 1 to 1500');
         return false;
       }
-      if (!Number.isInteger(plan.stripPin) || plan.stripPin < 0) {
+      if (!validPin(s.pin)) {
         showFieldError(pin, 'Enter the GPIO number');
+        return false;
+      }
+      const owner = pinOwner(s.pin, s);
+      if (owner) {
+        showFieldError(pin, `GPIO ${s.pin} is already used by ${owner}. Each strip needs its own pin.`);
         return false;
       }
       return true;
     }
 
-    // --- Step 3: light strip ---
-    function renderLight() {
-      const pin = numberInput(plan.lightPin, { min: 0, max: 48, placeholder: 'e.g. 26', onchange: input => {
-        plan.lightPin = input.value === '' ? '' : parseInt(input.value, 10);
-        lightTest = null;
+    // --- Step 3: light strips ---
+    // The light strip lit white with WLED effect fx (1 = Blink, 0 = steady); the other light strips off, the RGB strips in Aurora
+    function lightState(light, fx) {
+      const seg = layout(plan, { whole: true }).map(e => (e.light === light
+        ? { ...e.seg, bri: 255, fx, sx: 128, ix: 128, col: [[255, 255, 255], [0, 0, 0]] }
+        : e.light ? { ...e.seg, on: false } : { ...e.seg, ...AURORA }));
+      return { on: true, bri: 255, transition: 0, seg };
+    }
+
+    function renderLights() {
+      return plan.lights.flatMap(lightBlock);
+    }
+
+    function lightBlock(light, j) {
+      const pin = numberInput(light.pin, { min: 0, max: 48, placeholder: 'e.g. 26', onchange: input => {
+        light.pin = input.value === '' ? '' : parseInt(input.value, 10);
+        lightTests[j] = null;
       } });
-      pin.id = 'setupLightPin';
+      pin.id = `setupLightPin${j}`;
       const test = h('div', { class: 'setup-test-body', 'aria-live': 'polite' });
       const paint = () => {
-        test.replaceChildren(...(!lightTest ? [] : lightTest === 'on' ? [
-          h('p', {}, 'Is the light strip blinking?'),
+        const result = lightTests[j];
+        test.replaceChildren(...(!result ? [] : result === 'on' ? [
+          h('p', {}, `Is ${plan.lights.length === 1 ? 'the light strip' : `light strip ${j + 1}`} blinking?`),
           choiceButtons([['ok', 'Yes', 'ok'], ['dark', 'No']], answer => {
-            lightTest = answer;
+            lightTests[j] = answer;
             paint();
             // Stop blinking once answered; the light stays on
-            const segs = buildSegments(plan, 1).map(s => (s.n === LIGHT_SEGMENT ? { ...s, bri: 255, fx: 0, col: [[255, 255, 255], [0, 0, 0]] } : { ...s, ...AURORA }));
-            preview({ on: true, bri: 255, transition: 0, seg: segs });
+            preview(lightState(light, 0));
           })
-        ] : [h('p', { class: 'setup-verdict', dataset: { tone: lightTest === 'ok' ? 'ok' : 'warn' } },
-          lightTest === 'ok' ? '✓ Works' : 'Check the pin and power.')]));
+        ] : [h('p', { class: 'setup-verdict', dataset: { tone: result === 'ok' ? 'ok' : 'warn' } },
+          result === 'ok' ? '✓ Works' : 'Check the pin and power.')]));
       };
       paint();
       return [
-        field('Which pin (GPIO) is the light strip on?', pin),
+        field(`Which pin (GPIO) is ${plan.lights.length === 1 ? 'the light strip' : `light strip ${j + 1}`} on?`, pin),
         h('div', { class: 'setup-test' },
           h('div', { class: 'setup-test-head' },
             h('span', { class: 'setup-label' }, 'Verify live'),
             h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: async () => {
-              if (busy || !checkLight()) return;
-              // Blink between off and 100%, so it's visible even if the light was already fully on (WLED effect 1 = Blink)
-              const segs = buildSegments(plan, 1).map(s => (s.n === LIGHT_SEGMENT ? { ...s, bri: 255, fx: 1, sx: 128, ix: 128, col: [[255, 255, 255], [0, 0, 0]] } : { ...s, ...AURORA }));
-              if (await preview({ on: true, bri: 255, transition: 0, seg: segs })) {
-                lightTest = 'on';
+              if (busy || !checkLight(light, j)) return;
+              // Blink between off and 100%, so it's visible even if the light was already fully on
+              if (await preview(lightState(light, 1))) {
+                lightTests[j] = 'on';
                 paint();
               }
             } }, 'Blink')),
@@ -564,27 +674,48 @@ export function runControllerSetup(ip, live) {
       ];
     }
 
-    function checkLight() {
-      const input = document.getElementById('setupLightPin');
-      if (!Number.isInteger(plan.lightPin) || plan.lightPin < 0) {
+    function checkLight(light, j) {
+      const input = document.getElementById(`setupLightPin${j}`);
+      if (!validPin(light.pin)) {
         showFieldError(input, 'Enter the GPIO number');
         return false;
       }
-      if (plan.lightPin === plan.stripPin) {
-        showFieldError(input, `GPIO ${plan.stripPin} is the RGB strip's data pin. Each output needs its own pin.`);
+      const owner = pinOwner(light.pin, light);
+      if (owner) {
+        showFieldError(input, `GPIO ${light.pin} is already used by ${owner}. Each strip needs its own pin.`);
         return false;
       }
       return true;
     }
 
-    // --- Step 4: zones ---
-    let startTest = null;     // zone whose start LED is lit on the strip
+    const checkLights = () => plan.lights.every(checkLight);
+
+    // --- Step 4: zones, per RGB strip ---
+    let startTest = null;     // { k, zone }: the zone whose start LED is lit on the strip
     let startTimer = null;
 
     function renderZones() {
-      const maxZones = Math.min(MAX_ZONES, plan.count);
-      const split = plan.zones > 1;
-      const zoneCount = numberInput(split ? plan.zones : 4, { min: 2, max: maxZones, onchange: input => {
+      return [
+        h('p', { class: 'setup-lead' }, `Each zone gets its own effects in the Event and Flow matrices, so different parts of ${plan.strips.length === 1 ? 'the RGB strip' : 'the RGB strips'} can light up differently. Effects start at a zone's first LED unless you pick another one; they run to the zone's end and continue from its first LED.`),
+        ...plan.strips.flatMap(zoneBlock),
+        h('small', { class: 'setup-hint' }, 'Uneven splits can be made later in the advanced editor.'),
+        startTestBody(),
+        h('div', { class: 'setup-choices' },
+          h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: async () => {
+            if (busy) return;
+            const seg = layout(plan).map(e => (e.light ? { ...e.seg, on: false } : { ...e.seg, fx: 0, col: [rgb(ZONE_COLORS[e.zone % ZONE_COLORS.length]), [0, 0, 0]] }));
+            if (await preview({ on: true, bri: 110, transition: 0, seg })) {
+              startTest = null;
+              refreshStartTest();
+            }
+          } }, plan.strips.length === 1 ? 'Show the zones on the strip' : 'Show the zones on the strips'))
+      ];
+    }
+
+    function zoneBlock(s, k) {
+      const maxZones = Math.min(MAX_ZONES, s.count);
+      const split = s.zones > 1;
+      const zoneCount = numberInput(split ? s.zones : 4, { min: 2, max: maxZones, onchange: input => {
         const n = parseInt(input.value, 10);
         if (n >= 2 && n <= maxZones) setZones(n);
       } });
@@ -595,57 +726,50 @@ export function runControllerSetup(ip, live) {
       };
       // New zone bounds make the old start LEDs meaningless, so each zone starts at its first LED again
       const setZones = zones => {
-        if (zones !== plan.zones) {
-          plan.zones = zones;
-          plan.offsets = [];
-          startTest = null;
+        if (zones !== s.zones) {
+          s.zones = zones;
+          s.offsets = [];
+          if (startTest?.k === k) {
+            startTest = null;
+            refreshStartTest();
+          }
         }
         refreshZones();
       };
       const zonesBox = h('div', { class: 'setup-zones' });
-      const refreshZones = () => zonesBox.replaceChildren(stripPreview(plan), zoneList(), startTestBody());
+      const refreshZones = () => zonesBox.replaceChildren(stripPreview(s, k, stripLabel(plan, k)), zoneList(s, k));
       refreshZones();
+      const radio = `setupZones${k}`;
       return [
-        h('p', { class: 'setup-lead' }, 'Each zone gets its own effects in the Event and Flow matrices, so different parts of the RGB strip can light up differently. Effects start at a zone\'s first LED unless you pick another one; they run to the zone\'s end and continue from its first LED.'),
         h('fieldset', { class: 'setup-field' },
-          h('legend', { class: 'setup-label' }, 'How should the RGB strip be used?'),
-          h('label', { class: 'setup-check' }, h('input', { type: 'radio', name: 'setupZones', checked: !split, onchange: () => pick(1) }), h('span', {}, 'As one zone (the whole strip)')),
-          h('label', { class: 'setup-check' }, h('input', { type: 'radio', name: 'setupZones', checked: split, disabled: maxZones < 2, onchange: () => pick(parseInt(zoneCount.value, 10) || 4) }), h('span', {}, 'Split into equal zones:'), zoneCount),
-          h('small', { class: 'setup-hint' }, 'Uneven splits can be made later in the advanced editor.')),
-        zonesBox,
-        h('div', { class: 'setup-choices' },
-          h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: async () => {
-            if (busy) return;
-            const segs = buildSegments(plan).map((s, i) => (s.n === LIGHT_SEGMENT ? { ...s, on: false } : { ...s, fx: 0, col: [rgb(ZONE_COLORS[i % ZONE_COLORS.length]), [0, 0, 0]] }));
-            if (await preview({ on: true, bri: 110, transition: 0, seg: segs })) {
-              startTest = null;
-              refreshStartTest();
-            }
-          } }, 'Show the zones on the strip'))
+          h('legend', { class: 'setup-label' }, `How should ${plan.strips.length === 1 ? 'the RGB strip' : `RGB strip ${k + 1}`} be used?`),
+          h('label', { class: 'setup-check' }, h('input', { type: 'radio', name: radio, checked: !split, onchange: () => pick(1) }), h('span', {}, 'As one zone (the whole strip)')),
+          h('label', { class: 'setup-check' }, h('input', { type: 'radio', name: radio, checked: split, disabled: maxZones < 2, onchange: () => pick(parseInt(zoneCount.value, 10) || 4) }), h('span', {}, 'Split into equal zones:'), zoneCount)),
+        zonesBox
       ];
     }
 
-    function zoneList() {
-      const ranges = zoneRanges(plan.count, plan.zones);
+    function zoneList(s, k) {
+      const ranges = zoneRanges(s.count, s.zones);
       return h('ul', { class: 'setup-zone-list' }, ...ranges.map((r, i) => h('li', {},
         swatch(ZONE_COLORS[i % ZONE_COLORS.length]),
         zoneLabel(ranges, i),
         h('span', { class: 'setup-muted' }, `${humanRange(r)} (${r.stop - r.start})`),
-        zoneStart(r, i))));
+        zoneStart(s, k, r, i))));
     }
 
     const zoneLabel = (ranges, i) => (ranges.length === 1 ? 'Whole strip' : `Zone ${i + 1}`);
 
     // "Starts at LED" with − and +, counted like the strip (from 1); the buttons wrap around inside the zone
-    function zoneStart(range, zone) {
+    function zoneStart(s, k, range, zone) {
       const len = range.stop - range.start;
-      const firstLed = () => range.start + zoneOffset(plan, zone, range) + 1;
+      const firstLed = () => range.start + zoneOffset(s, zone, range) + 1;
       const set = offset => {
-        plan.offsets[zone] = ((offset % len) + len) % len;
+        s.offsets[zone] = ((offset % len) + len) % len;
         input.value = firstLed();
-        document.getElementById('setupStripPreview')?.replaceWith(stripPreview(plan));
+        document.getElementById(`setupStripPreview${k}`)?.replaceWith(stripPreview(s, k, stripLabel(plan, k)));
         clearTimeout(startTimer);
-        startTimer = setTimeout(() => testStart(zone), 250);
+        startTimer = setTimeout(() => testStart(k, zone), 250);
       };
       const input = numberInput(firstLed(), { min: range.start + 1, max: range.stop, onchange: el => {
         const led = parseInt(el.value, 10);
@@ -654,31 +778,32 @@ export function runControllerSetup(ip, live) {
       input.setAttribute('aria-label', `LED where effects start, ${range.start + 1} to ${range.stop}`);
       // A number outside the zone is not applied; leaving the field shows the start in use again
       input.addEventListener('change', () => { input.value = firstLed(); });
-      const step = delta => set(zoneOffset(plan, zone, range) + delta);
+      const step = delta => set(zoneOffset(s, zone, range) + delta);
       return h('span', { class: 'setup-zone-start' },
         h('span', { class: 'setup-muted' }, 'Starts at LED'),
         h('span', { class: 'setup-stepper' },
           h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'Start one LED earlier', disabled: len === 1, onclick: () => step(-1) }, '−'),
           input,
           h('button', { class: 'ui-btn ui-btn-sm', type: 'button', 'aria-label': 'Start one LED later', disabled: len === 1, onclick: () => step(1) }, '+')),
-        h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: () => testStart(zone) }, 'Show'));
+        h('button', { class: 'ui-btn ui-btn-sm', type: 'button', onclick: () => testStart(k, zone) }, 'Show'));
     }
 
     // Green on the zone's start LED, red on the LED before and after it (wrapping inside the zone).
     // The other zones stay dark. WLED's "i" counts from the segment's first LED, and the test segments have no offset.
-    async function testStart(zone) {
+    async function testStart(k, zone) {
       if (busy) return;
-      const range = zoneRanges(plan.count, plan.zones)[zone];
+      const s = plan.strips[k];
+      const range = s && zoneRanges(s.count, s.zones)[zone];
       if (!range) return;
       const len = range.stop - range.start;
-      const first = zoneOffset(plan, zone, range);
+      const first = zoneOffset(s, zone, range);
       const i = [first, '00FF00'];
       if (len > 1) i.push((first + len - 1) % len, 'FF0000', (first + 1) % len, 'FF0000');
-      const segs = buildSegments(plan).map((s, n) => (s.n === LIGHT_SEGMENT
-        ? { ...s, on: false }
-        : { ...s, fx: 0, col: [[0, 0, 0], [0, 0, 0]], ...(n === zone ? { i } : {}) }));
-      if (await preview({ on: true, bri: 110, transition: 0, seg: segs })) {
-        startTest = zone;
+      const seg = layout(plan).map(e => (e.light
+        ? { ...e.seg, on: false }
+        : { ...e.seg, fx: 0, col: [[0, 0, 0], [0, 0, 0]], ...(e.k === k && e.zone === zone ? { i } : {}) }));
+      if (await preview({ on: true, bri: 110, transition: 0, seg })) {
+        startTest = { k, zone };
         refreshStartTest();
       }
     }
@@ -689,10 +814,13 @@ export function runControllerSetup(ip, live) {
 
     function startTestBody() {
       const box = h('div', { class: 'setup-test-body setup-zones-test', id: 'setupStartTest', 'aria-live': 'polite' });
-      const ranges = zoneRanges(plan.count, plan.zones);
-      if (startTest === null || !ranges[startTest]) return box;
-      const r = ranges[startTest];
-      box.append(h('p', {}, `${zoneLabel(ranges, startTest)}: green = LED ${r.start + zoneOffset(plan, startTest, r) + 1}, where effects start, with a red LED on each side. Use − and + until the green LED is where you want it.`));
+      const s = startTest && plan.strips[startTest.k];
+      const ranges = s ? zoneRanges(s.count, s.zones) : [];
+      const r = startTest && ranges[startTest.zone];
+      if (!r) return box;
+      const zone = zoneLabel(ranges, startTest.zone);
+      const label = plan.strips.length === 1 ? zone : `${stripLabel(plan, startTest.k)}, ${zone.toLowerCase()}`;
+      box.append(h('p', {}, `${label}: green = LED ${r.start + zoneOffset(s, startTest.zone, r) + 1}, where effects start, with a red LED on each side. Use − and + until the green LED is where you want it.`));
       return box;
     }
 
@@ -718,8 +846,10 @@ export function runControllerSetup(ip, live) {
     function renderIdle() {
       const idle = plan.idle;
       const look = () => IDLE_LOOKS.find(l => l.id === idle.look) || IDLE_LOOKS[0];
+      const strips = plan.strips.length === 1 ? 'RGB strip' : 'RGB strips';
+      const lights = plan.lights.length === 1 ? 'Light strip' : 'Light strips';
       const colorField = field('Color', h('input', { class: 'setup-color', type: 'color', value: idle.color, oninput: event => { idle.color = event.target.value; previewIdle(); } }));
-      const briField = field('RGB strip brightness', slider(idle.bri, { min: 5, label: 'RGB strip brightness', onchange: v => { idle.bri = v; previewIdle(); } }));
+      const briField = field(`${strips} brightness`, slider(idle.bri, { min: 5, label: `${strips} brightness`, onchange: v => { idle.bri = v; previewIdle(); } }));
       const sync = () => {
         colorField.hidden = !look().color;
         briField.hidden = !look().fx;
@@ -728,30 +858,39 @@ export function runControllerSetup(ip, live) {
       return [
         h('p', { class: 'setup-lead' }, 'What should the lights show when no game is running? The controller also starts up with this.'),
         h('fieldset', { class: 'setup-field' },
-          h('legend', { class: 'setup-label' }, 'RGB strip'),
+          h('legend', { class: 'setup-label' }, strips),
           ...IDLE_LOOKS.map(l => h('label', { class: 'setup-check' },
             h('input', { type: 'radio', name: 'setupIdleLook', checked: l.id === idle.look, onchange: () => { idle.look = l.id; sync(); previewIdle(0); } }),
             h('span', {}, l.label)))),
         h('div', { class: 'setup-row' }, colorField, briField),
-        hasLightStrip(plan) && field('Light strip brightness', slider(idle.lightBri, { min: 0, label: 'Light strip brightness', onchange: v => { idle.lightBri = v; previewIdle(); } })),
+        readyLights(plan).length > 0 && field(`${lights} brightness`, slider(idle.lightBri, { min: 0, label: `${lights} brightness`, onchange: v => { idle.lightBri = v; previewIdle(); } })),
         h('small', { class: 'setup-hint' }, 'The strip shows your choice as you pick. Each zone can get its own look later under Edit › Idle lighting.')
       ].filter(Boolean);
     }
 
     // --- Step 6: review ---
     function renderReview() {
-      const ranges = zoneRanges(plan.count, plan.zones);
-      const strip = STRIP_TYPES.find(t => t.value === plan.stripType).label;
-      const rows = [
-        ['Name', plan.name],
-        ['RGB strip', `${plan.count} LEDs on GPIO ${plan.stripPin}, ${strip}`],
-        ['Colors', `${COLOR_ORDERS[plan.order & 0x0f]} order${plan.colorsChecked ? ', checked' : ' (not checked)'}`],
-        ['Zones', ranges.map((r, i) => {
-          const offset = zoneOffset(plan, i, r);
+      const many = plan.strips.length > 1;
+      const stripRows = plan.strips.flatMap((s, k) => {
+        const type = STRIP_TYPES.find(t => t.value === s.type).label;
+        const ranges = zoneRanges(s.count, s.zones);
+        const zones = ranges.map((r, i) => {
+          const offset = zoneOffset(s, i, r);
           const start = offset ? `, effects start at LED ${r.start + offset + 1}` : '';
           return ranges.length === 1 ? `One zone, the whole strip${start}` : `Zone ${i + 1}: ${humanRange(r)}${start}`;
-        }).join('\n')],
-        ['Light strip', plan.lightStrip ? `On GPIO ${plan.lightPin}` : 'None'],
+        }).join('\n');
+        return [
+          [stripLabel(plan, k), `${s.count} LEDs on GPIO ${s.pin}, ${type}`],
+          [many ? `Colors ${k + 1}` : 'Colors', `${COLOR_ORDERS[s.order & 0x0f]} order${s.colorsChecked ? ', checked' : ' (not checked)'}`],
+          [many ? `Zones ${k + 1}` : 'Zones', zones]
+        ];
+      });
+      const rows = [
+        ['Name', plan.name],
+        ...stripRows,
+        [plan.lights.length > 1 ? 'Light strips' : 'Light strip', plan.lights.length
+          ? plan.lights.map((l, j) => (plan.lights.length === 1 ? `On GPIO ${l.pin}` : `${lightLabel(plan, j)}: GPIO ${l.pin}`)).join('\n')
+          : 'None'],
         ['Idle lighting', describeIdle(plan)]
       ];
       return [

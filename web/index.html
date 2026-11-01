@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2711%27 fill=%27none%27 stroke=%27%2314b8a6%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%2314b8a6%27/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/css/theme.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/tokens.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/shell.css?v=2.2-p25">
@@ -13,6 +14,7 @@
   <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
   <link rel="stylesheet" href="/css/pages.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/hub.css?v=2.2-p25">
+  <link rel="stylesheet" href="/css/studio.css?v=2.2-p26">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -42,6 +44,10 @@
         <a href="/lighting" data-link data-view="lighting" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span>Lighting</span>
+        </a>
+        <a href="/studio" data-link data-view="studio" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 11 17 13 22 17 22 7"/></svg>
+          <span>Studio</span>
         </a>
         <a href="/settings" data-link data-view="settings" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -407,6 +413,213 @@
           </div>
         </section>
 
+
+        <!-- TAB 6: STUDIO (TV-style broadcast output at /studio/live). Four sub-pages: broadcast, match, players, cameras -->
+        <section id="tab-studio-broadcast" class="tab-pane studio-page">
+          <div class="studio-grid">
+            <div class="studio-main">
+              <div class="ide-panel studio-output">
+                <div class="panel-header">
+                  <span class="panel-title"><span>Broadcast Output</span></span>
+                  <span class="studio-actions">
+                    <a class="btn-ide" href="/studio/live?demo=1" target="_blank" rel="noopener">Open demo</a>
+                    <a class="btn-ide" href="/studio/live" target="_blank" rel="noopener">Open output</a>
+                    <button type="button" class="btn-ide btn-ide-primary studio-save">Save</button>
+                  </span>
+                </div>
+                <div class="panel-body">
+                  <div class="studio-frame-wrap">
+                    <iframe id="studioFrame" class="studio-frame" src="about:blank" data-src="/studio/live?demo=1" title="Studio preview (demo match)" allow="camera; fullscreen"></iframe>
+                  </div>
+                  <div class="studio-cuebar" id="studioCues">
+                    <span class="studio-cuebar-label">Scenes</span>
+                    <button type="button" class="btn-ide" data-cue="intro">Intro</button>
+                    <button type="button" class="btn-ide" data-cue="bulloff">Bull-off</button>
+                    <button type="button" class="btn-ide" data-cue="live">Live</button>
+                    <button type="button" class="btn-ide" data-cue="idle">Idle</button>
+                    <button type="button" class="btn-ide" data-cue="leg">Leg summary</button>
+                    <button type="button" class="btn-ide" data-cue="match">Match end</button>
+                    <button type="button" class="btn-ide" data-cue="180">180</button>
+                    <button type="button" class="btn-ide" data-cue="bust">Bust</button>
+                    <button type="button" class="btn-ide" data-cue="stinger">Transition</button>
+                  </div>
+                  <div class="studio-cuebar" id="studioLayoutCues">
+                    <span class="studio-cuebar-label">Overlay</span>
+                    <button type="button" class="btn-ide" data-cue="overlay:hide">Hide</button>
+                    <button type="button" class="btn-ide" data-cue="overlay:show">Show</button>
+                    <span class="studio-cuebar-label">Cameras</span>
+                    <button type="button" class="btn-ide" data-cue="layout:auto">Auto</button>
+                    <button type="button" class="btn-ide" data-cue="layout:split">Split</button>
+                    <button type="button" class="btn-ide" data-cue="layout:board">Board</button>
+                    <button type="button" class="btn-ide" data-cue="layout:player">Player</button>
+                  </div>
+                  <p class="studio-note">The buttons play on every open output right away, also during a game; the game takes over again after a few seconds. Output for the TV or OBS (1920&times;1080): <code id="studioOutputUrl"></code>, double-click for fullscreen, <code>?chroma=green</code> for a green background.</p>
+                </div>
+              </div>
+
+              <div class="ide-panel">
+                <div class="panel-header"><span class="panel-title"><span>Overlay</span></span></div>
+                <div class="panel-body studio-form studio-overlay-form">
+                  <label>Look
+                    <select id="studioTheme" class="select-ide">
+                      <option value="autodarts">Autodarts: dark slate, rounded</option>
+                      <option value="tv">TV broadcast: white rows, black bars</option>
+                      <option value="arena">Arena: black and gold</option>
+                      <option value="neon">Neon: glowing outlines</option>
+                      <option value="velocity">Velocity: slanted e-sports</option>
+                      <option value="glass">Glass: frosted and see-through</option>
+                      <option value="pub">Pub: chalkboard in a wooden frame</option>
+                      <option value="daylight">Daylight: white cards, dark text</option>
+                    </select>
+                  </label>
+                  <label>Camera layout
+                    <select id="studioLayout" class="select-ide">
+                      <option value="split">Split: board and player side by side</option>
+                      <option value="board">Board full screen, player small</option>
+                      <option value="player">Player full screen, board small</option>
+                    </select>
+                    <small id="studioLayoutHint" class="studio-layout-hint" hidden>Set by automatic camera direction: board while throwing, split while the darts are pulled. Untick “Automatic camera direction” below to pick one layout yourself.</small>
+                  </label>
+                  <label class="studio-inline">Accent colour<input id="studioAccent" type="color" value="#3b82f6"></label>
+                  <div class="studio-overlay-checks">
+                    <label class="studio-check"><input id="studioShowOverlay" type="checkbox"> <strong>Show overlay</strong> (off: only the cameras)</label>
+                    <label class="studio-check" title="Board while throwing, split at takeout"><input id="studioAutoDirect" type="checkbox"> Automatic camera direction</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="studio-side">
+              <div class="ide-panel studio-texts-panel">
+                <div class="panel-header">
+                  <span class="panel-title"><span>Texts</span></span>
+                  <button type="button" class="btn-ide" id="studioTextsReset">Reset all texts</button>
+                </div>
+                <div class="panel-body">
+                  <p class="studio-note"><strong>Click a field</strong> to see it in the preview (marked yellow). Empty uses the grey default. The box in front shows or hides the text; <strong>Show</strong> switches a whole part.</p>
+                  <div class="studio-texts">
+                    <div class="studio-text-group">
+                      <div class="studio-subhead">Event</div>
+                      <div class="studio-text-where">Shown: Idle screen title, the bar under the scoreboard, the intro</div>
+                      <div class="studio-fields">
+                        <div class="studio-text-row"><input type="checkbox" data-show-text="event_title" title="Show this text on the screens" aria-label="Show Event title"><label>Event title<input id="studioTitle" class="input-text" maxlength="80" placeholder="Friday Night Darts" data-preview="event_title"></label></div>
+                        <div class="studio-text-row"><input type="checkbox" data-show-text="event_subtitle" title="Show this text on the screens" aria-label="Show Subtitle"><label><span>Subtitle <small>(e.g. Final, Round 3)</small></span><input id="studioSubtitle" class="input-text" maxlength="80" placeholder="Final" data-preview="event_subtitle"></label></div>
+                      </div>
+                    </div>
+                    <div id="studioTexts" class="studio-texts"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-studio-match" class="tab-pane studio-page">
+          <div class="studio-grid">
+            <div class="ide-panel">
+              <div class="panel-header"><span class="panel-title"><span>Players in Autodarts</span></span></div>
+              <div class="panel-body">
+                <ol class="studio-steps">
+                  <li>Open a lobby on <a href="https://play.autodarts.com/" target="_blank" rel="noopener">play.autodarts.com</a> and add the players, in any order.</li>
+                  <li>With two players picked, the screens show them face to face and one by one.</li>
+                  <li>Start the match in Autodarts: the intro plays, then the scoreboard.</li>
+                </ol>
+                <p class="studio-note">The Studio finds the players by name (also first name only, a typo or the nickname). Wrong or not recognised? Choose the right Studio player below; it is remembered for the next match.</p>
+                <div id="studioLiveMatch" class="studio-live-match"></div>
+              </div>
+            </div>
+
+            <div class="studio-side">
+            <div class="ide-panel">
+              <div class="panel-header">
+                <span class="panel-title"><span>Game Data</span></span>
+                <a class="btn-ide" href="/api/studio/raw" download="autoglow-match-data.json" title="Match data exactly as received from Autodarts">Download</a>
+              </div>
+              <div class="panel-body">
+                <dl class="studio-status" id="studioStatus"></dl>
+              </div>
+            </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-studio-players" class="tab-pane studio-page">
+            <div class="ide-panel">
+              <div class="panel-header"><span class="panel-title"><span>Players</span></span></div>
+              <div class="panel-body">
+                <div class="studio-player-form">
+                  <div class="studio-pics">
+                    <label class="studio-pic" title="Choose picture">
+                      <span id="studioPlayerPic" class="studio-pic-preview"><span>PNG</span></span>
+                      <input id="studioPlayerFile" type="file" accept="image/png,image/jpeg,image/webp">
+                      <small>Picture</small>
+                    </label>
+                    <label class="studio-pic" title="Photo the mockup player camera shows while this player is at the board">
+                      <span id="studioPlayerMockup" class="studio-pic-preview wide"><span>Photo</span></span>
+                      <input id="studioPlayerMockupFile" type="file" accept="image/png,image/jpeg,image/webp">
+                      <small>Mockup camera photo</small>
+                    </label>
+                  </div>
+                  <div class="studio-form">
+                    <div class="studio-fields" id="studioPlayerFields">
+                      <label>Player name<input id="studioPlayerName" class="input-text" maxlength="40" placeholder="Shown on the scoreboard"></label>
+                      <label>Autodarts name <small>(if different)</small><input data-profile="alias" class="input-text" maxlength="40" placeholder="Name used in Autodarts"></label>
+                      <label>Nickname<input data-profile="nickname" class="input-text" maxlength="40" placeholder="The Power"></label>
+                      <label>Darts club<input data-profile="club" class="input-text" maxlength="60"></label>
+                      <label>Hometown<input data-profile="hometown" class="input-text" maxlength="60"></label>
+                      <label>Country <small>(e.g. NED)</small><input data-profile="country" class="input-text" maxlength="3"></label>
+                      <label>Throws
+                        <select data-profile="hand" class="select-ide"><option value="">–</option><option value="Right">Right-handed</option><option value="Left">Left-handed</option></select>
+                      </label>
+                      <label>Dart weight <small>(g)</small><input data-profile="dart_weight" class="input-text" maxlength="10" inputmode="decimal"></label>
+                      <label>Favourite double<input data-profile="favourite_double" class="input-text" maxlength="10" placeholder="D16"></label>
+                      <label>Playing since<input data-profile="playing_since" class="input-text" maxlength="10" placeholder="2015"></label>
+                    </div>
+                    <div class="studio-subhead">Stats for the intro and player cards <small>(typed in for now)</small></div>
+                    <div class="studio-fields three">
+                      <label>Average<input data-profile="stat_average" class="input-text" maxlength="10" inputmode="decimal" placeholder="85.4"></label>
+                      <label>180s<input data-profile="stat_180s" class="input-text" maxlength="10" inputmode="numeric" placeholder="42"></label>
+                      <label>Best checkout<input data-profile="stat_best_checkout" class="input-text" maxlength="10" inputmode="numeric" placeholder="161"></label>
+                    </div>
+                    <div class="studio-actions">
+                      <button type="button" class="btn-ide btn-ide-primary" id="studioPlayerSave">Add player</button>
+                      <button type="button" class="btn-ide" id="studioPlayerCancel" hidden>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+                <div id="studioPlayers" class="studio-players"></div>
+              </div>
+            </div>
+        </section>
+
+        <section id="tab-studio-cameras" class="tab-pane studio-page">
+            <div class="ide-panel">
+              <div class="panel-header">
+                <span class="panel-title"><span>Cameras</span></span>
+                <span class="studio-actions">
+                  <select id="studioResolution" class="select-ide" aria-label="Stream quality">
+                    <option value="480p">480p (light on Wi-Fi)</option>
+                    <option value="720p">720p</option>
+                    <option value="1080p">1080p</option>
+                  </select>
+                  <select id="studioRelayFps" class="select-ide" aria-label="Frame rate of the Autodarts cameras" title="Frame rate of the Autodarts cameras on the screens">
+                    <option value="10">Autodarts cams 10 fps</option>
+                    <option value="15">Autodarts cams 15 fps</option>
+                    <option value="30">Autodarts cams 30 fps</option>
+                  </select>
+                  <button type="button" class="btn-ide" id="studioRefreshCams">Refresh</button>
+                  <button type="button" class="btn-ide" id="studioAllowCams" title="Only for an output shown on this device">Use this browser's cameras</button>
+                </span>
+              </div>
+              <div class="panel-body">
+                <div id="studioCameras" class="studio-cams"></div>
+                <p class="studio-note">AutoGlow streams the cameras to every device in the network: TVs, tablets, OBS. <strong>Autodarts cameras</strong> come from the Autodarts Board Manager, so the same camera detects darts and shows the game; AutoGlow fetches each one once for all screens. They send full-size pictures (about 3.5 MB/s per camera at 15 fps); use 10 fps if the Wi-Fi struggles. A USB camera can only be used by one program at a time; the quality setting applies to those.</p>
+              </div>
+            </div>
+          <div class="studio-savebar">
+            <button type="button" class="btn-ide btn-ide-primary studio-save">Save</button>
+          </div>
+        </section>
 
         <!-- TAB 5: SETTINGS (lighting engine, inactivity & standby timers, access PIN) -->
         <section id="tab-settings" class="tab-pane">

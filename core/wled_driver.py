@@ -760,6 +760,30 @@ class WLEDDriver:
                     return s.id
         return self.config.pwm_seg_id if (self.config.pwm_seg_id is not None and self.config.pwm_index is not None) else None
 
+    def _get_pwm_seg_ids(self) -> List[int]:
+        """Segment IDs of every PWM White output (a controller can have several light strips)."""
+        if self.config.hw_ins and not any(is_pwm_output(h) for h in self.config.hw_ins):
+            return []
+        ids = [s.id for s in self.config.segments if "pwm" in s.name.lower() or "pwm" in s.type.lower()]
+        if ids:
+            return ids
+        single = self._get_pwm_seg_id()
+        return [single] if single is not None else []
+
+    def _get_pwm_led_indices(self) -> List[int]:
+        """LED index of every PWM White output in the UDP frame, laid out like _get_total_led_count."""
+        if self.config.hw_ins:
+            indices: List[int] = []
+            cursor = 0
+            for h in self.config.hw_ins:
+                if is_pwm_output(h):
+                    indices.append(cursor)
+                cursor += max(1, int(h.get("len", 1)))
+            return indices
+        if self._get_pwm_seg_id() is None or self.config.pwm_index is None:
+            return []
+        return [self.config.pwm_index]
+
     # -------------------------------------------------------------------------
     # Internal Synchronous Helpers (Executed in thread pool)
     # -------------------------------------------------------------------------
@@ -857,8 +881,8 @@ class WLEDDriver:
         ip = target_ip.strip() if target_ip and target_ip.strip() else (self.config.ip.strip() if self.config.ip else "")
         if not ip:
             return True
-        pwm_seg_id = self._get_pwm_seg_id()
-        if pwm_seg_id is None:
+        pwm_seg_ids = self._get_pwm_seg_ids()
+        if not pwm_seg_ids:
             return True  # No PWM hardware output on this controller
         # Fast check (0.3s) if device is reachable
         if not is_host_online(ip, 80, timeout=0.3):
@@ -868,10 +892,10 @@ class WLEDDriver:
         url = f"http://{ip}/json/state"
         payload = {
             "seg": [{
-                "id": pwm_seg_id,
+                "id": seg_id,
                 "on": (brightness > 0),
                 "bri": brightness
-            }],
+            } for seg_id in pwm_seg_ids],
             "v": True
         }
         data = json.dumps(payload).encode("utf-8")
@@ -883,11 +907,13 @@ class WLEDDriver:
             logger.warning(f"Error setting PWM brightness via HTTP on {ip}: {e}")
             return False
 
-        # Stage 1: verify the PWM segment committed the brightness (v: true returns full state)
-        live_seg = next((sg for sg in state.get("seg", []) if isinstance(sg, dict) and sg.get("id") == pwm_seg_id), None)
-        if live_seg is not None and brightness > 0 and live_seg.get("bri") != brightness:
-            logger.warning(f"PWM segment {pwm_seg_id} on {ip} reads back bri={live_seg.get('bri')} (expected {brightness})")
-            return False
+        # Stage 1: verify the PWM segments committed the brightness (v: true returns full state)
+        for live_seg in state.get("seg", []):
+            if not isinstance(live_seg, dict) or live_seg.get("id") not in pwm_seg_ids:
+                continue
+            if brightness > 0 and live_seg.get("bri") != brightness:
+                logger.warning(f"PWM segment {live_seg.get('id')} on {ip} reads back bri={live_seg.get('bri')} (expected {brightness})")
+                return False
         return True
 
     # -------------------------------------------------------------------------
@@ -927,8 +953,8 @@ class WLEDDriver:
                 master_buffer = bytearray(total_led_count * 3)
                 any_active = False
 
-                pwm_seg_id = self._get_pwm_seg_id()
-                pwm_channel_rendered = False
+                # LED ranges an effect drew this frame; light strips outside them keep the spotlight brightness
+                rendered_ranges: List[Tuple[int, int]] = []
 
                 for s_id, ch in list(self._segment_channels.items()):
                     start_idx = ch.get("start_idx", 0)
@@ -970,8 +996,7 @@ class WLEDDriver:
                         continue
 
                     any_active = True
-                    if pwm_seg_id is not None and s_id == pwm_seg_id:
-                        pwm_channel_rendered = True
+                    rendered_ranges.append((start_idx, stop_idx))
 
                     if blend_with_baseline and transient_eff and baseline_eff:
                         t_buf = self._render_frame(transient_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
@@ -991,11 +1016,11 @@ class WLEDDriver:
                         seg_rendered = self._render_frame(active_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
                         master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
 
-                # If PWM channel had no active matrix event, maintain default spotlight brightness
-                pwm_index = self.config.pwm_index
-                has_pwm = (pwm_seg_id is not None and pwm_index is not None)
-                if has_pwm and pwm_index is not None and not pwm_channel_rendered and pwm_index < total_led_count:
-                    pwm_val = self._current_pwm_brightness
+                # Light strips without an active matrix event keep the default spotlight brightness
+                pwm_val = self._current_pwm_brightness
+                for pwm_index in self._get_pwm_led_indices():
+                    if pwm_index >= total_led_count or any(a <= pwm_index < b for a, b in rendered_ranges):
+                        continue
                     master_buffer[pwm_index * 3 + 0] = pwm_val
                     master_buffer[pwm_index * 3 + 1] = pwm_val
                     master_buffer[pwm_index * 3 + 2] = pwm_val

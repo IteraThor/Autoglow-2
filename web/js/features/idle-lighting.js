@@ -111,8 +111,11 @@ function slider({ label, min, max, value, unit = '', onInput }) {
 }
 
 // segments: the controller's segments [{ id, name, start, stop, pwm }]
+// Each segment's controls live in their own element (elementFor), so the page can place them per light.
 export function createIdleEditor(ip, segments) {
-  const element = h('div', { class: 'idle-editor' });
+  const hosts = new Map(segments.map(seg => [String(seg.id), h('div', { class: 'idle-seg' })]));
+  // The on/off switch is placed by the page (in the light's card header)
+  const switches = new Map(segments.map(seg => [String(seg.id), h('span', { class: 'idle-seg-switch' })]));
   let effects = [SOLID];
   let state = [];
   let saved = '[]';
@@ -167,25 +170,24 @@ export function createIdleEditor(ip, segments) {
     }));
   }
 
-  function card(seg) {
-    const body = h('div', { class: 'idle-card-body' });
+  function fill(seg) {
+    const host = hosts.get(String(seg.id));
+    if (!host) return;
+    const body = h('div', { class: 'idle-seg-body' });
+    const onText = h('span', {}, seg.on ? 'On' : 'Off');
     const onSwitch = h('input', {
-      type: 'checkbox', checked: seg.on, 'aria-label': `${seg.name} on`,
+      type: 'checkbox', checked: seg.on, 'aria-label': `${seg.name} on when idle`,
       onchange: () => {
         seg.on = onSwitch.checked;
-        cardEl.classList.toggle('is-off', !seg.on);
+        host.classList.toggle('is-off', !seg.on);
+        onText.textContent = seg.on ? 'On' : 'Off';
         changed(true);
       }
     });
-    const cardEl = h('div', { class: `idle-card${seg.on ? '' : ' is-off'}` },
-      h('div', { class: 'idle-card-head' },
-        h('span', { class: 'seg-swatch', dataset: { kind: seg.pwm ? 'pwm' : 'rgb' } }),
-        h('strong', { class: 'idle-card-name' }, seg.name),
-        h('span', { class: 'idle-card-range' }, seg.pwm ? 'Light strip' : `LEDs ${seg.start + 1}–${seg.stop}`),
-        h('label', { class: 'switch idle-card-switch', title: 'On when idle' }, onSwitch, h('span', { class: 'switch-slider' }))
-      ),
-      body
-    );
+    host.classList.toggle('is-off', !seg.on);
+    switches.get(String(seg.id)).replaceChildren(
+      h('label', { class: 'idle-seg-onoff', title: 'Light on when idle' }, onText, h('span', { class: 'switch' }, onSwitch, h('span', { class: 'switch-slider' }))));
+    host.replaceChildren(body);
 
     if (seg.pwm) {
       const bri = slider({ label: 'Brightness', min: 0, max: 100, value: seg.bri, unit: '%', onInput: v => { seg.bri = v; changed(); } });
@@ -199,7 +201,7 @@ export function createIdleEditor(ip, segments) {
         }
       }, step ? `${step}%` : 'Off')));
       body.append(bri.row, steps);
-      return cardEl;
+      return;
     }
 
     const colors = h('div', { class: 'idle-colors' });
@@ -238,20 +240,16 @@ export function createIdleEditor(ip, segments) {
       slider({ label: 'Brightness', min: 0, max: 100, value: seg.bri, unit: '%', onInput: v => { seg.bri = v; changed(); } }).row,
       motion
     );
-    return cardEl;
   }
 
-  function render() {
-    element.replaceChildren(...(state.length
-      ? state.map(card)
-      : [h('p', { class: 'detail-empty' }, 'This controller has no segments yet. Set up its LEDs first.')]));
-  }
+  const render = () => state.forEach(fill);
 
   return {
-    element,
+    elementFor: id => hosts.get(String(id)) || null,
+    switchFor: id => switches.get(String(id)) || null,
     set onChange(fn) { onChange = fn; },
     async load() {
-      element.replaceChildren(h('p', { class: 'detail-empty' }, 'Loading idle lighting…'));
+      for (const host of hosts.values()) host.replaceChildren(h('p', { class: 'detail-empty' }, 'Loading…'));
       effects = await loadEffects(ip);
       let preset = [];
       try {
@@ -281,7 +279,12 @@ export function createIdleEditor(ip, segments) {
       saved = JSON.stringify(state);
       render();
     },
-    isDirty: () => JSON.stringify(state) !== saved,
+    // With an id: only that segment
+    isDirty(id) {
+      if (id === undefined) return JSON.stringify(state) !== saved;
+      const before = JSON.parse(saved).find(seg => String(seg.id) === String(id));
+      return JSON.stringify(state.find(seg => String(seg.id) === String(id))) !== JSON.stringify(before);
+    },
     async save() {
       if (!state.length) return true;
       await api.post('/api/wled/preset', { ip, preset_id: 1, name: 'AutoGlow Default', segments: payload(), bri: 255, boot_default: true }, { timeout: 10000 });

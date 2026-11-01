@@ -1,16 +1,17 @@
 // AutoGlow Bridge - page hook (runs in the play.autodarts.com page context).
-// Passively observes the game data the Autodarts web app already receives and hands it to
+// Passively observes the game and lobby data the Autodarts web app already receives and hands it to
 // content.js. It never sends anything to Autodarts and never reads credentials or tokens.
 (() => {
   if (window.__autoglowBridgeHooked) return;
   window.__autoglowBridgeHooked = true;
 
   const TAG = 'autoglow-bridge';
-  const RELAYED_CHANNELS = new Set(['autodarts.boards', 'autodarts.matches']);
+  const RELAYED_CHANNELS = new Set(['autodarts.boards', 'autodarts.matches', 'autodarts.lobbies']);
   const RELAYED_PATHS = [
     /^\/bs\/v\d+\/boards\/?$/,            // board list (names, online state)
     /^\/bs\/v\d+\/boards\/[^/]+\/?$/,     // single board
-    /^\/gs\/v\d+\/matches\/[^/]+\/?$/     // match snapshot (players, turns)
+    /^\/gs\/v\d+\/matches\/[^/]+\/?$/,    // match snapshot (players, turns)
+    /^\/gs\/v\d+\/lobbies\/[^/]+\/?$/     // lobby (players picked before the match starts)
   ];
 
   const post = (payload) => window.postMessage({ source: TAG, payload }, window.location.origin);

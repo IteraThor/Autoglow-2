@@ -54,7 +54,8 @@ export function layoutSummary(live) {
   const leds = buses.filter(b => !isPwmBus(b)).reduce((sum, b) => sum + (Number(b.len) || 0), 0);
   const parts = [];
   if (leds) parts.push(`${leds} RGB LEDs`);
-  if (buses.some(isPwmBus)) parts.push('light strip');
+  const lights = buses.filter(isPwmBus).length;
+  if (lights) parts.push(lights === 1 ? 'light strip' : `${lights} light strips`);
   if (segments.length) parts.push(`${segments.length} segment${segments.length === 1 ? '' : 's'}`);
   return parts.join(' · ') || 'No LED outputs configured';
 }

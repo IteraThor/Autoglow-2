@@ -21,6 +21,15 @@ export const VIEWS = [
       { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator', mode: 'flow' }
     ]
   },
+  {
+    id: 'studio', label: 'Studio', path: '/studio',
+    subs: [
+      { id: 'broadcast', label: 'Broadcast', pane: 'tab-studio-broadcast' },
+      { id: 'match', label: 'Match', pane: 'tab-studio-match' },
+      { id: 'players', label: 'Players', pane: 'tab-studio-players' },
+      { id: 'cameras', label: 'Cameras', pane: 'tab-studio-cameras' }
+    ]
+  },
   { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
 ];
 

@@ -37,6 +37,11 @@ const EVENT_CATEGORIES = [
     icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>`
   },
   {
+    id: "bulloff",
+    label: "Bull-off",
+    icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`
+  },
+  {
     id: "players",
     label: "Throw - Players",
     icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`
@@ -57,6 +62,8 @@ const EVENT_DEFS = [
   { key: "takeout_in_progress", category: "flow", label: "Takeout in Progress", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false },
   { key: "takeout", category: "flow", label: "Takeout", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false },
   { key: "manual_reset", category: "flow", label: "Manual Reset", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false },
+  { key: "bull_off_start", category: "bulloff", label: "Bull-off Started", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false },
+  { key: "bull_off_won", category: "bulloff", label: "Bull-off Won", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false },
   { key: "calibrating", category: "flow", label: "Calibrating", defaultAnim: "solid", defaultCol: "#000000", defaultDur: 0.0, defaultSpeed: 1.0, defaultEnabled: false }
 ];
 

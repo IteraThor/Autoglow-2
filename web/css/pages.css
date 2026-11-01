@@ -461,33 +461,14 @@ input.detail-name:focus {
 }
 
 .detail-head[data-dirty] .detail-title > .dirty-dot,
-.detail-section[data-dirty] .dirty-dot {
+.detail-section[data-dirty] .dirty-dot,
+.light-card[data-dirty] .dirty-dot {
   display: inline-block;
 }
 
 .card-title .dirty-dot {
   margin-left: var(--space-2);
   vertical-align: middle;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: start;
-}
-
-.detail-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-@media (min-width: 1280px) {
-  .detail-grid {
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  }
 }
 
 .detail-section {
@@ -539,12 +520,109 @@ input.detail-name:focus {
   font-size: var(--fs-sm);
 }
 
-.detail-section.is-locked .detail-lock-note {
+.is-locked > .detail-lock-note {
   display: block;
 }
 
-.detail-section.is-locked .detail-lock-note ~ * {
+.is-locked > .detail-lock-note ~ * {
   opacity: 0.4;
+}
+
+/* Lights: one card per segment (idle look + game profile) */
+.detail-lights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* As many light cards side by side as fit; notices and links take a full row */
+.detail-lights-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.detail-lights-body > :not(.light-card) {
+  grid-column: 1 / -1;
+}
+
+.detail-group-head {
+  margin-top: var(--space-2);
+}
+
+.detail-group-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.light-card {
+  padding: var(--space-3) var(--space-4);
+}
+
+.light-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.light-name {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.light-name .dirty-dot {
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.light-head .idle-seg-switch {
+  margin-left: auto;
+}
+
+.light-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  align-items: start;
+  padding-top: var(--space-2);
+}
+
+/* Line under the game profile, above the idle settings */
+.light-row:not(:last-child) {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.light-row-label {
+  padding-top: 8px;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.light-row-body .ui-select {
+  width: 100%;
+  max-width: 320px;
+}
+
+.light-row-body .detail-empty {
+  padding-top: 6px;
+  font-size: var(--fs-sm);
+}
+
+.detail-footer {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .detail-row-actions {
@@ -608,20 +686,13 @@ input.detail-name:focus {
   list-style: none;
 }
 
-.led-summary li {
+.led-summary-output {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-1) var(--space-2);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-subtle);
-}
-
-.led-summary-output {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
@@ -632,20 +703,7 @@ input.detail-name:focus {
 }
 
 .led-summary-segs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.led-summary-seg {
-  padding: 2px var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--fs-xs);
-}
-
-.led-summary-seg span {
+  margin-left: auto;
   color: var(--text-muted);
 }
 
@@ -801,61 +859,37 @@ input.detail-name:focus {
   font-size: var(--fs-sm);
 }
 
-/* Idle lighting editor (web/js/features/idle-lighting.js) */
-.idle-editor {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-2);
-}
-
-.idle-card {
+/* Idle lighting controls, one block per light (web/js/features/idle-lighting.js) */
+.idle-seg {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
 }
 
-.idle-card.is-off .idle-card-body {
+.idle-seg.is-off .idle-seg-body {
   opacity: 0.4;
 }
 
-.idle-card-head {
-  display: flex;
+.idle-seg-onoff {
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 0;
+  min-height: 32px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
 }
 
-.idle-card-name {
-  overflow: hidden;
-  color: var(--text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.idle-card-range {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-  white-space: nowrap;
-}
-
-.idle-card-switch {
-  margin-left: auto;
-}
-
-.idle-card-body {
+.idle-seg-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  max-width: 420px;
 }
 
 .idle-effect-row,
 .idle-slider {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) 40px;
+  grid-template-columns: 80px minmax(0, 1fr) 40px;
   align-items: center;
   gap: var(--space-3);
 }
@@ -883,7 +917,7 @@ input.detail-name:focus {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
-  padding-left: calc(72px + var(--space-3));
+  padding-left: calc(80px + var(--space-3));
 }
 
 .idle-color {
@@ -913,7 +947,7 @@ input.detail-name:focus {
 .idle-motion {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .idle-motion:empty {
@@ -924,6 +958,7 @@ input.detail-name:focus {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-2);
+  margin-left: calc(80px + var(--space-3));
 }
 
 /* Searchable effect picker */
@@ -1021,33 +1056,6 @@ input.detail-name:focus {
   font-weight: 600;
 }
 
-/* Game profile rows */
-.profile-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.profile-row-label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.profile-row-label span {
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-}
-
-.profile-row .ui-select {
-  width: 260px;
-  max-width: 50%;
-}
-
 @media (max-width: 680px) {
   .ctl-row {
     flex-wrap: wrap;
@@ -1064,6 +1072,11 @@ input.detail-name:focus {
   .detail-actions {
     justify-content: flex-start;
   }
+
+  .light-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
 
   .seg-table thead {
     display: none;

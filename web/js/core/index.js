@@ -14,6 +14,7 @@ import { initControllers } from '../features/controllers.js';
 import { initHub } from '../features/hub.js';
 import { initLightingGuard } from '../features/lighting-guard.js';
 import { initSettings } from '../features/settings.js';
+import { initStudio } from '../features/studio.js';
 
 Object.assign(window, {
   api,
@@ -34,4 +35,5 @@ initModeSwitch();
 initControllers();
 initHub();
 initSettings();
+initStudio();
 initLightingGuard();

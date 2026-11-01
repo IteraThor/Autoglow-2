@@ -1,5 +1,6 @@
 // AutoGlow 2 - Setup › Controllers › <controller>
-// One page per controller: name and on/off in the header, then LEDs & outputs, idle lighting and game profile.
+// One page per controller: name and on/off in the header, then one card per light (its idle look and game profile)
+// and the wiring at the bottom.
 // Everything is a draft until the save bar's Save; leaving with unsaved changes asks first.
 
 import { api } from '../core/api.js';
@@ -16,13 +17,8 @@ import {
 } from './led-layout.js';
 import { confirmLeave } from './lighting-guard.js';
 
-const SECTIONS = [
-  { id: 'leds', label: 'LEDs & outputs', lead: 'What is wired to the controller. To change it, run the guided setup.' },
-  { id: 'idle', label: 'Idle lighting', lead: 'Shown when no game is running and at start-up. Changes show on the lights right away.' },
-  { id: 'profile', label: 'Game profile', lead: 'The effects each segment plays during a game.' }
-];
 // Names of the unsaved parts in the save bar
-const PART_LABELS = { general: 'name & status', leds: 'LEDs & outputs', idle: 'idle lighting', profile: 'game profile' };
+const PART_LABELS = { general: 'name & status', leds: 'wiring', idle: 'idle lighting', profile: 'game profile' };
 
 // PWM / white segments are driven by brightness and play no matrix effects, so they get no profile
 const isPwmSegment = seg => /pwm|white/i.test(`${seg.type || ''} ${seg.name || ''}`);
@@ -132,17 +128,14 @@ function renderLedSummary(body) {
   const { layout } = page;
   const order = hw => COLOR_ORDERS.find(o => o.value === hw.order)?.label;
   body.replaceChildren(
-    stripBar(layout),
     h('ul', { class: 'led-summary' }, layout.outputs.map((hw, busIdx) => {
       const pwm = isPwmOutput(hw);
       const segs = layout.segments.filter(s => s.busIdx === busIdx);
-      return h('li', {},
-        h('div', { class: 'led-summary-output' },
-          h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
-          h('strong', {}, outputTypeLabel(hw.type)),
-          h('span', {}, [`GPIO ${pinOf(hw)}`, !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · '))),
-        h('div', { class: 'led-summary-segs' }, segs.map(seg => h('span', { class: 'led-summary-seg' },
-          `#${seg.id} ${seg.name}`, !pwm && h('span', {}, ` · LEDs ${seg.start + 1}–${seg.stop}`)))));
+      return h('li', { class: 'led-summary-output' },
+        h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
+        h('strong', {}, `Output ${busIdx + 1}`),
+        h('span', {}, [outputTypeLabel(hw.type), `GPIO ${pinOf(hw)}`, !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · ')),
+        h('span', { class: 'led-summary-segs' }, `→ ${segs.map(seg => seg.name).join(', ') || 'no segment'}`));
     })),
     h('div', { class: 'led-summary-actions' },
       h('button', {
@@ -271,25 +264,7 @@ function renderLeds(body) {
   );
 }
 
-// --- Idle lighting ----------------------------------------------------------
-
-function renderIdle(body) {
-  if (!page.layout) {
-    body.replaceChildren(offlineNotice('to edit its idle lighting'));
-    return;
-  }
-  if (!page.idle) {
-    const saved = JSON.parse(page.savedLayout);
-    page.idle = createIdleEditor(page.ip, saved.segments.map(seg => ({ ...seg, pwm: isPwmOutput(saved.outputs[seg.busIdx]) })));
-    page.idle.onChange = sync;
-    page.idle.load().then(sync);
-  }
-  body.replaceChildren(
-    h('div', { class: 'detail-lock-note' }, 'Save or discard the LED changes first: idle lighting follows the saved segments.'),
-    page.idle.element);
-}
-
-// --- Game profile -----------------------------------------------------------
+// --- Lights: one card per segment with its idle look and game profile -------
 
 async function loadProfiles() {
   try {
@@ -308,27 +283,63 @@ async function loadProfiles() {
   }
 }
 
-function renderProfile(body) {
-  if (!page.profiles) {
-    body.replaceChildren(h('p', { class: 'detail-empty' }, page.profilesFailed ? 'Profiles could not be loaded.' : 'Loading profiles…'));
-    return;
+// The saved LED layout when the controller is reachable, else the segments in AutoGlow's config
+function lightList() {
+  if (page.savedLayout) {
+    const saved = JSON.parse(page.savedLayout);
+    return saved.segments.map(seg => ({ id: seg.id, name: seg.name, pwm: isPwmOutput(saved.outputs[seg.busIdx]) }));
   }
-  const segs = (Array.isArray(page.dev.segments) ? page.dev.segments : []);
-  const rows = Object.keys(page.profiles).map(key => {
-    const seg = segs.find(s => String(s.id) === key);
-    const current = page.profiles[key];
-    const options = (page.profileNames.includes(current) ? page.profileNames : [current, ...page.profileNames]).map(n => ({ value: n, label: n }));
-    const label = seg ? `#${seg.id} ${seg.name || 'Segment'}` : 'Whole controller';
-    const range = seg ? `LEDs ${Number(seg.start) + 1}–${Number(seg.start) + (Number(seg.length ?? seg.len) || 0)}` : null;
-    return h('div', { class: 'profile-row' },
-      h('div', { class: 'profile-row-label' }, h('strong', {}, label), range && h('span', {}, range)),
-      select(options, current, { 'aria-label': `Profile for ${label}`, onchange: e => { page.profiles[key] = e.target.value; sync(); } }));
-  });
-  body.replaceChildren(
-    h('div', { class: 'detail-lock-note' }, 'Save or discard the LED changes first: profiles follow the saved segments.'),
-    ...rows,
-    segs.some(isPwmSegment) && h('p', { class: 'form-hint' }, 'Light strip segments are not listed: they play no game effects.'),
-    h('a', { class: 'card-link', href: '/lighting/matrix', 'data-link': true }, 'Edit profiles on the Lighting page'));
+  return (Array.isArray(page.dev.segments) ? page.dev.segments : []).map(seg => ({ id: seg.id, name: seg.name || 'Segment', pwm: isPwmSegment(seg) }));
+}
+
+function profileControl(key, name) {
+  if (!page.profiles) return h('p', { class: 'detail-empty' }, page.profilesFailed ? 'Profiles could not be loaded.' : 'Loading…');
+  const current = page.profiles[key];
+  if (current === undefined) return h('p', { class: 'detail-empty' }, 'Save the wiring first to pick a profile.');
+  const options = (page.profileNames.includes(current) ? page.profileNames : [current, ...page.profileNames]).map(n => ({ value: n, label: n }));
+  return select(options, current, { 'aria-label': `Game profile for ${name}`, onchange: e => { page.profiles[key] = e.target.value; sync(); } });
+}
+
+function lightRow(label, content) {
+  return h('div', { class: 'light-row' }, h('span', { class: 'light-row-label' }, label), h('div', { class: 'light-row-body' }, content));
+}
+
+function lightCard(light) {
+  const key = String(light.id);
+  const titleId = `ctl-light-${key}`;
+  const idle = page.idle?.elementFor(light.id)
+    || h('p', { class: 'detail-empty' }, page.online === null ? 'Connecting…' : 'Needs the controller online.');
+  const game = light.pwm ? h('p', { class: 'detail-empty' }, 'Light strips play no game effects.') : profileControl(key, light.name);
+  return h('section', { class: 'card light-card', 'aria-labelledby': titleId },
+    h('header', { class: 'light-head' },
+      h('span', { class: 'seg-swatch', dataset: { kind: light.pwm ? 'pwm' : 'rgb' } }),
+      h('h2', { class: 'light-name', id: titleId }, light.name, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
+      page.idle?.switchFor(light.id)),
+    lightRow('During a game', game),
+    lightRow('Idle', idle));
+}
+
+function renderLights() {
+  if (page.layout && !page.idle) {
+    const saved = JSON.parse(page.savedLayout);
+    page.idle = createIdleEditor(page.ip, saved.segments.map(seg => ({ ...seg, pwm: isPwmOutput(saved.outputs[seg.busIdx]) })));
+    page.idle.onChange = sync;
+    page.idle.load().then(sync);
+  }
+  const lights = lightList();
+  page.lightCards = Object.fromEntries(lights.map(light => [String(light.id), lightCard(light)]));
+  // No segments yet: one profile for the whole controller
+  if (page.profiles?.all !== undefined) {
+    page.lightCards.all = lightCard({ id: 'all', name: 'Whole controller', pwm: false });
+    page.lightCards.all.querySelector('.light-row:last-child').remove();
+  }
+  const offline = !page.layout && page.online !== null && offlineNotice('to change the idle lighting');
+  page.lightsBody.replaceChildren(...[
+    offline,
+    ...Object.values(page.lightCards),
+    !lights.length && page.layout && notice('No lights are set up on this controller yet. Run the guided setup under Wiring.'),
+    h('a', { class: 'card-link', href: '/lighting/matrix', 'data-link': true }, 'Edit game profiles on the Lighting page')
+  ].filter(Boolean));
 }
 
 // --- Page -------------------------------------------------------------------
@@ -362,12 +373,14 @@ function sync() {
   const parts = dirtyParts();
   const ledsDirty = parts.includes('leds');
   if (page.closeEditorBtn) page.closeEditorBtn.disabled = ledsDirty;
-  for (const s of SECTIONS) page.sections[s.id].toggleAttribute('data-dirty', parts.includes(s.id));
+  page.sections.leds.toggleAttribute('data-dirty', ledsDirty);
   page.head.toggleAttribute('data-dirty', parts.includes('general'));
-  for (const id of ['idle', 'profile']) {
-    page.sections[id].classList.toggle('is-locked', ledsDirty);
-    page.sections[id].querySelector('.detail-section-body').inert = ledsDirty;
+  const savedProfiles = page.savedProfiles ? JSON.parse(page.savedProfiles) : {};
+  for (const [key, card] of Object.entries(page.lightCards)) {
+    card.toggleAttribute('data-dirty', Boolean(page.idle?.isDirty(key) || (page.profiles && page.profiles[key] !== savedProfiles[key])));
   }
+  page.lights.classList.toggle('is-locked', ledsDirty);
+  page.lightsBody.inert = ledsDirty;
   page.saveBar.hidden = parts.length === 0;
   page.saveNote.textContent = `Unsaved changes: ${parts.map(p => PART_LABELS[p]).join(', ')}`;
   page.saveBtn.disabled = page.saving;
@@ -450,7 +463,7 @@ function discard() {
   page.idle?.discard();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderProfile(page.bodies.profile);
+  renderLights();
   sync();
 }
 
@@ -525,7 +538,7 @@ export async function openDetail(ip, { force = false } = {}) {
     general, savedGeneral: snapshot(general),
     layout: null, savedLayout: null, idle: null,
     profiles: null, savedProfiles: null, profileNames: [],
-    saving: false, sections: {}, bodies: {}
+    saving: false, sections: {}, bodies: {}, lightCards: {}
   };
 
   buildHeaderControls();
@@ -537,35 +550,37 @@ export async function openDetail(ip, { force = false } = {}) {
   page.head = h('header', { class: 'detail-head' },
     page.title,
     h('div', { class: 'detail-title' }, page.dot, page.nameInput, page.pill, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
-    h('div', { class: 'detail-actions' },
-      page.enabledToggle,
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', title: 'AutoGlow stops using it. The controller keeps its own settings.', onclick: removeThis }, 'Remove')),
+    h('div', { class: 'detail-actions' }, page.enabledToggle),
     page.meta);
 
-  for (const s of SECTIONS) {
-    page.bodies[s.id] = h('div');
-    page.sections[s.id] = section(s.id, s.label, s.lead, page.bodies[s.id]);
-  }
+  page.lightsBody = h('div', { class: 'detail-lights-body' });
+  page.lights = h('div', { class: 'detail-lights' },
+    h('div', { class: 'detail-group-head' },
+      h('h2', { class: 'detail-group-title' }, 'Lights'),
+      h('p', { class: 'detail-lead' }, 'Idle changes show on the lights right away.')),
+    h('div', { class: 'detail-lock-note' }, 'Save or discard the wiring changes first: the lights follow the saved wiring.'),
+    page.lightsBody);
+  page.bodies.leds = h('div');
+  page.sections.leds = section('leds', 'Wiring', 'What is connected to the controller. To change it, run the guided setup.', page.bodies.leds);
   page.saveNote = h('span', { class: 'savebar-note' });
   page.discardBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: discard }, 'Discard');
   page.saveBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: save }, 'Save changes');
   page.saveBar = h('div', { class: 'savebar', role: 'region', 'aria-label': 'Unsaved changes', hidden: true },
     page.saveNote, page.discardBtn, page.saveBtn);
 
-  // Wide screens: LEDs on the left, idle lighting and profile on the right
   host.replaceChildren(
     h('a', { class: 'detail-back', href: '/setup/controllers', 'data-link': true }, '← Controllers'),
     page.head,
-    h('div', { class: 'detail-grid' },
-      page.sections.leds,
-      h('div', { class: 'detail-side' }, page.sections.idle, page.sections.profile)),
+    page.lights,
+    page.sections.leds,
+    h('div', { class: 'detail-footer' },
+      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', title: 'AutoGlow stops using it. The controller keeps its own settings.', onclick: removeThis }, 'Remove this controller…')),
     page.saveBar);
 
   renderHead();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderIdle(page.bodies.idle);
-  renderProfile(page.bodies.profile);
+  renderLights();
   sync();
 
   const opened = page;
@@ -593,8 +608,7 @@ export async function openDetail(ip, { force = false } = {}) {
   renderHead();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderIdle(page.bodies.idle);
-  renderProfile(page.bodies.profile);
+  renderLights();
   sync();
 }
 

@@ -22,6 +22,12 @@ AUTODARTS_AS_URL = "https://api.autodarts.com/as/v0"
 CLIENT_ID = "autodarts-play"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 AutoGlow/2.0"
 RECONNECT_MIN_DELAY = 5.0
+# A match may open with a bull-off; its states use these keys for the bull-off itself, not the match
+BULL_OFF_VARIANT = "Bull-off"
+BULL_OFF_GAME_KEYS = frozenset({
+    "variant", "settings", "gameScores", "gameFinished", "gameWinner", "scores", "stats", "state",
+    "turns", "turnScore", "turnBusted", "skippedPlayers", "player", "round", "leg", "set",
+})
 RECONNECT_MAX_DELAY = 60.0
 
 
@@ -83,9 +89,18 @@ class AutodartsClient:
         self._last_leg_won_time: float = 0.0
         self._last_match_won_time: float = 0.0
         self._in_leg_break: bool = False
+        # Bull-off before the first leg: None (none seen), "running" or "decided"; round grows on a tie
+        self._bull_off_phase: Optional[str] = None
+        self._bull_off_round: int = 0
 
         self.current_players: List[str] = []
         self.active_player_idx: int = 0
+        # Latest match state, read by the Studio scoreboard (core/studio.py)
+        self.last_match_state: Optional[dict] = None
+        self.last_match_state_at: float = 0.0
+        # The bull-off of the running match for the Studio: its latest state and each player's dart per
+        # round (a tie starts a new round and Autodarts clears the darts of the round before)
+        self.bull_off: Optional[Dict[str, Any]] = None
         self.board_states: Dict[str, dict] = {}
         self._boards_cache: List[Dict[str, Any]] = []
         self.user_name: str = ""
@@ -702,7 +717,67 @@ class AutodartsClient:
             self.current_players = extracted
             logger.info(f"Identified match players ({len(extracted)}): {', '.join(extracted)} (Active Idx: {self.active_player_idx})")
 
+    def remember_match_state(self, state: dict) -> None:
+        """Keep the latest match state for the Studio. A message may carry only part of it, so merge."""
+        prev = self.last_match_state
+        same_match = prev is not None and (not state.get("id") or prev.get("id") == state.get("id"))
+        if state.get("variant") == BULL_OFF_VARIANT:
+            self._remember_bull_off(state)
+            # The bull-off before the first leg carries its own variant, settings and scores (bull
+            # distances); keep only the match-level fields so the Studio shows the match at its start
+            state = {k: v for k, v in state.items() if k not in BULL_OFF_GAME_KEYS}
+            state["bullOff"] = True
+        elif state.get("gameScores") is not None:
+            state = {**state, "bullOff": False}
+        self.last_match_state = {**prev, **state} if prev is not None and same_match else dict(state)
+        self.last_match_state_at = time.time()
+
+    def begin_bull_off_view(self, match_id: Any, mode: str, lobby: Optional[dict] = None) -> None:
+        """A match opens with a bull-off: the Studio shows it from now on (the first dart comes later)."""
+        if self.bull_off is None or self.bull_off.get("match_id") != match_id:
+            self.bull_off = {"match_id": match_id, "mode": mode, "lobby": lobby, "state": {}, "rounds": {}}
+
+    def _remember_bull_off(self, state: dict) -> None:
+        """Keep each player's bull-off dart per round: the state names only the current turn's dart."""
+        match_id = state.get("id")
+        bull_off = self.bull_off
+        if bull_off is None or (match_id and bull_off.get("match_id") not in (None, match_id)):
+            bull_off = self.bull_off = {"match_id": match_id, "mode": "", "lobby": None, "state": {}, "rounds": {}}
+        merged = bull_off["state"] = {**bull_off["state"], **state}
+        bull_off["match_id"] = bull_off.get("match_id") or match_id
+        settings = merged.get("settings")
+        if isinstance(settings, dict) and settings.get("mode"):
+            bull_off["mode"] = str(settings["mode"])
+        rnd = merged.get("round")
+        rnd = rnd if isinstance(rnd, int) and not isinstance(rnd, bool) else 1
+        entry = bull_off["rounds"].setdefault(rnd, {"stats": None, "throws": {}})
+        if isinstance(state.get("stats"), list):
+            entry["stats"] = state["stats"]
+        raw_players = merged.get("players")
+        players = raw_players if isinstance(raw_players, list) else []
+        player_ids = [p.get("id") if isinstance(p, dict) else None for p in players]
+        for turn in state.get("turns") or []:
+            if not isinstance(turn, dict) or turn.get("round") not in (None, rnd):
+                continue
+            throws = [t for t in turn.get("throws") or [] if isinstance(t, dict)]
+            if throws and turn.get("playerId") in player_ids:
+                entry["throws"][player_ids.index(turn["playerId"])] = throws[-1]
+
+    @property
+    def bull_off_view(self) -> Optional[Dict[str, Any]]:
+        """The bull-off while it runs or shows its result, until the first leg begins."""
+        bull_off = self.bull_off
+        if bull_off is None:
+            return None
+        state = self.last_match_state
+        if state is not None and state.get("id") not in (None, bull_off.get("match_id")):
+            return None
+        if self._bull_off_phase is not None or (state is not None and state.get("bullOff") is True):
+            return bull_off
+        return None
+
     async def _parse_match_state(self, state: dict):
+        self.remember_match_state(state)
         # Check if match was aborted / cancelled / deleted / stopped
         status_val = str(state.get("status", "")).lower()
         is_match_aborted = (
@@ -723,6 +798,17 @@ class AutodartsClient:
 
         # Extract player names (including local players and guests)
         self._extract_and_set_players(state)
+
+        variant = state.get("variant")
+        is_bull_off = variant == BULL_OFF_VARIANT
+        if is_bull_off:
+            # Before the turn color below, so a timed bull-off animation plays first
+            await self._track_bull_off_round(state)
+        elif variant and self._bull_off_phase is not None and not self._last_match_finished:
+            # First state of the first leg: the match itself begins now
+            self._bull_off_phase = None
+            logger.info(f"Bull-off over, first leg begins ({variant}) -> emitting GAME_START")
+            await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=self.board_id))
 
         turns = state.get("turns", [])
 
@@ -897,6 +983,11 @@ class AutodartsClient:
                         logger.info(f"Single hit detected on throw {throw_id}: {seg_label} (Multiplier: 1)")
                         await self._emit_event(DartEvent(event_type=DartEventType.SINGLE, score=score, multiplier=1, segment_number=score, segment_name=seg_label, board_id=self.board_id))
 
+        if is_bull_off:
+            # After the deciding dart's own hit effect, which arrives in the same message
+            await self._check_bull_off_winner(state)
+            return
+
         # Multi-schema completed legs counting
         total_legs = 0
         has_leg_info = False
@@ -1020,6 +1111,45 @@ class AutodartsClient:
                     board_id=self.board_id
                 ))
 
+    async def start_bull_off(self) -> None:
+        """The match opens with a bull-off: play its animation now; Game Started follows when the first leg begins."""
+        if self._bull_off_phase is not None:
+            return
+        self._bull_off_phase = "running"
+        self._bull_off_round = 1
+        logger.info("Bull-off started -> emitting BULL_OFF_START")
+        await self._emit_event(DartEvent(event_type=DartEventType.BULL_OFF_START, board_id=self.board_id))
+
+    async def _track_bull_off_round(self, state: dict) -> None:
+        """A bull-off state: start the bull-off if this is the first sign of it, or restart it after a tie."""
+        rnd = state.get("round")
+        rnd = rnd if isinstance(rnd, int) and not isinstance(rnd, bool) else 1
+        if self._bull_off_phase is None:
+            await self.start_bull_off()
+            self._bull_off_round = rnd
+        elif rnd > self._bull_off_round:
+            # Nobody won the round (PDC: same segment), so everyone throws again
+            self._bull_off_round = rnd
+            self._bull_off_phase = "running"
+            self._in_leg_break = False
+            logger.info(f"Bull-off tie -> round {rnd}, emitting BULL_OFF_START again")
+            await self._emit_event(DartEvent(event_type=DartEventType.BULL_OFF_START, board_id=self.board_id))
+
+    async def _check_bull_off_winner(self, state: dict) -> None:
+        """Bull-off decided: gameFinished with the winner's index in gameWinner (the game_shot event names
+        the last thrower, not the winner)."""
+        winner = state.get("gameWinner")
+        if self._bull_off_phase != "running" or state.get("gameFinished") is not True:
+            return
+        if not isinstance(winner, int) or isinstance(winner, bool) or winner < 0:
+            return
+        self._bull_off_phase = "decided"
+        # Hold the winner's animation through the takeout until the first leg begins
+        self._in_leg_break = True
+        name = self.current_players[winner] if winner < len(self.current_players) else None
+        logger.info(f"Bull-off won by {name or f'player {winner + 1}'} -> emitting BULL_OFF_WON")
+        await self._emit_event(DartEvent(event_type=DartEventType.BULL_OFF_WON, player_name=name, player_index=winner, board_id=self.board_id))
+
     def _reset_match_state(self):
         self._last_180_fired = False
         self._last_bust_fired = False
@@ -1031,8 +1161,13 @@ class AutodartsClient:
         self._last_match_won_time = 0.0
         self._in_leg_break = False
         self._last_flow_state = None
+        self._bull_off_phase = None
+        self._bull_off_round = 0
+        self.bull_off = None
         self.current_players = []
         self.active_player_idx = 0
+        self.last_match_state = None
+        self.last_match_state_at = 0.0
 
     async def _emit_leg_won(self, player_name: Optional[Any] = None, player_idx: Optional[int] = None):
         # Never emit or overwrite with LEG_WON if match is already won!

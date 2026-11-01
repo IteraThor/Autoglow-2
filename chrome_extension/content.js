@@ -33,7 +33,16 @@ window.addEventListener('message', (ev) => {
   send(ev.data.payload);
 });
 
-// Keeps the service worker awake while a game tab is open and reports in-app navigation
+// Keeps the service worker awake while a game tab is open
 setInterval(() => send({ type: 'tab', attached: true, url: location.href }), KEEPALIVE_MS);
+
+// In-app navigation (lobby -> match -> back) is reported right away: AutoGlow uses the page to know
+// whether a lobby is still open
+let lastUrl = location.href;
+setInterval(() => {
+  if (location.href === lastUrl) return;
+  lastUrl = location.href;
+  send({ type: 'tab', attached: true, url: lastUrl });
+}, 1000);
 
 getPort();
