@@ -288,6 +288,7 @@ class FlowRuntime:
         if self.step == WAITING and not self.in_bull_off:
             return
         played: Optional[str] = None
+        all_played: List[str] = []
         streaming = False
         for ip, sid, role in self.out.segments():
             flow = self.out.flow_for(ip, sid)
@@ -305,6 +306,7 @@ class FlowRuntime:
                     eff = dataclasses.replace(eff, duration=CAMERA_FRIENDLY_MAX_HIT)
                 self.out.hit(ip, sid, eff, CAMERA_FRIENDLY_STRENGTH if gentle else 1.0)
                 played = key
+                all_played.append(key + (" (gentle)" if gentle else ""))
             pos = board_position(event.segment_number)
             if flow.hit_locator and pos is not None and role != "ambient" and self.out.can_locate(ip, sid) and key in ("single", "double", "triple", "ton", "ton40"):
                 if not streaming:
@@ -313,9 +315,9 @@ class FlowRuntime:
                 colour = flow.players[self.colour_slot(flow)].color
                 self.out.locate(ip, sid, pos, colour)
                 played = played or "locator"
+                all_played.append("locator")
         if played:
-            logger.info(f"Flow hit: {played}" + (" (gentle)" if any(
-                self.out.flow_for(ip, sid).camera_friendly for ip, sid, _ in self.out.segments()) and self.step in TURN_STEPS else ""))
+            logger.info("Flow hit: " + ", ".join(dict.fromkeys(all_played)))
             self.last_hit = played
             await self._announce(hit=played)
 
