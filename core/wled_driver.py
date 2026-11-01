@@ -18,10 +18,53 @@ from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
 from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
 from core.animations import render_animation_frame, blend_frames
+from core.effects.flow import blend_flow
 
 # WLED realtime UDP limits: one DRGB packet holds 490 LEDs, one DNRGB packet 489 (it spends 2 bytes on the start index)
 DRGB_MAX_LEDS = 490
 DNRGB_MAX_LEDS = 489
+
+# A hit fades back into the current look over its last 0.3 s
+FLOW_HIT_FADE_BACK = 0.3
+# The hit locator lights one board number's width (1/20 of the strip) with soft edges
+LOCATOR_WIDTH = 1.0 / 20.0
+
+
+def _clear_flow_state(ch: Dict[str, Any]) -> None:
+    ch["flow"] = False
+    ch["fade"] = None
+    ch["overlay"] = None
+    ch["locator"] = None
+    ch["last_base"] = None
+
+
+def _composite(base: Union[bytes, bytearray], layer: Union[bytes, bytearray], mask: Union[bytes, bytearray], scale: float) -> bytearray:
+    """Lay `layer` over `base`; each LED shows as much of the layer as the mask's brightness says."""
+    out = bytearray(base)
+    for i in range(0, len(out) - 2, 3):
+        m = max(mask[i], mask[i + 1], mask[i + 2])
+        if m == 0:
+            continue
+        a = m / 255.0 * scale
+        for c in (i, i + 1, i + 2):
+            out[c] = int(base[c] + (layer[c] - base[c]) * a + 0.5)
+    return out
+
+
+def _draw_locator(base: Union[bytes, bytearray], count: int, position: float, color: RGBColor, level: float) -> bytearray:
+    out = bytearray(base)
+    half = LOCATOR_WIDTH / 2.0
+    edge = max(LOCATOR_WIDTH / 2.0, 1.0 / max(1, count))
+    col = (color.r, color.g, color.b)
+    for i in range(count):
+        d = abs(((i + 0.5) / count - position + 0.5) % 1.0 - 0.5)
+        if d >= half + edge:
+            continue
+        a = level * (1.0 if d <= half else 1.0 - (d - half) / edge)
+        j = i * 3
+        for c in range(3):
+            out[j + c] = int(out[j + c] + (col[c] - out[j + c]) * a + 0.5)
+    return out
 
 logger = logging.getLogger("autoglow.wled_driver")
 
@@ -131,6 +174,7 @@ class WLEDDriver:
         for ch in self._segment_channels.values():
             ch["baseline_effect"] = None
             ch["transient_effect"] = None
+            _clear_flow_state(ch)
 
         if self._master_broadcast_task and not self._master_broadcast_task.done():
             self._master_broadcast_task.cancel()
@@ -638,6 +682,8 @@ class WLEDDriver:
         ch = self._segment_channels[s_id]
         ch["start_idx"] = start_idx
         ch["stop_idx"] = stop_idx
+        if ch.get("flow"):
+            _clear_flow_state(ch)
 
         # If previous_color is explicitly provided, record it as the channel's last active color
         if previous_color and (previous_color.r, previous_color.g, previous_color.b) != (0, 0, 0):
@@ -668,6 +714,151 @@ class WLEDDriver:
         # Ensure master broadcast loop is running
         if not self._master_broadcast_task or self._master_broadcast_task.done():
             self._master_broadcast_task = asyncio.create_task(self._run_master_broadcast_loop())
+
+    # -------------------------------------------------------------------------
+    # Flow Matrix channels: a look that comes in with a transition, hits on top
+    # -------------------------------------------------------------------------
+    def _flow_channel(self, segment_id: Optional[int]) -> Dict[str, Any]:
+        s_id = int(segment_id) if segment_id is not None else 0
+        start_idx, stop_idx = self._get_segment_bounds(s_id)
+        ch = self._segment_channels.get(s_id)
+        if ch is None:
+            ch = {"baseline_effect": None, "baseline_start_time": time.time(), "transient_effect": None,
+                  "transient_start_time": 0.0, "transient_duration": 0.0, "last_active_color": None}
+            self._segment_channels[s_id] = ch
+        ch["start_idx"] = start_idx
+        ch["stop_idx"] = stop_idx
+        if not ch.get("flow"):
+            # Coming from a legacy effect or from nothing: start clean
+            _clear_flow_state(ch)
+            ch["baseline_effect"] = None
+            ch["flow"] = True
+        ch["transient_effect"] = None
+        return ch
+
+    def _ensure_broadcast(self) -> None:
+        if not self._master_broadcast_task or self._master_broadcast_task.done():
+            self._master_broadcast_task = asyncio.create_task(self._run_master_broadcast_loop())
+
+    def flow_show(
+        self,
+        segment_id: Optional[int],
+        effect: EffectConfig,
+        style: str = "crossfade",
+        duration: float = 0.0,
+        accent: Optional[Tuple[int, int, int]] = None,
+    ) -> bool:
+        """
+        Show a flow step's look on a segment. It blends in from whatever the segment shows now (black when
+        coming from the idle lighting) using the step's transition. Returns False when not streaming.
+        """
+        if self._protocol_mode != ProtocolMode.ACTIVE_UDP:
+            logger.warning("Blocked flow look: protocol mode is IDLE_HTTP. Connect UDP first.")
+            return False
+        ch = self._flow_channel(segment_id)
+        prev = ch.get("baseline_effect")
+        if prev == effect:
+            return True  # the same look again (e.g. a repeated event) keeps running, fade included
+        now = time.time()
+        fade = None
+        if duration > 0.0 and style != "instant":
+            # Mid-transition (or with nothing to animate) the outgoing picture is frozen; otherwise it keeps moving
+            frozen = ch.get("last_base") if (ch.get("fade") or prev is None) else None
+            fade = {
+                "start": now, "duration": float(duration), "style": style, "accent": accent,
+                "frame": frozen, "effect": None if frozen is not None else prev,
+                "effect_start": ch.get("baseline_start_time", now),
+            }
+        ch["baseline_effect"] = effect
+        ch["baseline_start_time"] = now
+        ch["fade"] = fade
+        self._ensure_broadcast()
+        return True
+
+    def flow_hit(self, segment_id: Optional[int], effect: EffectConfig, strength: float = 1.0) -> bool:
+        """Play a hit on top of a segment's current look; it fades back into the look at the end."""
+        if self._protocol_mode != ProtocolMode.ACTIVE_UDP:
+            return False
+        ch = self._flow_channel(segment_id)
+        white, black = RGBColor(255, 255, 255), RGBColor(0, 0, 0)
+        ch["overlay"] = {
+            "start": time.time(),
+            "duration": max(0.2, float(effect.duration or 1.0)),
+            "strength": max(0.0, min(1.0, strength)),
+            # The colour layer, and a white-on-black copy whose brightness says how much of the layer shows
+            "layer": dataclasses.replace(effect, color_secondary=effect.color_primary, brightness=None),
+            "mask": dataclasses.replace(effect, color_primary=white, color_secondary=black, brightness=None),
+            "brightness": effect.brightness,
+        }
+        self._ensure_broadcast()
+        return True
+
+    def flow_locate(self, segment_id: Optional[int], position: float, color: RGBColor,
+                    duration: float = 1.2, clockwise: bool = True) -> bool:
+        """
+        Light the part of a segment next to a board position (0 = top, 0.25 = right, going clockwise),
+        e.g. the number just hit. The segment offset says where the top is.
+        """
+        if self._protocol_mode != ProtocolMode.ACTIVE_UDP:
+            return False
+        ch = self._flow_channel(segment_id)
+        pos = position % 1.0
+        ch["locator"] = {"start": time.time(), "duration": max(0.3, duration),
+                         "position": pos if clockwise else (1.0 - pos) % 1.0, "color": color}
+        self._ensure_broadcast()
+        return True
+
+    def flow_clear(self) -> None:
+        for ch in self._segment_channels.values():
+            if ch.get("flow"):
+                ch["baseline_effect"] = None
+                _clear_flow_state(ch)
+
+    def _render_flow_channel(self, ch: Dict[str, Any], now: float, count: int) -> Optional[bytearray]:
+        base_eff = ch.get("baseline_effect")
+        if base_eff is None:
+            return None
+        base = render_animation_frame(base_eff, 0, now - ch.get("baseline_start_time", now), count)
+
+        fade = ch.get("fade")
+        if fade:
+            f = (now - fade["start"]) / fade["duration"]
+            if f >= 1.0:
+                ch["fade"] = None
+            else:
+                src = fade.get("frame")
+                if src is None and fade.get("effect") is not None:
+                    src = render_animation_frame(fade["effect"], 0, now - fade["effect_start"], count)
+                if src is None or len(src) != count * 3:
+                    src = bytes(count * 3)
+                base = blend_flow(src, base, f, fade["style"], fade.get("accent"))
+        ch["last_base"] = bytes(base)
+        out = base
+
+        ov = ch.get("overlay")
+        if ov:
+            el = now - ov["start"]
+            dur = ov["duration"]
+            if el >= dur:
+                ch["overlay"] = None
+            else:
+                back = min(FLOW_HIT_FADE_BACK, dur * 0.4)
+                scale = ov["strength"] * min(1.0, (dur - el) / back)
+                bri = ov.get("brightness")
+                if bri is not None and 0 <= bri < 100:
+                    scale *= bri / 100.0
+                layer = render_animation_frame(ov["layer"], 0, el, count)
+                mask = render_animation_frame(ov["mask"], 0, el, count)
+                out = _composite(out, layer, mask, scale)
+
+        loc = ch.get("locator")
+        if loc:
+            el = now - loc["start"]
+            if el >= loc["duration"]:
+                ch["locator"] = None
+            else:
+                out = _draw_locator(out, count, loc["position"], loc["color"], (1.0 - el / loc["duration"]) ** 1.5)
+        return out
 
     def stop_segment(self, segment_id: int) -> None:
         """
@@ -700,6 +891,7 @@ class WLEDDriver:
         for ch in self._segment_channels.values():
             ch["baseline_effect"] = None
             ch["transient_effect"] = None
+            _clear_flow_state(ch)
 
         if self._master_broadcast_task and not self._master_broadcast_task.done():
             self._master_broadcast_task.cancel()
@@ -981,6 +1173,15 @@ class WLEDDriver:
                     stop_idx = min(ch.get("stop_idx", total_led_count), total_led_count)
                     seg_len = stop_idx - start_idx
                     if seg_len <= 0:
+                        continue
+
+                    if ch.get("flow"):
+                        flow_frame = self._render_flow_channel(ch, t0, seg_len)
+                        if flow_frame is None:
+                            continue
+                        any_active = True
+                        rendered_ranges.append((start_idx, stop_idx))
+                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(flow_frame, self._get_segment_offset(s_id))
                         continue
 
                     # Determine which effect to render: transient overlay or permanent baseline

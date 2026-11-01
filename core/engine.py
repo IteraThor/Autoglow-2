@@ -5,18 +5,17 @@ profile-driven lighting effects, and real-time UI telemetry dispatching.
 """
 
 import asyncio
-import dataclasses
 import logging
 import time
 from typing import Optional, Set, Callable, Awaitable, Dict, Any
 
 from core.models import (
-    AppConfig, DeviceConfig, ProfileConfig, DartEvent, DartEventType, EffectConfig, ProtocolMode, LightingMode,
-    AnimationType
+    AppConfig, DeviceConfig, ProfileConfig, DartEvent, DartEventType, ProtocolMode, LightingMode
 )
 from core.wled_driver import WLEDDriver
 from core.autodarts_client import AutodartsClient
-from core.game_flow import GameFlowStorageManager, GameFlow, create_default_game_flow
+from core.game_flow import GameFlowStorageManager
+from core.flow_runtime import EngineFlowOutput, FlowRuntime
 
 logger = logging.getLogger("autoglow.engine")
 
@@ -96,15 +95,21 @@ class AutoGlowEngine:
         # Set when the Lighting page plays a test effect, so leaving the page can restore idle
         self.lighting_test_active = False
 
-        # Flow Matrix (Game Flow) state
+        # Flow Matrix: profiles on disk, and the runtime that follows the match
         self.game_flow_storage = GameFlowStorageManager()
-        try:
-            self.game_flow: GameFlow = self.game_flow_storage.load()
-        except Exception:
-            self.game_flow = create_default_game_flow()
-        self.flow_active_phase: str = "idle"
-        self.flow_active_player_idx: int = 0
-        self._flow_advance_task: Optional[asyncio.Task] = None
+        self.flow_runtime = FlowRuntime(EngineFlowOutput(self))
+        self.flow_preview_task: Optional[asyncio.Task] = None
+
+    @property
+    def flow_active_phase(self) -> str:
+        """The Flow Matrix step the match is in ("waiting" outside a match)."""
+        return self.flow_runtime.step
+
+    def segment_clockwise(self, ip: Optional[str], seg_id: Optional[int]) -> bool:
+        """Whether a segment's LEDs run clockwise around the board (used by the hit locator)."""
+        dev = next((d for d in self._active_devices() if d.ip == ip), None)
+        seg = next((sg for sg in (dev.segments if dev else []) if _seg_id(sg) == (seg_id or 0)), None)
+        return bool(_seg_attr(seg, "clockwise", True)) if seg is not None else True
 
     @property
     def driver(self) -> WLEDDriver:
@@ -187,10 +192,10 @@ class AutoGlowEngine:
         if isinstance(mode, str):
             mode = LightingMode.FLOW if mode.lower() == "flow" else LightingMode.MATRIX
         if self.app_config.lighting_mode != mode:
-            # Clean up pending transition tasks from previous mode
-            if self._flow_advance_task and not self._flow_advance_task.done():
-                self._flow_advance_task.cancel()
-                self._flow_advance_task = None
+            # Clean up pending tasks and looks from the previous mode
+            self.flow_runtime.reset()
+            for drv in self.drivers.values():
+                drv.flow_clear()
             if self._game_start_task and not self._game_start_task.done():
                 self._game_start_task.cancel()
                 self._game_start_task = None
@@ -204,16 +209,9 @@ class AutoGlowEngine:
         """True while the Flow Matrix (not the Event Matrix) decides what plays."""
         return bool(self.app_config) and self.app_config.lighting_mode == LightingMode.FLOW
 
-    def reload_game_flow(self, flow: Optional[GameFlow] = None) -> None:
-        """Reload Game Flow from disk or apply in-memory instance."""
-        if flow:
-            self.game_flow = flow
-        else:
-            try:
-                self.game_flow = self.game_flow_storage.load()
-            except Exception as e:
-                logger.warning(f"Failed to reload game flow from disk: {e}")
-        logger.info("AutoGlow Engine synchronized with current Game Flow definition.")
+    def reload_game_flow(self, flow: Any = None) -> None:
+        """Flow profiles are re-read from disk when they change; nothing to reload by hand."""
+        logger.info("AutoGlow Engine uses the saved flow profiles.")
 
     # -------------------------------------------------------------------------
     # Public Lifecycle & Protocol Mode Controls
@@ -254,7 +252,9 @@ class AutoGlowEngine:
                 pass
             self._idle_task = None
 
-        for task in (self._match_end_task, self._game_start_task, self._flow_advance_task):
+        flow_tasks = (self.flow_runtime._timer, self.flow_preview_task)
+        self.flow_runtime.reset()
+        for task in (self._match_end_task, self._game_start_task, *flow_tasks):
             if task and not task.done():
                 task.cancel()
                 try:
@@ -263,7 +263,7 @@ class AutoGlowEngine:
                     pass
         self._match_end_task = None
         self._game_start_task = None
-        self._flow_advance_task = None
+        self.flow_preview_task = None
 
         if self.autodarts:
             await self.autodarts.stop()
@@ -370,31 +370,6 @@ class AutoGlowEngine:
 
     def _get_max_effect_duration(self, event_key: str) -> float:
         """Calculate the maximum configured duration for a given event across enabled devices and segments."""
-        if self._is_flow_mode():
-            max_flow_dur = 0.0
-            p = self.game_flow.get_phase(event_key)
-            if p and p.effect and p.effect.enabled and p.effect.duration > 0:
-                max_flow_dur = max(max_flow_dur, p.effect.duration)
-            ev = self.game_flow.events.get(event_key)
-            if ev and ev.effect and ev.effect.enabled and ev.effect.duration > 0:
-                max_flow_dur = max(max_flow_dur, ev.effect.duration)
-
-            for dev in self._active_devices():
-                for seg in dev.segments or []:
-                    if _is_pwm_segment(seg):
-                        continue
-                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, _seg_id(seg))
-                    sp = seg_flow.get_phase(event_key)
-                    if sp and sp.effect and sp.effect.enabled and sp.effect.duration > 0:
-                        max_flow_dur = max(max_flow_dur, sp.effect.duration)
-                    sev = seg_flow.events.get(event_key)
-                    if sev and sev.effect and sev.effect.enabled and sev.effect.duration > 0:
-                        max_flow_dur = max(max_flow_dur, sev.effect.duration)
-
-            if max_flow_dur == 0.0 and event_key == "game_start":
-                max_flow_dur = 2.5
-            return max_flow_dur
-
         max_dur = 0.0
         for dev in self._active_devices():
             for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
@@ -458,12 +433,14 @@ class AutoGlowEngine:
         event_key = event.event_type.value
         logger.info(f"AutoGlow Engine processing event: '{event_key}' (player='{event.player_name}', score={event.score}, seg='{event.segment_name}')")
 
+        if self._is_flow_mode():
+            await self._process_flow_event(event)
+            return
+
         # Intro duration gating (Game Started, Bull-off Started): the turn color waits for the intro to finish
         if event.event_type in (DartEventType.GAME_START, DartEventType.BULL_OFF_START):
             if self._game_start_task and not self._game_start_task.done():
                 self._game_start_task.cancel()
-            if self._flow_advance_task and not self._flow_advance_task.done():
-                self._flow_advance_task.cancel()
             if self._match_end_task and not self._match_end_task.done():
                 self._match_end_task.cancel()
                 self._match_end_task = None
@@ -473,8 +450,7 @@ class AutoGlowEngine:
 
             if max_game_start_dur > 0.0:
                 self._game_start_end_time = time.time() + max_game_start_dur
-                if not self._is_flow_mode():
-                    self._game_start_task = asyncio.create_task(self._await_game_start_transition(max_game_start_dur))
+                self._game_start_task = asyncio.create_task(self._await_game_start_transition(max_game_start_dur))
             else:
                 self._game_start_end_time = 0.0
         elif event.event_type in [
@@ -486,8 +462,6 @@ class AutoGlowEngine:
         ]:
             if self._game_start_task and not self._game_start_task.done():
                 self._game_start_task.cancel()
-            if self._flow_advance_task and not self._flow_advance_task.done():
-                self._flow_advance_task.cancel()
             self._game_start_end_time = 0.0
             self._pending_throw_event = None
 
@@ -597,47 +571,43 @@ class AutoGlowEngine:
 
         match_players = getattr(self.autodarts, "current_players", []) if self.autodarts else []
 
-        if self._is_flow_mode():
-            await self._dispatch_flow_event(event)
-            dispatched_any = True
-        else:
-            for dev in self._active_devices():
-                drv = self.get_driver(dev.ip)
-                if not drv:
+        for dev in self._active_devices():
+            drv = self.get_driver(dev.ip)
+            if not drv:
+                continue
+
+            # Each segment plays the effect of the profile it is assigned
+            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+                profile = self._profile_for(dev.ip, seg_id)
+                if event.event_type == DartEventType.THROW:
+                    eff = profile.resolve_player_effect(
+                        player_name=event.player_name,
+                        player_index=event.player_index,
+                        match_players=match_players,
+                    )
+                else:
+                    eff = profile.get_effect(event_key)
+                if not (eff and eff.enabled):
                     continue
+                where = f"Segment #{seg_id}" if seg_id is not None else "all segments"
+                logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) {where} for '{self.last_event_name}'")
+                if seg_id is None:
+                    await drv.play_effect(eff)
+                else:
+                    await drv.play_effect(eff, segment_id=seg_id)
+                dispatched_any = True
 
-                # Each segment plays the effect of the profile it is assigned
-                for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
-                    profile = self._profile_for(dev.ip, seg_id)
-                    if event.event_type == DartEventType.THROW:
-                        eff = profile.resolve_player_effect(
-                            player_name=event.player_name,
-                            player_index=event.player_index,
-                            match_players=match_players,
-                        )
-                    else:
-                        eff = profile.get_effect(event_key)
-                    if not (eff and eff.enabled):
-                        continue
-                    where = f"Segment #{seg_id}" if seg_id is not None else "all segments"
-                    logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) {where} for '{self.last_event_name}'")
-                    if seg_id is None:
-                        await drv.play_effect(eff)
-                    else:
-                        await drv.play_effect(eff, segment_id=seg_id)
-                    dispatched_any = True
-
-            if not dispatched_any and not self._active_devices():
-                # No controller configured: fall back to the active profile across all drivers
-                fallback_eff = self.profile.resolve_player_effect(
-                    player_name=event.player_name,
-                    player_index=event.player_index,
-                    match_players=match_players
-                ) if event.event_type == DartEventType.THROW else self.profile.get_effect(event_key)
-                if fallback_eff and fallback_eff.enabled:
-                    logger.info(f"Dispatching global effect '{fallback_eff.animation.value}' for '{self.last_event_name}'")
-                    for drv in self.drivers.values():
-                        await drv.play_effect(fallback_eff)
+        if not dispatched_any and not self._active_devices():
+            # No controller configured: fall back to the active profile across all drivers
+            fallback_eff = self.profile.resolve_player_effect(
+                player_name=event.player_name,
+                player_index=event.player_index,
+                match_players=match_players
+            ) if event.event_type == DartEventType.THROW else self.profile.get_effect(event_key)
+            if fallback_eff and fallback_eff.enabled:
+                logger.info(f"Dispatching global effect '{fallback_eff.animation.value}' for '{self.last_event_name}'")
+                for drv in self.drivers.values():
+                    await drv.play_effect(fallback_eff)
 
         # Notify UI telemetry subscribers
         await self._broadcast_telemetry({
@@ -655,155 +625,33 @@ class AutoGlowEngine:
             "flow_phase": self.flow_active_phase
         })
 
-    def _resolve_flow_effect(self, flow: GameFlow, event: DartEvent) -> Optional[EffectConfig]:
-        """Resolve the target effect from a GameFlow for a given dart event."""
-        if event.event_type == DartEventType.GAME_START:
-            p = flow.get_phase("game_start")
-            if p and p.effect and p.effect.enabled:
-                return p.effect
-            return EffectConfig(duration=2.5, animation=p.effect.animation if p and p.effect else AnimationType.SOLID)
-
-        if event.event_type == DartEventType.THROW:
-            p_idx = event.player_index if event.player_index is not None else 0
-            target_phase_id = "turn_p1" if p_idx == 0 else "turn_p2"
-            p = flow.get_phase(target_phase_id)
-            if p and p.effect and p.effect.enabled:
-                return dataclasses.replace(p.effect, duration=0.0, enabled=True)
-            return None
-
-        key_map = {
-            DartEventType.SINGLE: "single",
-            DartEventType.DOUBLE: "double",
-            DartEventType.TRIPLE: "triple",
-            DartEventType.SCORE_180: "180",
-            DartEventType.BULLSEYE: "bullseye",
-            DartEventType.BUST: "bust",
-            DartEventType.CALIBRATING: "calibrating"
-        }
-        if event.event_type in key_map:
-            ev_k = key_map[event.event_type]
-            ev_phase = flow.events.get(ev_k)
-            if ev_phase and ev_phase.effect and ev_phase.effect.enabled:
-                return ev_phase.effect
-            def_flow = create_default_game_flow()
-            def_ev = def_flow.events.get(ev_k)
-            if def_ev and def_ev.effect:
-                return def_ev.effect
-            return None
-
-        if event.event_type in [DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS]:
-            p = flow.get_phase("takeout")
-            return p.effect if (p and p.effect and p.effect.enabled) else None
-
-        if event.event_type == DartEventType.LEG_WON:
-            p = flow.get_phase("leg_won")
-            return p.effect if (p and p.effect and p.effect.enabled) else None
-
-        if event.event_type in [DartEventType.MATCH_WON, DartEventType.GAME_FINISH]:
-            p = flow.get_phase("match_won")
-            return p.effect if (p and p.effect and p.effect.enabled) else None
-
-        # GAME_IDLE / MANUAL_RESET have no flow effect: the idle look comes from the Setup tab (WLED preset 1)
-        return None
-
-    async def _dispatch_flow_event(self, event: DartEvent) -> None:
-        """Dispatch match events according to the active Game Flow state machine (Flow Matrix mode)."""
+    async def _process_flow_event(self, event: DartEvent) -> None:
+        """Flow Matrix: the flow runtime follows the match and drives the strips."""
         event_key = event.event_type.value
-        logger.info(f"AutoGlow Engine [FLOW MATRIX] handling event '{event_key}'")
+        if event.event_type in (DartEventType.CALIBRATING, DartEventType.MANUAL_RESET):
+            # Not a game moment: only wake the lights (to the idle look) if they were off
+            if self.is_board_off or self.is_board_dimmed:
+                await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
+        await self.flow_runtime.handle(event)
 
-        if event.event_type == DartEventType.GAME_START:
-            self.flow_active_phase = "game_start"
-            dur = self._get_max_effect_duration("game_start")
-            if self._flow_advance_task and not self._flow_advance_task.done():
-                self._flow_advance_task.cancel()
-            self._flow_advance_task = asyncio.create_task(self._flow_auto_advance("turn_p1", dur))
-
-        elif event.event_type == DartEventType.THROW:
-            p_idx = event.player_index if event.player_index is not None else 0
-            self.flow_active_player_idx = p_idx
-            self.flow_active_phase = "turn_p1" if p_idx == 0 else "turn_p2"
-
-        elif event.event_type in [DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS]:
-            self.flow_active_phase = "takeout"
-        elif event.event_type == DartEventType.LEG_WON:
-            self.flow_active_phase = "leg_won"
-        elif event.event_type in [DartEventType.MATCH_WON, DartEventType.GAME_FINISH]:
-            self.flow_active_phase = "match_won"
-        elif event.event_type in [DartEventType.GAME_IDLE, DartEventType.MANUAL_RESET]:
-            self.flow_active_phase = "idle"
-            if self._flow_advance_task and not self._flow_advance_task.done():
-                self._flow_advance_task.cancel()
-            # Hand the strips back to the idle look saved in the Setup tab (WLED preset 1)
-            if any(drv.protocol_mode == ProtocolMode.ACTIVE_UDP for drv in self.drivers.values()):
-                await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
-            return
-
-        for dev in self._active_devices():
-            drv = self.get_driver(dev.ip)
-            if not drv:
-                continue
-
-            if dev.segments:
-                for seg in dev.segments:
-                    if _is_pwm_segment(seg):
-                        continue
-                    seg_id = _seg_id(seg)
-                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, seg_id)
-                    target_eff = self._resolve_flow_effect(seg_flow, event)
-                    if target_eff:
-                        await drv.play_effect(target_eff, segment_id=seg_id, force_enable=True)
-            else:
-                seg_flow = self.game_flow_storage.get_for_segment(dev.ip, None)
-                target_eff = self._resolve_flow_effect(seg_flow, event)
-                if target_eff:
-                    await drv.play_effect(target_eff, force_enable=True)
-
-    async def _flow_auto_advance(self, target_phase_id: str, delay: float) -> None:
-        """Asynchronously advance the Flow Matrix state machine after an intro or celebration completes."""
-        try:
-            await asyncio.sleep(delay)
-            if not self._is_flow_mode():
-                return
-            self.flow_active_phase = target_phase_id
-
-            for dev in self._active_devices():
-                drv = self.get_driver(dev.ip)
-                if not drv:
-                    continue
-
-                if dev.segments:
-                    for seg in dev.segments:
-                        if _is_pwm_segment(seg):
-                            continue
-                        seg_id = _seg_id(seg)
-                        seg_flow = self.game_flow_storage.get_for_segment(dev.ip, seg_id)
-                        p = seg_flow.get_phase(target_phase_id)
-                        if p and p.effect and p.effect.enabled:
-                            baseline_eff = dataclasses.replace(p.effect, duration=0.0, enabled=True)
-                            await drv.play_effect(baseline_eff, segment_id=seg_id, force_enable=True)
-                else:
-                    seg_flow = self.game_flow_storage.get_for_segment(dev.ip, None)
-                    p = seg_flow.get_phase(target_phase_id)
-                    if p and p.effect and p.effect.enabled:
-                        baseline_eff = dataclasses.replace(p.effect, duration=0.0, enabled=True)
-                        await drv.play_effect(baseline_eff, force_enable=True)
-
-            await self._broadcast_telemetry({
-                "type": "game_flow_state",
-                "phase": self.flow_active_phase,
-                "lighting_mode": self.app_config.lighting_mode.value
-            })
-
-            self._game_start_end_time = 0.0
-            if self._pending_throw_event:
-                pending = self._pending_throw_event
-                self._pending_throw_event = None
-                logger.info("Flow Matrix intro animation finished -> processing queued throw event")
-                await self.process_event(pending)
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.exception(f"Error in _flow_auto_advance: {e}")
+        new_event_name = f"{event_key} ; {event.segment_name}" if event.segment_name else event_key
+        if self.last_event_name and self.last_event_name != "Standby":
+            self.previous_event_name = self.last_event_name
+        self.last_event_name = new_event_name
+        await self._broadcast_telemetry({
+            "type": "game_event",
+            "event": event_key,
+            "display_event": self.last_event_name,
+            "previous_event": self.previous_event_name,
+            "segment_name": event.segment_name or "",
+            "score": event.score,
+            "multiplier": event.multiplier,
+            "timestamp": time.time(),
+            "players": getattr(self.autodarts, "current_players", []) if self.autodarts else [],
+            "active_player_idx": getattr(self.autodarts, "active_player_idx", 0) if self.autodarts else 0,
+            "lighting_mode": self.app_config.lighting_mode.value,
+            "flow_phase": self.flow_runtime.step,
+        })
 
     # -------------------------------------------------------------------------
     # Idle & Power Management Loop

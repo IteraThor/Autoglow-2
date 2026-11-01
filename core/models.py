@@ -339,6 +339,7 @@ class SegmentConfig:
     role: str = "dartboard_ring"  # "dartboard_ring", "white_illumination", "ambient"
     hw_key: Optional[str] = None
     offset: int = 0                   # effects begin this many LEDs after start, wrapping around (WLED "of")
+    clockwise: bool = True            # LEDs run clockwise around the board from the offset (hit locator)
 
     def to_dict(self) -> Dict[str, Any]:
         out = {
@@ -351,6 +352,8 @@ class SegmentConfig:
             "role": self.role,
             "offset": self.offset
         }
+        if not self.clockwise:
+            out["clockwise"] = False
         if self.hw_key:
             out["hw_key"] = self.hw_key
         return out
@@ -380,7 +383,8 @@ class SegmentConfig:
         role = str(data.get("role", "dartboard_ring"))
         hw_key = data.get("hw_key")
         offset = _safe_int(data.get("offset", data.get("of")), 0) % length
-        return cls(id=seg_id, name=name, type=seg_type, gpio=gpio, start=start, length=length, role=role, hw_key=hw_key, offset=offset)
+        return cls(id=seg_id, name=name, type=seg_type, gpio=gpio, start=start, length=length, role=role, hw_key=hw_key, offset=offset,
+                   clockwise=data.get("clockwise", True) is not False)
 
 
 @dataclass

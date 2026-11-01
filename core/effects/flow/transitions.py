@@ -6,17 +6,19 @@ over the transition. Edges are a share of the strip, so a wipe takes the same ti
 same on any number of LEDs. Flash fires once per transition, which keeps it under 3 flashes a second.
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from core.effects.flow.catalog import normalize_transition_style
 from core.effects.flow.renderers import EDGE_SHARE, _curtain_distance, _smoothstep
+
+Buffer = Union[bytes, bytearray]
 
 FLASH_RISE = 0.2  # share of the transition spent rising into the flash
 
 
 def blend_flow(
-    buf_a: bytes,
-    buf_b: bytes,
+    buf_a: Buffer,
+    buf_b: Buffer,
     factor: float,
     style: str = "crossfade",
     accent: Optional[Tuple[int, int, int]] = None,

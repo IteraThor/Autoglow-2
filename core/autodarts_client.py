@@ -947,6 +947,8 @@ class AutodartsClient:
 
                     # 1. Check 180 (turn score == 180)
                     turn_points = last_turn.get("points", 0)
+                    # The visit total rides on its third dart, so a flow can celebrate a ton (100+) or ton-40
+                    visit_total = turn_points if (len(throws) == 3 and isinstance(turn_points, int)) else None
                     if len(throws) == 3 and turn_points == 180 and not self._last_180_fired:
                         self._last_180_fired = True
                         await self._emit_event(DartEvent(event_type=DartEventType.SCORE_180, score=180, segment_name="180", board_id=self.board_id))
@@ -966,22 +968,22 @@ class AutodartsClient:
                     # 4. Check Triple Hit
                     elif mult == 3:
                         logger.info(f"Triple hit detected on throw {throw_id}: {seg_label} (Multiplier: 3)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.TRIPLE, score=score * 3, multiplier=3, segment_number=score, segment_name=seg_label, board_id=self.board_id))
+                        await self._emit_event(DartEvent(event_type=DartEventType.TRIPLE, score=score * 3, multiplier=3, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
 
                     # 5. Check Bullseye (50 points)
                     elif (mult == 2 and score == 25) or seg_label in ["Bull", "50"]:
                         logger.info(f"Bullseye hit detected on throw {throw_id}: Bull (50)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.BULLSEYE, score=50, multiplier=2, segment_number=25, segment_name=seg_label, board_id=self.board_id))
+                        await self._emit_event(DartEvent(event_type=DartEventType.BULLSEYE, score=50, multiplier=2, segment_number=25, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
 
                     # 6. Check Double Hit (D1..D20)
                     elif mult == 2:
                         logger.info(f"Double hit detected on throw {throw_id}: {seg_label} (Multiplier: 2)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.DOUBLE, score=score * 2, multiplier=2, segment_number=score, segment_name=seg_label, board_id=self.board_id))
+                        await self._emit_event(DartEvent(event_type=DartEventType.DOUBLE, score=score * 2, multiplier=2, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
 
                     # 7. Check Single Hit (S1..S20, 25)
                     elif mult == 1:
                         logger.info(f"Single hit detected on throw {throw_id}: {seg_label} (Multiplier: 1)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.SINGLE, score=score, multiplier=1, segment_number=score, segment_name=seg_label, board_id=self.board_id))
+                        await self._emit_event(DartEvent(event_type=DartEventType.SINGLE, score=score, multiplier=1, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
 
         if is_bull_off:
             # After the deciding dart's own hit effect, which arrives in the same message

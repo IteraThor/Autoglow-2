@@ -57,13 +57,17 @@ _LEGACY_EFFECTS: Dict[str, tuple] = {
 
 _LEGACY_TRANSITIONS = {"cut": "instant", "fade": "crossfade", "pulse": "crossfade"}
 
+# Options every look has: where its main colour comes from ("player" = the current player's colour,
+# the winner's on Leg won / Match won)
+COMMON_OPTIONS: Dict[str, tuple] = {"colour_from": ("custom", ["custom", "player"])}
+
 SPEED_MIN = 0.25
 SPEED_MAX = 4.0
 
 
 def normalize_options(effect_id: str, options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """The full option set for an effect: known keys only, each with an allowed value."""
-    spec = FLOW_EFFECTS.get(effect_id, FLOW_EFFECTS["solid"])["options"]
+    spec = {**FLOW_EFFECTS.get(effect_id, FLOW_EFFECTS["solid"])["options"], **COMMON_OPTIONS}
     given = options or {}
     out: Dict[str, Any] = {}
     for key, (default, allowed) in spec.items():
