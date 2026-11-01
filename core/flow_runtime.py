@@ -212,6 +212,10 @@ class FlowRuntime:
         await self.out.to_waiting()
         await self._announce()
 
+    def hold_remaining(self) -> float:
+        """Seconds until a playing timed step lets the next turn come in (0 when nothing holds)."""
+        return max(0.0, self._hold_until - self._clock()) if self._hold_step else 0.0
+
     def _held(self) -> bool:
         return self._hold_step is not None and self._clock() < self._hold_until
 

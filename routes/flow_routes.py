@@ -308,6 +308,33 @@ async def handle_preview_stop(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
+async def handle_segment_direction(request: web.Request) -> web.Response:
+    """Save which way a light strip runs around the board (used by the hit locator)."""
+    engine = _engine(request)
+    data = await read_json(request)
+    ip = str(data.get("ip") or "")
+    seg_id = int(data.get("segment_id") or 0)
+    clockwise = bool(data.get("clockwise", True))
+    from core.storage import load_app_config, save_app_config
+    config_path = request.app.get("config_path") or "config.json"
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    changed = False
+    for config in {id(c): c for c in (cfg, engine.app_config) if c}.values():
+        for dev in config.devices:
+            if dev.ip != ip:
+                continue
+            for seg in dev.segments:
+                if seg.id == seg_id:
+                    seg.clockwise = clockwise
+                    changed = True
+    if not changed:
+        raise ValidationError("That light strip was not found.")
+    if not save_app_config(cfg, config_path):
+        raise PersistenceError("Could not save the strip direction.")
+    request.app["current_app_config"] = cfg
+    return web.json_response({"status": "ok", "clockwise": clockwise})
+
+
 async def handle_get_lighting_mode(request: web.Request) -> web.Response:
     """Return the current active lighting mode (matrix or flow)."""
     engine = request.app.get("engine")
@@ -365,5 +392,6 @@ def register_flow_routes(app: web.Application) -> None:
     app.router.add_post("/api/flow/try", handle_try)
     app.router.add_post("/api/flow/preview", handle_preview)
     app.router.add_post("/api/flow/preview/stop", handle_preview_stop)
+    app.router.add_post("/api/flow/segment-direction", handle_segment_direction)
     app.router.add_get("/api/flow/mode", handle_get_lighting_mode)
     app.router.add_post("/api/flow/mode", handle_set_lighting_mode)

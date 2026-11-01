@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/css/layout.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/components.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/tabs.css?v=2.2-p27">
-  <link rel="stylesheet" href="/css/flow_planner.css?v=2.2-p25">
+  <link rel="stylesheet" href="/css/flow-matrix.css?v=2.4-f1">
   <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
   <link rel="stylesheet" href="/css/pages.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/hub.css?v=2.2-p25">
@@ -766,83 +766,11 @@
 
         </section>
 
-        <!-- TAB 7: DIGITAL LED HARDWARE SIMULATOR & EFFECT STUDIO -->
-        <section id="tab-simulator" class="tab-pane">
-          <!-- Flow Matrix Hardware Controller & WS281x Segment Selector -->
-          <div class="flow-hw-toolbar" id="flowHardwareToolbar">
-            <div class="flow-hw-left">
-              <div class="flow-hw-device-group">
-                <span class="flow-hw-label">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/></svg>
-                  <span>Target:</span>
-                </span>
-                <select id="flowDeviceSelect" class="select-ide flow-device-select" onchange="onFlowDeviceSelected(this.value)">
-                  <option value="all">All Devices (Broadcast)</option>
-                </select>
-              </div>
+        <!-- LIGHTING: FLOW MATRIX (web/js/features/flow-matrix.js) -->
+        <section id="tab-simulator" class="tab-pane true-size">
+          <div id="flowMatrixRoot" class="fm-page"></div>
 
-              <div class="flow-segment-strip" id="flowSegmentStrip" style="display: none;">
-                <div class="flow-segment-tabs" id="flowSegmentTabsList">
-                  <!-- Rendered dynamically with WS281x segments only -->
-                </div>
-              </div>
-            </div>
-
-            <div class="flow-hw-right">
-              <span class="flow-segment-badge" id="flowSegmentInfoBadge" style="display: none;">
-                <span class="protocol-dot" style="background: var(--accent-primary); box-shadow: 0 0 6px var(--accent-primary);"></span>
-                <span id="flowSegmentBadgeText">60 LEDs (WS281x)</span>
-              </span>
-            </div>
-          </div>
-
-          <!-- Game Flow Simulator (Simplified Pipeline) -->
-          <div id="gameFlowPlannerContainer" class="game-flow-panel">
-            <div class="flow-header">
-              <div class="flow-header-left">
-                <div class="flow-title-group">
-                  <span class="flow-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-                    <span>Game Flow Simulator</span>
-                  </span>
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <button class="btn-ide btn-ide-primary" id="btnPlayFlow" onclick="playGameFlow()" style="padding: 4px 12px; font-weight: 600; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;" title="Play match flow sequentially through all transitions">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <span>Auto Play</span>
-                  </button>
-
-                  <button class="btn-ide" id="btnAutoPlayNext" onclick="autoPlayNextPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(var(--accent-rgb), 0.3);" title="Play next turn in player loop">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left:-2px"><line x1="13" y1="5" x2="13" y2="19"/><line x1="20" y1="5" x2="20" y2="19"/></svg>
-                    <span>Play Next</span>
-                  </button>
-
-                  <button class="btn-ide" id="btnPlayNextStep" onclick="playNextStepPhase()" style="padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; border-color: rgba(var(--accent-rgb), 0.3);" title="Advance to the next phase (exits turn loop to Leg Won)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                    <span>Next Step</span>
-                  </button>
-
-                </div>
-
-              </div>
-
-              <div class="flow-header-right">
-                <button class="btn-ide" onclick="resetGameFlow()" style="font-size: 11px; padding: 4px 8px;" title="Reset to standard 5-step player loop">↺ Reset</button>
-                <button class="btn-ide btn-ide-primary btn-save-flow" id="btnSaveFlow" onclick="saveGameFlow()" style="font-size: 11px; padding: 4px 12px; font-weight: 600;">Save Flow</button>
-              </div>
-            </div>
-
-            <!-- Horizontal Pipeline Track -->
-            <div class="flow-pipeline-container">
-              <div class="flow-pipeline-track" id="flowPipelineTrack">
-                <!-- Dynamically populated clean boxes: IDLE -> Game Start -> [Turn P1 <-> Turn P2 (Loop)] -> Leg Won -->
-              </div>
-            </div>
-          </div>
-
-          <!-- WLED Hardware Simulator (collapsible, hidden by default) -->
+          <!-- WLED Hardware Simulator: what the strips show right now (collapsed by default) -->
           <div class="sim-stage-card" id="hwSimCard">
             <div class="sim-stage-header">
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -1064,7 +992,6 @@
   <script defer src="/js/matrix.js?v=2.2-p25"></script>
   <script defer src="/js/power.js?v=2.2-p25"></script>
   <script defer src="/js/simulator.js?v=2.2-p27"></script>
-  <script defer src="/js/flow_planner.js?v=2.2-p27"></script>
   <script defer src="/app.js?v=2.2-p25"></script>
 
 </body>

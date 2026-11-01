@@ -7,6 +7,7 @@ import { api } from '../core/api.js';
 import { confirmDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { router } from '../core/router.js';
+import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 import { runControllerSetup } from './controller-setup.js';
 import { applySetup, devices, layoutSummary, saveDevices } from './controllers.js';
@@ -266,8 +267,24 @@ function renderLeds(body) {
 
 // --- Lights: one card per segment with its idle look and game profile -------
 
+// The game profiles of the lighting engine that plays (Flow Matrix profiles, or legacy Event Matrix presets)
+const flowMode = () => appStore.get().lightingMode === 'flow';
+
+async function loadFlowProfiles() {
+  const data = await api.get('/api/flow/overview');
+  const names = data.profiles.map(p => p.name);
+  const dev = data.lights.find(d => d.ip === page.ip);
+  const segs = (Array.isArray(page.dev.segments) ? page.dev.segments : []).filter(seg => !isPwmSegment(seg));
+  const fromServer = Object.fromEntries((dev?.segments || []).map(seg => [String(seg.id), seg.profile]));
+  const profiles = segs.length
+    ? Object.fromEntries(segs.map(seg => [String(seg.id), fromServer[String(seg.id)] || data.default]))
+    : { all: fromServer.null || data.default };
+  return { names, profiles };
+}
+
 async function loadProfiles() {
   try {
+    if (flowMode()) return await loadFlowProfiles();
     const data = await api.get('/api/matrix/presets');
     const names = data.presets?.length ? [...data.presets] : ['Default'];
     const fallback = data.device_profiles?.[page.ip] || data.active_profile || 'Default';
@@ -338,7 +355,9 @@ function renderLights() {
     offline,
     ...Object.values(page.lightCards),
     !lights.length && page.layout && notice('No lights are set up on this controller yet. Run the guided setup under Wiring.'),
-    h('a', { class: 'card-link', href: '/lighting/matrix', 'data-link': true }, 'Edit game profiles on the Lighting page')
+    flowMode()
+      ? h('a', { class: 'card-link', href: '/lighting/flow', 'data-link': true }, 'Edit flow profiles in the Flow Matrix')
+      : h('a', { class: 'card-link', href: '/lighting/matrix', 'data-link': true }, 'Edit game profiles on the Lighting page')
   ].filter(Boolean));
 }
 
@@ -430,7 +449,8 @@ async function save() {
       const saved = JSON.parse(page.savedProfiles);
       for (const [key, name] of Object.entries(page.profiles)) {
         if (saved[key] === name) continue;
-        await api.post('/api/matrix/presets/select', { name, ip, ...(key === 'all' ? {} : { segment_id: Number(key) }) });
+        const target = { name, ip, ...(key === 'all' ? {} : { segment_id: Number(key) }) };
+        await api.post(flowMode() ? '/api/flow/assign' : '/api/matrix/presets/select', target);
       }
     }
     if (ledsPending) {

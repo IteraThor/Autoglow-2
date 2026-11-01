@@ -17,8 +17,8 @@ function activatePane(targetId) {
   if (targetId === 'tab-effects') renderEffectsTable();
   if (targetId.startsWith('tab-studio') && window.renderStudio) window.renderStudio(targetId);
   if (targetId === 'tab-simulator') {
+    if (window.renderFlowMatrix) window.renderFlowMatrix();
     if (window.renderSimulatorTab) renderSimulatorTab();
-    if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
   }
   if (targetId === 'tab-settings') {
     renderPowerTab();
@@ -56,7 +56,6 @@ async function loadConfig() {
       renderAutodartsTab();
       renderEffectsTable();
       renderPowerTab();
-      if (typeof window.renderFlowHardwareToolbar === 'function') window.renderFlowHardwareToolbar();
       updateLightingModeUI(appState.lighting_mode || 'matrix');
 
       // Background fetch Autodarts status to resolve account details for player slot prefilling
@@ -162,12 +161,7 @@ function handleTelemetryMessage(msg) {
   }
 
   if (msg.type === 'game_flow_state') {
-    if (typeof window.highlightFlowPhase === 'function') {
-      window.highlightFlowPhase(msg.phase);
-    }
-    if (msg.lighting_mode) {
-      updateLightingModeUI(msg.lighting_mode);
-    }
+    if (typeof window.onFlowTelemetry === 'function') window.onFlowTelemetry(msg);
     return;
   }
 

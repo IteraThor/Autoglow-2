@@ -70,6 +70,11 @@ def _visit_events(visit_no: int, player: int) -> List[DartEvent]:
     return events
 
 
+async def _wait_for_timed_step(runtime: FlowRuntime) -> None:
+    """Players wait for the intro or a leg celebration before they throw."""
+    await asyncio.sleep(runtime.hold_remaining() + 0.6)
+
+
 async def _run(engine: Any, runtime: FlowRuntime, players: int, bull_off: bool, legs: int) -> None:
     send = runtime.handle
     try:
@@ -83,6 +88,7 @@ async def _run(engine: Any, runtime: FlowRuntime, players: int, bull_off: bool, 
             await send(_ev(DartEventType.BULL_OFF_WON, player_index=0))
             await asyncio.sleep(1.5)
         await send(_ev(DartEventType.GAME_START))
+        await _wait_for_timed_step(runtime)
         visit = 0
         starter = 0
         for leg in range(legs):
@@ -102,7 +108,7 @@ async def _run(engine: Any, runtime: FlowRuntime, players: int, bull_off: bool, 
             winner = (starter + players - 1) % players
             if leg < legs - 1:
                 await send(_ev(DartEventType.LEG_WON, player_index=winner))
-                await asyncio.sleep(1.0)
+                await _wait_for_timed_step(runtime)
                 starter = (starter + 1) % players
             else:
                 await send(_ev(DartEventType.MATCH_WON, player_index=winner))

@@ -1044,10 +1044,6 @@
     updateInspectorUI();
     var dummyInput = document.getElementById('dummyLedInput');
     if (dummyInput) dummyInput.value = DUMMY_LED_COUNT;
-    if (window.alignFlowWires) {
-      window.alignFlowWires();
-      setTimeout(window.alignFlowWires, 60);
-    }
   };
 
 })();
