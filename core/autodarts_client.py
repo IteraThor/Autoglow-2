@@ -1062,6 +1062,12 @@ class AutodartsClient:
         raw_winner = state.get("winner")
         if raw_winner is None and isinstance(state.get("match"), dict):
             raw_winner = state.get("match", {}).get("winner")
+        # After a bull-off Autodarts lists the players winner-first, but "winner" still counts in the lobby
+        # order (seen in real games 2026-11-02). gameWinner, the winner of the deciding leg, uses the current
+        # order, so it names the match winner reliably once that leg is over.
+        game_winner = state.get("gameWinner")
+        if state.get("gameFinished") is True and isinstance(game_winner, int) and 0 <= game_winner < len(self.current_players):
+            raw_winner = game_winner
 
         if isinstance(raw_winner, int) and 0 <= raw_winner < len(self.current_players):
             has_explicit_winner = True
@@ -1093,7 +1099,11 @@ class AutodartsClient:
         elif has_leg_info and not self._last_match_finished:
             if self._last_total_legs_won is not None and total_legs > self._last_total_legs_won:
                 self._last_total_legs_won = total_legs
-                await self._emit_leg_won()
+                leg_winner = state.get("gameWinner")
+                if isinstance(leg_winner, int) and 0 <= leg_winner < len(self.current_players):
+                    await self._emit_leg_won(player_name=self.current_players[leg_winner], player_idx=leg_winner)
+                else:
+                    await self._emit_leg_won()
             elif self._last_total_legs_won is None:
                 self._last_total_legs_won = total_legs
 

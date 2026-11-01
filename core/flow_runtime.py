@@ -287,6 +287,8 @@ class FlowRuntime:
                 self.out.locate(ip, sid, pos, colour)
                 played = played or "locator"
         if played:
+            logger.info(f"Flow hit: {played}" + (" (gentle)" if any(
+                self.out.flow_for(ip, sid).camera_friendly for ip, sid, _ in self.out.segments()) and self.step in TURN_STEPS else ""))
             self.last_hit = played
             await self._announce(hit=played)
 
