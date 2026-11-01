@@ -340,6 +340,7 @@ class SegmentConfig:
     hw_key: Optional[str] = None
     offset: int = 0                   # effects begin this many LEDs after start, wrapping around (WLED "of")
     clockwise: bool = True            # LEDs run clockwise around the board from the offset (hit locator)
+    locator: bool = True              # goes all the way around the board, so the hit locator can use it
 
     def to_dict(self) -> Dict[str, Any]:
         out = {
@@ -354,6 +355,8 @@ class SegmentConfig:
         }
         if not self.clockwise:
             out["clockwise"] = False
+        if not self.locator:
+            out["locator"] = False
         if self.hw_key:
             out["hw_key"] = self.hw_key
         return out
@@ -384,7 +387,7 @@ class SegmentConfig:
         hw_key = data.get("hw_key")
         offset = _safe_int(data.get("offset", data.get("of")), 0) % length
         return cls(id=seg_id, name=name, type=seg_type, gpio=gpio, start=start, length=length, role=role, hw_key=hw_key, offset=offset,
-                   clockwise=data.get("clockwise", True) is not False)
+                   clockwise=data.get("clockwise", True) is not False, locator=data.get("locator", True) is not False)
 
 
 @dataclass

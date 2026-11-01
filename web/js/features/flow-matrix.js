@@ -768,18 +768,18 @@ function locatorCheck() {
   const rings = allSegments().filter(s => s.role !== 'ambient');
   if (!rings.length) return h('p', { class: 'form-hint' }, 'Add a controller to check the hit locator.');
   return h('div', { class: 'fm-locator' },
-    h('p', { class: 'form-hint' }, 'Check it once: "Show 20" should light the top of the board, "Show 6" the right side. If 6 lights up on the left, switch the direction.'),
+    h('p', { class: 'form-hint' }, 'Check it once: "Show 20" should light the top of the board, "Show 6" the right side. If 6 lights up on the left, switch the direction. Strips that cover only part of the board: choose Off.'),
     ...rings.map(seg => h('div', { class: 'fm-locator-row' },
       h('span', { class: 'fm-locator-name' }, `${seg.controller} · ${seg.name}`),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => tryOnLights('locator', 'turn', { number: 20, ip: seg.ip, segment_id: seg.id }) }, 'Show 20'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => tryOnLights('locator', 'turn', { number: 6, ip: seg.ip, segment_id: seg.id }) }, 'Show 6'),
-      seg.id !== null && segmented([true, false], seg.clockwise !== false, async v => {
+      seg.id !== null && segmented(['cw', 'ccw', 'off'], seg.locator === false ? 'off' : seg.clockwise === false ? 'ccw' : 'cw', async v => {
         try {
-          await api.post('/api/flow/segment-direction', { ip: seg.ip, segment_id: seg.id, clockwise: v });
+          await api.post('/api/flow/segment-direction', { ip: seg.ip, segment_id: seg.id, direction: v });
           await loadOverview();
           render();
         } catch (err) { toast.error(err); }
-      }, { true: 'Clockwise', false: 'Anticlockwise' }))));
+      }, { cw: 'Clockwise', ccw: 'Anticlockwise', off: 'Off (not around the board)' }))));
 }
 
 function profilePanel() {

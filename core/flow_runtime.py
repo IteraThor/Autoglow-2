@@ -58,6 +58,7 @@ class FlowOutput(Protocol):
     def show(self, ip: str, seg_id: Optional[int], effect: EffectConfig, transition: FlowTransition) -> None: ...
     def hit(self, ip: str, seg_id: Optional[int], effect: EffectConfig, strength: float) -> None: ...
     def locate(self, ip: str, seg_id: Optional[int], position: float, color: RGBColor) -> None: ...
+    def can_locate(self, ip: str, seg_id: Optional[int]) -> bool: ...
     async def to_waiting(self) -> None: ...
     async def broadcast(self, message: Dict[str, Any]) -> None: ...
 
@@ -278,7 +279,7 @@ class FlowRuntime:
                 self.out.hit(ip, sid, eff, CAMERA_FRIENDLY_STRENGTH if gentle else 1.0)
                 played = key
             pos = board_position(event.segment_number)
-            if flow.hit_locator and pos is not None and role != "ambient" and key in ("single", "double", "triple", "ton", "ton40"):
+            if flow.hit_locator and pos is not None and role != "ambient" and self.out.can_locate(ip, sid) and key in ("single", "double", "triple", "ton", "ton40"):
                 if not streaming:
                     await self.out.ensure_streaming()
                     streaming = True
@@ -352,6 +353,9 @@ class EngineFlowOutput:
         drv = self.engine.get_driver(ip)
         if drv:
             drv.flow_hit(seg_id, effect, strength)
+
+    def can_locate(self, ip: str, seg_id: Optional[int]) -> bool:
+        return self.engine.segment_locator(ip, seg_id)
 
     def locate(self, ip: str, seg_id: Optional[int], position: float, color: RGBColor) -> None:
         drv = self.engine.get_driver(ip)

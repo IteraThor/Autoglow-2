@@ -74,6 +74,7 @@ def _lights(request: web.Request, storage: GameFlowStorageManager) -> List[Dict[
                     "role": _seg_attr(seg, "role", "dartboard_ring"),
                     "light_strip": pwm,
                     "clockwise": bool(_seg_attr(seg, "clockwise", True)),
+                    "locator": bool(_seg_attr(seg, "locator", True)),
                     "profile": None if pwm else storage.profile_name_for(dev.ip, sid),
                 })
         else:
@@ -314,7 +315,9 @@ async def handle_segment_direction(request: web.Request) -> web.Response:
     data = await read_json(request)
     ip = str(data.get("ip") or "")
     seg_id = int(data.get("segment_id") or 0)
-    clockwise = bool(data.get("clockwise", True))
+    direction = str(data.get("direction") or ("cw" if data.get("clockwise", True) else "ccw"))
+    clockwise = direction != "ccw"
+    locator = direction != "off"
     from core.storage import load_app_config, save_app_config
     config_path = request.app.get("config_path") or "config.json"
     cfg = request.app.get("current_app_config") or load_app_config(config_path)
@@ -326,13 +329,14 @@ async def handle_segment_direction(request: web.Request) -> web.Response:
             for seg in dev.segments:
                 if seg.id == seg_id:
                     seg.clockwise = clockwise
+                    seg.locator = locator
                     changed = True
     if not changed:
         raise ValidationError("That light strip was not found.")
     if not save_app_config(cfg, config_path):
         raise PersistenceError("Could not save the strip direction.")
     request.app["current_app_config"] = cfg
-    return web.json_response({"status": "ok", "clockwise": clockwise})
+    return web.json_response({"status": "ok", "direction": direction})
 
 
 async def handle_get_lighting_mode(request: web.Request) -> web.Response:

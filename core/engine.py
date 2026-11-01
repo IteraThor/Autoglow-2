@@ -105,6 +105,12 @@ class AutoGlowEngine:
         """The Flow Matrix step the match is in ("waiting" outside a match)."""
         return self.flow_runtime.step
 
+    def segment_locator(self, ip: Optional[str], seg_id: Optional[int]) -> bool:
+        """Whether a segment goes all the way around the board (only then can it show the hit locator)."""
+        dev = next((d for d in self._active_devices() if d.ip == ip), None)
+        seg = next((sg for sg in (dev.segments if dev else []) if _seg_id(sg) == (seg_id or 0)), None)
+        return bool(_seg_attr(seg, "locator", True)) if seg is not None else True
+
     def segment_clockwise(self, ip: Optional[str], seg_id: Optional[int]) -> bool:
         """Whether a segment's LEDs run clockwise around the board (used by the hit locator)."""
         dev = next((d for d in self._active_devices() if d.ip == ip), None)
