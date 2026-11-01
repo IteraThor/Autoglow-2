@@ -910,7 +910,7 @@ function onTelemetry(msg) {
     page.preview.running = false;
     page.live = null;
   } else {
-    page.live = { step: msg.phase, player: msg.player };
+    page.live = { step: msg.phase, player: msg.colour ?? msg.player };
   }
   if (msg.hit) {
     page.liveHit = msg.hit;

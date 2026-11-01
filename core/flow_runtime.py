@@ -13,6 +13,10 @@ Rules (the same ones the Flow Matrix page explains):
 - Waiting is the idle lighting saved in Setup (a WLED preset), so the strips switch to it without a blend.
 
 Each segment follows its own flow profile; the match itself (which step, whose turn) is shared.
+
+Player colours stick to players, not positions: Autodarts reorders the players for every leg (the starter
+goes first) and after a bull-off (the winner goes first), so the runtime keeps a match roster in the order
+players first appear and colours them by that.
 """
 
 import asyncio
@@ -96,7 +100,8 @@ class FlowRuntime:
         self._clock = clock
         self._sleep = sleep
         self.step: str = WAITING
-        self.player: int = 0
+        self.player: int = 0  # position in the match roster (see module doc), not Autodarts' current order
+        self.roster: List[str] = []
         self.in_bull_off = False
         self._hold_until = 0.0
         self._hold_step: Optional[str] = None
@@ -109,10 +114,12 @@ class FlowRuntime:
     def snapshot(self) -> Dict[str, Any]:
         return {"step": self.step, "player": self.player, "bull_off": self.in_bull_off, "hit": self.last_hit}
 
-    def reset(self) -> None:
+    def reset(self, keep_roster: bool = False) -> None:
         self._cancel_timer()
         self.step = WAITING
         self.player = 0
+        if not keep_roster:
+            self.roster = []
         self.in_bull_off = False
         self._hold_until = 0.0
         self._hold_step = None
@@ -123,7 +130,8 @@ class FlowRuntime:
         if t == DartEventType.GAME_IDLE:
             await self._to_waiting()
         elif t == DartEventType.BULL_OFF_START:
-            self.reset()
+            # A PDC tie starts another bull-off round: keep the players seen so far
+            self.reset(keep_roster=self.in_bull_off)
             self.in_bull_off = True
             await self._enter("bull_off")
         elif t == DartEventType.BULL_OFF_WON:
@@ -132,13 +140,13 @@ class FlowRuntime:
         elif t == DartEventType.GAME_START:
             await self._game_start()
         elif t == DartEventType.THROW:
-            await self._turn(event.player_index)
+            await self._turn(self._slot(event.player_index, event.player_name))
         elif t in (DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS):
             if self.step == "turn" and not self._held():
                 await self._enter("takeout")
         elif t == DartEventType.LEG_WON:
             self._queued_turn = None
-            await self._timed("leg_won", winner=event.player_index)
+            await self._timed("leg_won", winner=self._slot(event.player_index, event.player_name))
         elif t in (DartEventType.MATCH_WON, DartEventType.GAME_FINISH):
             self._queued_turn = None
             winner = self._winner_index(event)
@@ -150,16 +158,34 @@ class FlowRuntime:
 
     # -- steps --
 
+    def _slot(self, player_index: Optional[int], player_name: Optional[str]) -> int:
+        """The roster position of a player (added on first sight); falls back to the position given."""
+        idx = player_index if (player_index is not None and player_index >= 0) else 0
+        name = (player_name or "").strip()
+        if not name:
+            players = self.out.match_players()
+            name = str(players[idx] or "").strip() if idx < len(players) else ""
+        if not name:
+            return idx
+        key = name.lower()
+        lowered = [n.lower() for n in self.roster]
+        if key not in lowered:
+            self.roster.append(name)
+            lowered.append(key)
+        return lowered.index(key)
+
     async def _game_start(self) -> None:
         self._cancel_timer()
         self._queued_turn = None
+        if not self.in_bull_off:
+            self.roster = []  # a new match without a bull-off; after one, its players keep their colours
         self.in_bull_off = False
         await self._timed("game_start")
 
-    async def _turn(self, player_index: Optional[int]) -> None:
+    async def _turn(self, slot: int) -> None:
         if self.in_bull_off:
-            return  # bull-off darts are not turns
-        p = player_index if (player_index is not None and player_index >= 0) else 0
+            return  # bull-off darts are not turns (the player is in the roster now, though)
+        p = slot
         if self._held():
             self._queued_turn = p
             return
@@ -235,11 +261,10 @@ class FlowRuntime:
         if not segs:
             return  # off everywhere: skipped, the strips keep their current look
         await self.out.ensure_streaming()
-        players = self.out.match_players()
         for ip, sid, _role in segs:
             flow = self.out.flow_for(ip, sid)
             step = flow.steps[step_id]
-            effect = self._coloured(step.effect, flow, players, player, force_player=(step_id == "turn"))
+            effect = self._coloured(step.effect, flow, player, force_player=(step_id == "turn"))
             self.out.show(ip, sid, effect, step.transition)
         if player is not None:
             self.player = player
@@ -247,19 +272,21 @@ class FlowRuntime:
         logger.info(f"Flow -> {step_id}" + (f" (player {self.player + 1})" if step_id in ("turn", "takeout", "leg_won", "match_won") else ""))
         await self._announce()
 
-    def _coloured(self, effect: EffectConfig, flow: GameFlow, players: List[str], player: Optional[int],
-                  force_player: bool = False) -> EffectConfig:
+    def colour_slot(self, flow: GameFlow, player: Optional[int] = None) -> int:
+        """Which of the flow's colours a roster player gets (a colour tied to their name wins)."""
         idx = self.player if player is None else player
+        return player_colour_index(self.roster, idx, flow)
+
+    def _coloured(self, effect: EffectConfig, flow: GameFlow, player: Optional[int],
+                  force_player: bool = False) -> EffectConfig:
         wants_player = force_player or (effect.options or {}).get("colour_from") == "player"
         if not wants_player:
             return effect
-        colour = flow.players[player_colour_index(players, idx, flow)].color
-        return dataclasses.replace(effect, color_primary=colour)
+        return dataclasses.replace(effect, color_primary=flow.players[self.colour_slot(flow, player)].color)
 
     async def _hit(self, event: DartEvent) -> None:
         if self.step == WAITING and not self.in_bull_off:
             return
-        players = self.out.match_players()
         played: Optional[str] = None
         streaming = False
         for ip, sid, role in self.out.segments():
@@ -273,7 +300,7 @@ class FlowRuntime:
                 if not streaming:
                     await self.out.ensure_streaming()
                     streaming = True
-                eff = self._coloured(effect, flow, players, None)
+                eff = self._coloured(effect, flow, None)
                 if gentle and eff.duration > CAMERA_FRIENDLY_MAX_HIT:
                     eff = dataclasses.replace(eff, duration=CAMERA_FRIENDLY_MAX_HIT)
                 self.out.hit(ip, sid, eff, CAMERA_FRIENDLY_STRENGTH if gentle else 1.0)
@@ -283,7 +310,7 @@ class FlowRuntime:
                 if not streaming:
                     await self.out.ensure_streaming()
                     streaming = True
-                colour = flow.players[player_colour_index(players, self.player, flow)].color
+                colour = flow.players[self.colour_slot(flow)].color
                 self.out.locate(ip, sid, pos, colour)
                 played = played or "locator"
         if played:
@@ -293,17 +320,16 @@ class FlowRuntime:
             await self._announce(hit=played)
 
     def _winner_index(self, event: DartEvent) -> Optional[int]:
-        if event.player_index is not None:
-            return event.player_index
-        if event.player_name:
-            names = [str(p or "").strip().lower() for p in self.out.match_players()]
-            name = event.player_name.strip().lower()
-            if name in names:
-                return names.index(name)
+        if event.player_name or event.player_index is not None:
+            return self._slot(event.player_index, event.player_name)
         return self.player
 
     async def _announce(self, hit: Optional[str] = None) -> None:
         msg: Dict[str, Any] = {"type": "game_flow_state", "phase": self.step, "player": self.player}
+        segs = self.out.segments()
+        if segs and self.roster:
+            # Which colour dot the page should light (a colour tied to a name can differ from the position)
+            msg["colour"] = self.colour_slot(self.out.flow_for(segs[0][0], segs[0][1]))
         if hit:
             msg["hit"] = hit
         await self.out.broadcast(msg)
