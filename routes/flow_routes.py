@@ -43,7 +43,9 @@ def _engine(request: web.Request) -> Any:
 
 
 def _match_running(engine: Any) -> bool:
-    return bool(engine.autodarts and getattr(engine.autodarts, "_active_match_id", None))
+    """A match is in play (a finished match keeps its id until the board goes idle, but is over)."""
+    ad = engine.autodarts
+    return bool(ad and getattr(ad, "_active_match_id", None) and not getattr(ad, "_last_match_finished", False))
 
 
 def _clean_name(raw: Any) -> str:
