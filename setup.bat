@@ -49,6 +49,10 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: Optional Rust LED engine; needs Rust from https://rustup.rs, otherwise the Python engine is used
+echo --> Rust LED engine (optional)...
+"%~dp0venv\Scripts\python.exe" -m core.rust_core_setup
+
 echo.
 echo =============================================
 echo       Setup Completed Successfully!          

@@ -334,6 +334,8 @@ async def run_server() -> bool:
     except OSError as e:
         logger.info(f"IPv6 listener not available ({e}); serving on IPv4 only")
     logger.info(f"AutoGlow 2 Web Server running at http://localhost:{PORT}")
+    from core.wled_driver import led_engine_name
+    logger.info("LED engine: %s", "Rust (steady 50 FPS on its own thread)" if led_engine_name() == "rust" else "Python")
     try:
         await app["restart_event"].wait()
         logger.info("Restart requested: shutting down cleanly before relaunch...")
