@@ -429,123 +429,339 @@ function statusNotes() {
 }
 
 // --- chart -------------------------------------------------------------------
+// The legacy flow layout: Waiting -> Bull-off -> Game starts -> [Player 1 <-> Pulling darts <-> Player 2] -> Match won /
+// Leg won, with curved returns and the standby timers under Waiting. Nodes sit on fixed coordinates (one table per
+// view) and every connector is an SVG curve computed from the same numbers, so wires always line up.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const VIEW_KEY = 'autoglow_flow_view';
 
 function select(sel) {
   page.selected = sel;
   render();
-  document.getElementById('fmInspector')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function isSelected(kind, id) {
   return page.selected?.kind === kind && (id === undefined || page.selected.id === id);
 }
 
-function node(id) {
-  const meta = stepMeta(id);
-  const step = page.draft.steps[id];
-  const on = step.effect.enabled;
-  const effectName = effectMeta(step.effect.animation)?.label || 'Solid';
-  const timing = meta.timed ? seconds(step.effect.duration) : (id === 'bull_off' ? 'until the game starts' : id === 'takeout' ? 'until the next turn' : 'stays');
-  const live = page.live?.step === id;
-  return h('button', {
-    type: 'button',
-    class: `fm-node${on ? '' : ' is-off'}${isSelected('step', id) ? ' is-selected' : ''}${live ? ' is-live' : ''}`,
-    'data-step': id,
-    'aria-pressed': isSelected('step', id) ? 'true' : 'false',
-    onclick: () => select({ kind: 'step', id })
-  },
-  h('span', { class: 'fm-node-title' }, meta.label, live && h('span', { class: 'fm-live-dot', title: 'Playing now' })),
-  strip(stepFrame(id)),
-  h('span', { class: 'fm-node-meta' }, on ? `${effectName} · ${timing}` : 'Off'));
+function currentView() {
+  if (window.matchMedia('(max-width: 1100px)').matches) return 'vertical';
+  return page.view === 'vertical' ? 'vertical' : 'horizontal';
 }
 
-function waitingNode(end = false) {
-  const live = page.live?.step === 'waiting' && !end && page.preview.running;
-  return h('button', {
-    type: 'button',
-    class: `fm-node fm-node-waiting${isSelected('waiting') ? ' is-selected' : ''}${live ? ' is-live' : ''}`,
-    onclick: () => select({ kind: 'waiting' })
-  },
-  h('span', { class: 'fm-node-title' }, end ? 'Waiting again' : 'Waiting'),
-  h('span', { class: 'fm-node-idle', 'aria-hidden': 'true' }),
-  h('span', { class: 'fm-node-meta' }, 'Idle lighting from Setup'));
+function setView(view) {
+  page.view = view;
+  try { localStorage.setItem(VIEW_KEY, view); } catch (err) { /* private mode: this visit only */ }
+  render();
 }
 
-function arrow(targetId, { back = false, down = false, label = null } = {}) {
-  if (label) {
-    return h('div', { class: `fm-arrow fm-arrow-static${down ? ' is-down' : ''}` }, h('span', { class: 'fm-arrow-label' }, label), h('span', { class: 'fm-arrow-line', 'aria-hidden': 'true' }));
+// Node boxes ({x, y, w, h}), the match frame, where the hit chips and players go, per view
+const LAYOUTS = {
+  horizontal: (() => {
+    const W = 150, H = 76, top = 70;
+    return {
+      width: 1700, height: 470,
+      nodes: {
+        waiting: { x: 20, y: top + 70, w: W, h: H },
+        bull_off: { x: 255, y: top + 70, w: W, h: H },
+        game_start: { x: 490, y: top + 70, w: W, h: H },
+        p1: { x: 745, y: top + 70, w: W, h: H },
+        takeout: { x: 990, y: top + 70, w: W, h: H },
+        p2: { x: 1235, y: top + 70, w: W, h: H },
+        match_won: { x: 1530, y: top + 0, w: W, h: H },
+        leg_won: { x: 1530, y: top + 160, w: W, h: H },
+        timeout: { x: 20, y: top + 215, w: W, h: 46 },
+        auto_off: { x: 20, y: top + 315, w: W, h: 46 }
+      },
+      frame: { x: 710, y: top - 14, w: 720, h: 254 },
+      chips: { x: 728, y: top - 2, w: 690 },
+      players: { x: 990, y: top + 182 }
+    };
+  })(),
+  vertical: (() => {
+    const W = 196, H = 66, cx = 270;
+    return {
+      width: 980, height: 1080,
+      nodes: {
+        waiting: { x: cx, y: 30, w: W, h: H },
+        timeout: { x: cx + 290, y: 40, w: 160, h: 46 },
+        auto_off: { x: cx + 520, y: 40, w: 160, h: 46 },
+        bull_off: { x: cx, y: 165, w: W, h: H },
+        game_start: { x: cx, y: 300, w: W, h: H },
+        p1: { x: cx, y: 500, w: W, h: H },
+        takeout: { x: cx, y: 640, w: W, h: H },
+        p2: { x: cx, y: 780, w: W, h: H },
+        match_won: { x: cx - 70, y: 970, w: W, h: H },
+        leg_won: { x: cx + 230, y: 970, w: W, h: H }
+      },
+      frame: { x: cx - 50, y: 410, w: 640, h: 466 },
+      chips: { x: cx + 132, y: 424, w: 440 },
+      players: { x: cx + 245, y: 805 }
+    };
+  })()
+};
+
+// Connectors: [from node, side, along-offset] -> [to node, side, along-offset]; pill = the step whose
+// "comes in with" transition the arrow plays (shared pills light up together), or a fixed label
+const EDGES = {
+  horizontal: [
+    { from: ['waiting', 'r'], to: ['bull_off', 'l'], step: 'bull_off' },
+    { from: ['bull_off', 'r'], to: ['game_start', 'l'], step: 'game_start' },
+    { from: ['game_start', 'r'], to: ['p1', 'l'], step: 'turn' },
+    { from: ['p1', 'r', -16], to: ['takeout', 'l', -16], step: 'takeout', lane: 'up' },
+    { from: ['takeout', 'l', 16], to: ['p1', 'r', 16], step: 'turn', lane: 'down' },
+    { from: ['takeout', 'r', -16], to: ['p2', 'l', -16], step: 'turn', lane: 'up' },
+    { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout', lane: 'down' },
+    { from: ['frame', 'r'], to: ['match_won', 'l'], step: 'match_won' },
+    { from: ['frame', 'r'], to: ['leg_won', 'l'], step: 'leg_won' },
+    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', label: 'next leg', bend: 230 },
+    { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', bend: 120 },
+    { from: ['waiting', 'b'], to: ['timeout', 't'], standby: 'dim' },
+    { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
+  ],
+  vertical: [
+    { from: ['waiting', 'b'], to: ['bull_off', 't'], step: 'bull_off' },
+    { from: ['bull_off', 'b'], to: ['game_start', 't'], step: 'game_start' },
+    { from: ['game_start', 'b'], to: ['p1', 't'], step: 'turn', at: 0.22 },
+    { from: ['p1', 'b', -40], to: ['takeout', 't', -40], step: 'takeout', lane: 'left' },
+    { from: ['takeout', 't', 40], to: ['p1', 'b', 40], step: 'turn', lane: 'right' },
+    { from: ['takeout', 'b', -40], to: ['p2', 't', -40], step: 'turn', lane: 'left' },
+    { from: ['p2', 't', 40], to: ['takeout', 'b', 40], step: 'takeout', lane: 'right' },
+    { from: ['frame', 'b'], to: ['match_won', 't'], step: 'match_won' },
+    { from: ['frame', 'b'], to: ['leg_won', 't'], step: 'leg_won' },
+    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', label: 'next leg', bend: 330 },
+    { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', bend: 160 },
+    { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
+    { from: ['timeout', 'r'], to: ['auto_off', 'l'], standby: 'off' }
+  ]
+};
+
+const NORMAL = { l: [-1, 0], r: [1, 0], t: [0, -1], b: [0, 1] };
+
+function anchor(box, side, along = 0) {
+  if (side === 'l') return [box.x, box.y + box.h / 2 + along];
+  if (side === 'r') return [box.x + box.w, box.y + box.h / 2 + along];
+  if (side === 't') return [box.x + box.w / 2 + along, box.y];
+  return [box.x + box.w / 2 + along, box.y + box.h];
+}
+
+function curve(a, sa, b, sb, bend) {
+  const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const k = bend || Math.max(24, Math.min(90, dist * 0.45));
+  const c1 = [a[0] + NORMAL[sa][0] * k, a[1] + NORMAL[sa][1] * k];
+  const c2 = [b[0] + NORMAL[sb][0] * k, b[1] + NORMAL[sb][1] * k];
+  const at = t => {
+    const u = 1 - t;
+    return [0, 1].map(i => u * u * u * a[i] + 3 * u * u * t * c1[i] + 3 * u * t * t * c2[i] + t * t * t * b[i]);
+  };
+  return { d: `M${a[0]},${a[1]} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${b[0]},${b[1]}`, at };
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function stepOn(id) {
+  return !!page.draft.steps[id]?.effect.enabled;
+}
+
+const NODE_STEP = { p1: 'turn', p2: 'turn' };
+
+function nodeLabel(id) {
+  if (id === 'p1') return 'Player 1';
+  if (id === 'p2') return 'Player 2';
+  return { waiting: 'Waiting', timeout: 'Dimmed', auto_off: 'Lights off' }[id] || stepMeta(id).label;
+}
+
+function dotStyle(effect, player = 0) {
+  const eff = resolved(effect, false, player);
+  if (eff.animation === 'rainbow') return 'background: conic-gradient(#ff3b3b, #ffb300, #39d353, #1fb6ff, #8b5cf6, #ff3b3b)';
+  return `background:${hex(eff.color_primary)}`;
+}
+
+function chartNode(id, box) {
+  const el = h('button', { type: 'button', class: 'fc-node' });
+  el.style.left = `${box.x}px`;
+  el.style.top = `${box.y}px`;
+  el.style.width = `${box.w}px`;
+  el.style.height = `${box.h}px`;
+  const o = page.overview;
+
+  if (id === 'waiting') {
+    el.classList.add('fc-node-waiting');
+    if (isSelected('waiting')) el.classList.add('is-selected');
+    el.onclick = () => select({ kind: 'waiting' });
+    el.append(h('span', { class: 'fc-title' }, h('span', { class: 'fc-dot fc-dot-idle' }), 'Waiting'),
+      h('span', { class: 'fc-meta' }, 'Idle lighting · Setup'));
+    return el;
   }
-  const step = page.draft.steps[targetId];
-  const skipped = !step.effect.enabled;
-  const tr = step.transition;
-  const text = skipped ? 'skipped' : tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} ${seconds(tr.duration)}`;
-  return h('button', {
-    type: 'button',
-    class: `fm-arrow${back ? ' is-back' : ''}${down ? ' is-down' : ''}${skipped ? ' is-skipped' : ''}${isSelected('transition', targetId) ? ' is-selected' : ''}`,
-    title: skipped ? `${stepMeta(targetId).label} is off` : `How ${stepMeta(targetId).label} comes in`,
-    disabled: skipped,
-    onclick: () => select({ kind: 'transition', id: targetId })
-  }, h('span', { class: 'fm-arrow-label' }, text), h('span', { class: 'fm-arrow-line', 'aria-hidden': 'true' }));
+  if (id === 'timeout' || id === 'auto_off') {
+    const on = id === 'timeout' ? o.standby?.dim_on : o.standby?.off_on;
+    el.classList.add('fc-node-standby');
+    if (!on) el.classList.add('is-off');
+    if (isSelected('standby')) el.classList.add('is-selected');
+    el.onclick = () => select({ kind: 'standby' });
+    el.append(h('span', { class: 'fc-title' }, nodeLabel(id)));
+    return el;
+  }
+
+  const step = NODE_STEP[id] || id;
+  const meta = stepMeta(step);
+  const eff = page.draft.steps[step].effect;
+  const on = eff.enabled;
+  const player = id === 'p2' ? 1 : 0;
+  const live = page.live?.step === step && (step !== 'turn' || (id === 'p1') === ((page.live.player || 0) % 2 === 0));
+  el.dataset.step = step;
+  el.dataset.node = id;
+  if (!on) el.classList.add('is-off');
+  if (isSelected('step', step)) el.classList.add('is-selected');
+  if (live) el.classList.add('is-live');
+  el.onclick = () => select({ kind: 'step', id: step });
+  const timing = meta.timed ? seconds(eff.duration) : (step === 'turn' ? 'stays' : 'until next');
+  const dot = h('span', { class: 'fc-dot' });
+  dot.setAttribute('style', step === 'turn'
+    ? `background:${hex(playerColour(player))}`
+    : dotStyle(eff));
+  el.append(
+    h('span', { class: 'fc-title' }, dot, nodeLabel(id)),
+    h('span', { class: 'fc-meta' }, on ? `${(effectMeta(eff.animation)?.label || 'Solid')} · ${timing}` : 'Off'),
+    strip(step === 'turn' ? ((t, n) => renderFlowFrame(resolved(eff, true, player), t, n)) : stepFrame(step), { leds: 36, cls: 'fc-strip' }));
+  return el;
+}
+
+function edgeLabel(edge) {
+  if (edge.fixed) return page.overview.match_end_to_waiting ? 'back to waiting' : 'winner’s colour stays';
+  if (edge.standby) {
+    const s = page.overview.standby || {};
+    return edge.standby === 'dim' ? (s.dim_on ? `after ${s.dim_minutes} min` : 'off') : (s.off_on ? `after ${s.off_minutes} min` : 'off');
+  }
+  const tr = page.draft.steps[edge.step].transition;
+  const text = tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} ${seconds(tr.duration)}`;
+  return edge.label ? `${edge.label} · ${text}` : text;
+}
+
+function chart() {
+  const view = currentView();
+  const L = LAYOUTS[view];
+  const boxes = { ...L.nodes, frame: L.frame };
+  const stage = h('div', { class: `fc-stage fc-${view}` });
+  stage.style.width = `${L.width}px`;
+  stage.style.height = `${L.height}px`;
+
+  // Match frame with the hit chips on top and the players inside
+  const frame = h('div', { class: 'fc-frame' });
+  Object.assign(frame.style, { left: `${L.frame.x}px`, top: `${L.frame.y}px`, width: `${L.frame.w}px`, height: `${L.frame.h}px` });
+  stage.append(frame);
+  const chips = hitsRow();
+  Object.assign(chips.style, { left: `${L.chips.x}px`, top: `${L.chips.y}px`, width: `${L.chips.w}px` });
+  stage.append(chips);
+  const players = playersRow();
+  Object.assign(players.style, { left: `${L.players.x}px`, top: `${L.players.y}px` });
+  stage.append(players);
+
+  const svg = svgEl('svg', { class: 'fc-wires', width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}` });
+  const defs = svgEl('defs', {});
+  for (const [name, cls] of [['fcArrow', ''], ['fcArrowOn', 'on'], ['fcArrowOff', 'off']]) {
+    const m = svgEl('marker', { id: name, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
+    m.append(svgEl('path', { d: 'M0,0 L10,5 L0,10 z', class: `fc-arrowhead ${cls}`.trim() }));
+    defs.append(m);
+  }
+  svg.append(defs);
+  stage.append(svg);
+
+  for (const edge of EDGES[view]) {
+    const [fromId, fs, fa = 0] = edge.from;
+    const [toId, ts, ta = 0] = edge.to;
+    const a = anchor(boxes[fromId], fs, fa);
+    const b = anchor(boxes[toId], ts, ta);
+    const { d, at } = curve(a, fs, b, ts, edge.bend);
+    const mid = at(edge.at ?? 0.5);
+    const nodeStep = n => NODE_STEP[n] || n;
+    const ends = [nodeStep(fromId), nodeStep(toId)].filter(n => page.draft.steps[n]);
+    const skipped = (edge.step && !stepOn(edge.step)) || ends.some(n => !stepOn(n));
+    const chosen = edge.step && isSelected('transition', edge.step);
+    const cls = `fc-wire${skipped ? ' is-skipped' : ''}${chosen ? ' is-selected' : ''}${edge.fixed || edge.standby ? ' is-quiet' : ''}`;
+    svg.append(svgEl('path', { d, class: cls, 'marker-end': `url(#${chosen ? 'fcArrowOn' : skipped ? 'fcArrowOff' : 'fcArrow'})` }));
+
+    const pill = h('button', {
+      type: 'button',
+      class: `fc-pill${chosen ? ' is-selected' : ''}${skipped ? ' is-skipped' : ''}${edge.fixed || edge.standby ? ' is-quiet' : ''}`,
+      title: edge.step ? `How ${stepMeta(edge.step).label} comes in (click to edit)` : ''
+    }, skipped && edge.step ? 'skipped' : edgeLabel(edge));
+    let [px, py] = mid;
+    if (edge.lane === 'up') py -= 14;
+    if (edge.lane === 'down') py += 14;
+    if (edge.lane === 'left') px -= 46;
+    if (edge.lane === 'right') px += 46;
+    pill.style.left = `${px}px`;
+    pill.style.top = `${py}px`;
+    if (edge.step && !skipped) pill.onclick = () => select({ kind: 'transition', id: edge.step });
+    else if (edge.standby) pill.onclick = () => select({ kind: 'standby' });
+    else if (edge.fixed) pill.onclick = () => select({ kind: 'waiting' });
+    else pill.disabled = true;
+    stage.append(pill);
+  }
+
+  for (const [id, box] of Object.entries(L.nodes)) stage.append(chartNode(id, box));
+
+  const sizer = h('div', { class: 'fc-sizer' }, stage);
+  const scroller = h('div', { class: 'fc-scroller' }, sizer);
+  // Fit wide charts into the card; below 80 % the chart scrolls sideways instead of shrinking further
+  requestAnimationFrame(() => fitChart(scroller, sizer, stage, L));
+  return h('div', { class: 'fc-wrap' },
+    h('div', { class: 'fc-toolbar' },
+      h('span', { class: 'fc-legend' }, 'Click a step to change its look, an arrow to change how it comes in.'),
+      h('div', { class: 'fc-view' },
+        segmented(['horizontal', 'vertical'], view, setView, { horizontal: '⟶ Horizontal', vertical: '↓ Vertical' }))),
+    scroller);
+}
+
+function fitChart(scroller, sizer, stage, L) {
+  if (!scroller.isConnected) return;
+  const scale = Math.max(0.8, Math.min(1, scroller.clientWidth / L.width));
+  stage.style.transform = scale < 1 ? `scale(${scale})` : '';
+  stage.style.transformOrigin = 'top left';
+  sizer.style.width = `${Math.ceil(L.width * scale)}px`;
+  sizer.style.height = `${Math.ceil(L.height * scale)}px`;
 }
 
 function playersRow() {
   const players = page.draft.players;
   const liveP = page.live && ['turn', 'takeout'].includes(page.live.step) ? page.live.player : null;
   return h('button', {
-    type: 'button', class: `fm-players${isSelected('players') ? ' is-selected' : ''}`, onclick: () => select({ kind: 'players' })
+    type: 'button', class: `fc-players${isSelected('players') ? ' is-selected' : ''}`, onclick: () => select({ kind: 'players' }),
+    title: 'Player colours'
   },
-  h('span', { class: 'fm-row-label' }, 'Players'),
-  h('span', { class: 'fm-dots' }, ...players.map((p, i) => h('span', {
-    class: `fm-dot${liveP === i ? ' is-live' : ''}`, title: p.name ? `${p.name}` : `Player ${i + 1}`
-  }, h('span', { class: 'fm-dot-swatch', style: `background:${hex(p.color)}` }), h('span', { class: 'fm-dot-num' }, String(i + 1))))));
+  h('span', { class: 'fc-row-label' }, 'Players'),
+  ...players.map((p, i) => {
+    const dot = h('span', { class: `fc-pdot${liveP === i ? ' is-live' : ''}`, title: p.name || `Player ${i + 1}` });
+    dot.setAttribute('style', `background:${hex(p.color)}`);
+    return dot;
+  }));
 }
 
 function hitsRow() {
-  return h('div', { class: 'fm-hits' },
-    h('span', { class: 'fm-row-label' }, 'On a hit'),
-    h('div', { class: 'fm-chips' }, ...page.overview.hits.map(meta => {
+  return h('div', { class: 'fc-chips' },
+    h('span', { class: 'fc-row-label' }, 'Hits'),
+    ...page.overview.hits.map(meta => {
       const hit = page.draft.hits[meta.id];
-      const flash = page.liveHit === meta.id;
-      return h('button', {
+      const chip = h('button', {
         type: 'button',
-        class: `fm-chip${hit.enabled ? '' : ' is-off'}${isSelected('hit', meta.id) ? ' is-selected' : ''}${flash ? ' is-flash' : ''}`,
+        class: `fc-chip${hit.enabled ? '' : ' is-off'}${isSelected('hit', meta.id) ? ' is-selected' : ''}${page.liveHit === meta.id ? ' is-flash' : ''}`,
+        'data-hit': meta.id,
         title: hit.enabled ? `${meta.label}: ${effectMeta(hit.animation)?.label}` : `${meta.label}: off`,
         onclick: () => select({ kind: 'hit', id: meta.id })
-      }, hit.enabled && h('span', { class: 'fm-chip-swatch', style: `background:${hex(resolved(hit).color_primary)}` }), meta.label);
-    })));
-}
-
-function chart() {
-  return h('div', { class: 'fm-chart', role: 'group', 'aria-label': 'Game flow' },
-    h('div', { class: 'fm-stage' },
-      h('span', { class: 'fm-stage-label' }, 'Before the match'),
-      h('div', { class: 'fm-lane' },
-        waitingNode(),
-        arrow('bull_off'),
-        node('bull_off'),
-        arrow('game_start'),
-        node('game_start'))),
-    arrow('turn', { down: true }),
-    h('div', { class: 'fm-match' },
-      h('div', { class: 'fm-match-title' }, 'The match · repeats for every turn'),
-      h('div', { class: 'fm-loop' },
-        node('turn'),
-        h('div', { class: 'fm-loop-arrows' }, arrow('takeout'), arrow('turn', { back: true })),
-        node('takeout')),
-      playersRow(),
-      hitsRow(),
-      h('div', { class: 'fm-leg' },
-        h('span', { class: 'fm-leg-caption' }, 'After the last dart of a leg'),
-        arrow('leg_won'),
-        node('leg_won'),
-        h('span', { class: 'fm-leg-caption' }, '↺ then the next leg starts'))),
-    arrow('match_won', { down: true }),
-    h('div', { class: 'fm-stage' },
-      h('span', { class: 'fm-stage-label' }, 'After the last leg'),
-      h('div', { class: 'fm-lane' },
-        node('match_won'),
-        arrow(null, { label: page.overview.match_end_to_waiting ? 'then' : 'winner\'s colour stays' }),
-        waitingNode(true))));
+      }, meta.label);
+      if (hit.enabled) {
+        const sw = h('span', { class: 'fc-chip-dot' });
+        sw.setAttribute('style', dotStyle(hit));
+        chip.prepend(sw);
+      }
+      return chip;
+    }));
 }
 
 // --- inspector controls ------------------------------------------------------
@@ -683,16 +899,20 @@ function stepPanel(id) {
   const others = page.overview.steps.filter(s => s.id !== id);
   return [
     h('div', { class: 'fm-panel-head' },
-      h('h2', { class: 'fm-panel-title' }, meta.label),
+      h('div', {}, h('span', { class: 'fm-kicker' }, 'Step · look'), h('h2', { class: 'fm-panel-title' }, meta.label)),
       !meta.always_on && onOff(step.effect.enabled, v => setEffect(e => { e.enabled = v; }), `${meta.label} on or off`)),
     h('p', { class: 'fm-panel-help' }, STEP_HELP[id]),
+    h('div', { class: 'fm-hero' }, strip(id === 'turn' ? ((t, n) => renderFlowFrame(resolved(step.effect, true), t, n)) : stepFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero' })),
     !step.effect.enabled && h('p', { class: 'fm-off-note' }, `Off: ${OFF_TEXT[id]}.`),
     h('div', { class: step.effect.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(step.effect, {
         setEffect, timed: meta.timed, forcePlayer: id === 'turn', playerChoice: PLAYER_STEPS.has(id),
         playerWord: id === 'takeout' ? 'Player colour' : 'Winner\'s colour'
       })),
-      section('Comes in with', ...transitionEditor(id)),
+      h('button', { type: 'button', class: 'fm-link-row', onclick: () => select({ kind: 'transition', id }) },
+        h('span', { class: 'fm-link-label' }, 'Comes in with'),
+        h('span', { class: 'fm-link-value' }, transitionSummary(id)),
+        h('span', { class: 'fm-link-go', 'aria-hidden': 'true' }, 'Edit ›')),
       h('div', { class: 'fm-panel-actions' },
         h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, '▶ Try on my lights'),
         h('label', { class: 'fm-copy' }, h('span', { class: 'visually-hidden' }, 'Copy look from'),
@@ -702,15 +922,40 @@ function stepPanel(id) {
           } }, h('option', { value: '' }, 'Copy look from…'), ...others.map(s => h('option', { value: s.id }, s.label))))))];
 }
 
+function transitionSummary(id) {
+  const tr = page.draft.steps[id].transition;
+  return tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} · ${seconds(tr.duration)}`;
+}
+
 function transitionPanel(id) {
   const meta = stepMeta(id);
+  const view = currentView();
+  const arrows = EDGES[view].filter(e => e.step === id).length;
+  const before = BEFORE[id] ? stepMeta(BEFORE[id]).label : 'Waiting';
   return [
-    h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, `How ${meta.label} comes in`)),
-    h('p', { class: 'fm-panel-help' }, `Every time ${meta.label.toLowerCase()} starts, the strip changes from what it showed to this look with this transition.`),
-    section(null, ...transitionEditor(id)),
+    h('div', { class: 'fm-panel-head' },
+      h('div', {}, h('span', { class: 'fm-kicker' }, 'Transition'), h('h2', { class: 'fm-panel-title' }, `Into ${meta.label}`))),
+    h('p', { class: 'fm-panel-help' }, `How the strip changes to the ${meta.label.toLowerCase()} look, whatever it showed before.`
+      + (arrows > 1 ? ` This is shared by the ${arrows} arrows into ${meta.label} (they are highlighted).` : '')),
+    h('div', { class: 'fm-hero' },
+      h('div', { class: 'fm-hero-labels' }, h('span', {}, before), h('span', {}, '→'), h('span', {}, meta.label)),
+      strip(transitionFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero' })),
+    section('Style', ...transitionEditor(id)),
     h('div', { class: 'fm-panel-actions' },
       h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, '▶ Try on my lights'),
-      h('button', { type: 'button', class: 'ui-btn', onclick: () => select({ kind: 'step', id }) }, `Edit ${meta.label}`))
+      h('button', { type: 'button', class: 'ui-btn', onclick: () => select({ kind: 'step', id }) }, `Edit the ${meta.label} look`))
+  ];
+}
+
+function standbyPanel() {
+  const s = page.overview.standby || {};
+  return [
+    h('div', { class: 'fm-panel-head' }, h('div', {}, h('span', { class: 'fm-kicker' }, 'Standby'), h('h2', { class: 'fm-panel-title' }, 'When nobody plays'))),
+    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These timers are the same for every profile.'),
+    h('ul', { class: 'fm-users' },
+      h('li', {}, s.dim_on ? `Dim after ${s.dim_minutes} minutes` : 'Dimming is off'),
+      h('li', {}, s.off_on ? `Switch off after ${s.off_minutes} minutes` : 'Switching off is off')),
+    h('a', { class: 'card-link', href: '/settings', 'data-link': true }, 'Change the timers in Settings')
   ];
 }
 
@@ -814,10 +1059,14 @@ function inspector() {
   else if (sel.kind === 'hit') body = hitPanel(sel.id);
   else if (sel.kind === 'players') body = playersPanel();
   else if (sel.kind === 'waiting') body = waitingPanel();
+  else if (sel.kind === 'standby') body = standbyPanel();
   else body = profilePanel();
-  return h('aside', { class: 'fm-inspector card', id: 'fmInspector', 'aria-label': 'Edit' },
-    sel.kind !== 'profile' && h('button', { type: 'button', class: 'ui-btn-link fm-back', onclick: () => select({ kind: 'profile' }) }, '← Profile settings'),
-    ...body);
+  // Title, help and preview on one side; the controls on the other (side by side under a horizontal chart)
+  const parts = [sel.kind !== 'profile' && h('button', { type: 'button', class: 'ui-btn-link fm-back', onclick: () => select({ kind: 'profile' }) }, '← Profile settings'), ...body].filter(Boolean);
+  const isIntro = el => /\b(fm-back|fm-panel-head|fm-panel-help|fm-hero|fm-off-note)\b/.test(el.className || '');
+  return h('aside', { class: `fm-inspector card fm-inspector-${currentView()}`, id: 'fmInspector', 'aria-label': 'Edit' },
+    h('div', { class: 'fm-insp-intro' }, ...parts.filter(isIntro)),
+    h('div', { class: 'fm-insp-body' }, ...parts.filter(el => !isIntro(el))));
 }
 
 // --- page --------------------------------------------------------------------
@@ -891,7 +1140,7 @@ function render() {
         h('p', { class: 'page-lead' }, 'How your light strips follow a match. Click any part to change it.'))),
     profileBar(),
     statusLine(),
-    h('div', { class: 'fm-layout' }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
+    h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
     h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
       h('span', { class: 'savebar-note' }, 'Unsaved changes'),
       h('button', { type: 'button', class: 'ui-btn', onclick: discard }, 'Discard'),
@@ -924,17 +1173,25 @@ function onTelemetry(msg) {
 function updateLive() {
   const root = page.root;
   if (!root || !root.isConnected) return;
-  root.querySelectorAll('.fm-node[data-step]').forEach(el => el.classList.toggle('is-live', page.live?.step === el.dataset.step));
   const liveP = page.live && ['turn', 'takeout'].includes(page.live.step) ? page.live.player : null;
-  root.querySelectorAll('.fm-dot').forEach((el, i) => el.classList.toggle('is-live', liveP === i));
-  const labels = page.overview?.hits.map(hh => hh.id) || [];
-  root.querySelectorAll('.fm-chip').forEach((el, i) => el.classList.toggle('is-flash', page.liveHit === labels[i]));
+  root.querySelectorAll('.fc-node[data-step]').forEach(el => {
+    let on = page.live?.step === el.dataset.step;
+    if (on && el.dataset.step === 'turn') on = (el.dataset.node === 'p1') === ((page.live.player || 0) % 2 === 0);
+    el.classList.toggle('is-live', on);
+  });
+  root.querySelectorAll('.fc-pdot').forEach((el, i) => el.classList.toggle('is-live', liveP === i));
+  root.querySelectorAll('.fc-chip').forEach(el => el.classList.toggle('is-flash', page.liveHit === el.dataset.hit));
   const stop = root.querySelector('.fm-preview-wrap');
   if (stop && !page.preview.running && stop.textContent.includes('Stop')) render();
 }
 
 export function initFlowMatrix() {
   window.flowPage = { isDirty, save, discard };
+  try { page.view = localStorage.getItem(VIEW_KEY) || 'horizontal'; } catch (err) { page.view = 'horizontal'; }
+  window.addEventListener('resize', () => {
+    const wanted = currentView();
+    if (page.root?.isConnected && !page.root.querySelector(`.fc-${wanted}`)) render();
+  });
   window.renderFlowMatrix = () => {
     page.root = document.getElementById('flowMatrixRoot');
     refresh();

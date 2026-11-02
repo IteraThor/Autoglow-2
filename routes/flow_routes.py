@@ -107,6 +107,13 @@ def _overview(request: web.Request) -> Dict[str, Any]:
         "lights": lights,
         "lighting_mode": mode,
         "match_end_to_waiting": bool(cfg and cfg.disconnect_udp_on_match_end),
+        # The standby timers (Settings) drawn under Waiting
+        "standby": {
+            "dim_on": bool(cfg.inactivity_timeout_enabled) if cfg else True,
+            "dim_minutes": int(cfg.inactivity_timeout_minutes) if cfg else 5,
+            "off_on": bool(cfg.idle_power_off_enabled) if cfg else True,
+            "off_minutes": int(cfg.idle_power_off_minutes) if cfg else 30,
+        },
         "match_running": bool(engine and _match_running(engine)),
         "live": engine.flow_runtime.snapshot() if engine else None,
         "catalog": catalog_for_ui(),
