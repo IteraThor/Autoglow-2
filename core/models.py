@@ -21,6 +21,25 @@ def is_pwm_output(hw: Any) -> bool:
     """WLED analog (PWM) outputs are types 40-49; 50+ are SPI strips and network buses."""
     return isinstance(hw, dict) and 40 <= _safe_int(hw.get("type"), 22) < 50
 
+def _complete_segments_from_outputs(segments: List["SegmentConfig"], hw_ins: List[Any]) -> None:
+    """
+    Fill in what a controller's LED outputs already say about its segments, whichever page saved them:
+    a segment without a data pin gets the pin of the output it sits on, and a segment on a white light
+    output is white illumination (never part of the dartboard ring).
+    """
+    outputs = [h for h in hw_ins if isinstance(h, dict)]
+    for seg in segments:
+        out = next((h for h in outputs
+                    if _safe_int(h.get("start"), 0) <= seg.start < _safe_int(h.get("start"), 0) + max(1, _safe_int(h.get("len"), 1))), None)
+        if out is None:
+            continue
+        pins = out.get("pin")
+        if not seg.gpio.strip() and isinstance(pins, list) and pins:
+            seg.gpio = f"GPIO {pins[0]}"
+        if is_pwm_output(out):
+            seg.role = "white_illumination"
+
+
 def profile_dict_for_device(raw: Dict[str, Any], ip: str) -> Dict[str, Any]:
     """Flatten one controller's per-segment effects from a pre-2.3 profile into a plain profile dict.
 
@@ -445,6 +464,7 @@ class DeviceConfig:
         hw_ins = data.get("hw_ins", [])
         if not isinstance(hw_ins, list):
             hw_ins = []
+        _complete_segments_from_outputs(segments, hw_ins)
 
         raw_pwm_idx = data.get("pwm_index")
         pwm_index = _safe_int(raw_pwm_idx) if raw_pwm_idx is not None else None
