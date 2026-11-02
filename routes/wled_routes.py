@@ -4,6 +4,7 @@ Handlers for WLED mutations, discovery, preset management, and effects testing.
 """
 
 import asyncio
+from typing import Optional
 import logging
 from aiohttp import web
 
@@ -47,6 +48,48 @@ def _rgb_count(hw_ins) -> int:
     """LED count of the first RGB output, wherever it sits; PWM outputs are skipped."""
     rgb_hw = next((h for h in (hw_ins or []) if isinstance(h, dict) and not is_pwm_output(h)), None)
     return _safe_int(rgb_hw.get("len"), 45) if rgb_hw else 45
+
+
+def _segments_from_wled(seg_data: list, hw_ins: Optional[list], previous: list) -> list:
+    """
+    AutoGlow's segments from a WLED layout. Each segment gets the data pin of the output it sits on, light
+    strips are white illumination, and what only AutoGlow knows (role, hit-locator direction) is kept from the
+    previous segment with the same id and start, so re-running the setup guide does not reset it.
+    """
+    outputs = [h for h in (hw_ins or []) if isinstance(h, dict)]
+    before = {(p.id, p.start): p for p in previous or []}
+    segments = []
+    for s_idx, s in enumerate(seg_data):
+        if not isinstance(s, dict):
+            continue
+        start = _safe_int(s.get("start"), 0)
+        out = next((h for h in outputs if _safe_int(h.get("start"), 0) <= start < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1)), None)
+        pwm = bool(out and is_pwm_output(out))
+        pins = out.get("pin") if out else None
+        pin = pins[0] if isinstance(pins, list) and pins else None
+        seg_id = _safe_int(s.get("id"), s_idx)
+        old = before.get((seg_id, start))
+        seg = SegmentConfig(
+            id=seg_id,
+            name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
+            start=start,
+            length=max(1, (_safe_int(s.get("stop"), 1) - start)),
+            type="PWM White" if pwm else "WS281x",
+            offset=max(0, _safe_int(s.get("of"), 0)),
+        )
+        if pin is not None:
+            seg.gpio = f"GPIO {pin}"
+        elif old:
+            seg.gpio = old.gpio
+        if pwm:
+            seg.role = "white_illumination"
+        elif old and old.role != "white_illumination":
+            seg.role = old.role
+        if old:
+            seg.clockwise = old.clockwise
+            seg.locator = old.locator
+        segments.append(seg)
+    return segments
 
 
 async def handle_wled_update(request: web.Request) -> web.Response:
@@ -97,30 +140,10 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                     dev.pwm_index = None
 
             if seg_data and isinstance(seg_data, list):
-                dev.segments = [
-                    SegmentConfig(
-                        id=_safe_int(s.get("id"), s_idx),
-                        name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
-                        start=_safe_int(s.get("start"), 0),
-                        length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                        type="PWM White" if any(is_pwm_output(h) and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
-                        offset=max(0, _safe_int(s.get("of"), 0))
-                    )
-                    for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
-                ]
+                dev.segments = _segments_from_wled(seg_data, hw_ins or dev.hw_ins, dev.segments)
 
     if not found:
-        segments = [
-            SegmentConfig(
-                id=_safe_int(s.get("id"), s_idx),
-                name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
-                start=_safe_int(s.get("start"), 0),
-                length=max(1, (_safe_int(s.get("stop"), 1) - _safe_int(s.get("start"), 0))),
-                type="PWM White" if any(is_pwm_output(h) and _safe_int(h.get("start"), 0) <= _safe_int(s.get("start"), 0) < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1) for h in (hw_ins or [])) else "WS281x",
-                offset=max(0, _safe_int(s.get("of"), 0))
-            )
-            for s_idx, s in enumerate(seg_data) if isinstance(s, dict)
-        ] if seg_data else []
+        segments = _segments_from_wled(seg_data, hw_ins, []) if seg_data else []
 
         pwm_hw = next((h for h in hw_ins if is_pwm_output(h)), None) if (hw_ins and isinstance(hw_ins, list)) else None
         pwm_idx = _safe_int(pwm_hw.get("start"), 45) if pwm_hw else None

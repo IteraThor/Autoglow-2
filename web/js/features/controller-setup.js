@@ -77,7 +77,8 @@ export function buildOutputs(plan) {
     return out;
   });
   readyLights(plan).forEach(l => {
-    outputs.push({ ...l.bus, start, len: 1, pin: [l.pin], type: PWM_WHITE, order: 0, rev: false, skip: 0 });
+    // A white light strip has no color order; keep what WLED reports so an unchanged layout stays unchanged
+    outputs.push({ ...l.bus, start, len: 1, pin: [l.pin], type: PWM_WHITE, order: Number(l.bus?.order) || 0, rev: false, skip: 0 });
     start += 1;
   });
   return outputs;
@@ -148,27 +149,67 @@ export function describeIdle(plan) {
 }
 
 // The parts of an output WLED rebuilds its LEDs for; other fields (current limits etc.) don't matter here
+// Two layouts with the same key need no LED rewrite (writing outputs can make WLED reboot).
+// A white light strip's color order means nothing, so it is left out.
 export function layoutKey(outputs) {
-  return JSON.stringify((outputs || []).map(o => [Number(o.start) || 0, Number(o.len) || 0, Number(firstPin(o)), Number(o.type), Number(o.order) || 0, Boolean(o.rev), Number(o.skip) || 0]));
+  return JSON.stringify((outputs || []).map(o => [Number(o.start) || 0, Number(o.len) || 0, Number(firstPin(o)), Number(o.type),
+    isPwmBus(o) ? 0 : Number(o.order) || 0, Boolean(o.rev), Number(o.skip) || 0]));
 }
 
-function planFromLive(ip, live) {
+// The idle step starts from the controller's preset 1 (the idle and startup look), when it is one the guide offers
+const LOOK_BY_FX = { 9: 'rainbow', 38: 'aurora', 2: 'breathe', 0: 'solid' };
+const briToPercent = bri => Math.max(0, Math.min(100, Math.round((Number(bri ?? 255) / 255) * 100)));
+const toHex = col => (Array.isArray(col) ? '#' + col.slice(0, 3).map(v => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, '0')).join('') : null);
+
+function idleFromPreset(preset, buses) {
+  const idle = { look: 'rainbow', color: '#00ff9d', bri: 100, lightBri: 100 };
+  const segs = Array.isArray(preset?.seg) ? preset.seg.filter(s => Number(s?.stop) > Number(s?.start)) : [];
+  if (!segs.length) return idle;
+  const isLight = s => buses.some(b => isPwmBus(b) && Number(b.start) === Number(s.start));
+  const light = segs.find(isLight);
+  if (light) idle.lightBri = light.on === false ? 0 : briToPercent(light.bri);
+  const rgb = segs.find(s => !isLight(s));
+  if (rgb) {
+    const look = rgb.on === false ? 'off' : LOOK_BY_FX[Number(rgb.fx)];
+    if (look) {
+      idle.look = look;
+      idle.bri = briToPercent(rgb.bri) || 100;
+      idle.color = toHex(rgb.col?.[0]) || idle.color;
+    }
+  }
+  return idle;
+}
+
+function planFromLive(ip, live, preset = null) {
   const buses = Array.isArray(live?.hw_ins) ? live.hw_ins : [];
   const segs = Array.isArray(live?.state?.seg) ? live.state.seg : [];
   const rgbBuses = buses.filter(b => !isPwmBus(b));
   const strips = (rgbBuses.length ? rgbBuses : [null]).map((bus, k) => newStrip(bus, k === 0 ? 16 : ''));
-  // Per zone, the start of its effects as an offset from its first LED; the guide starts with one zone per strip
+  // Zones: today's split when it is an equal split (what the guide can make), else one zone per strip.
+  // Per zone, the start of its effects as an offset from its first LED.
   strips.forEach(strip => {
-    const seg = segs.find(s => Number(s?.start) === (Number(strip.bus?.start) || 0));
-    strip.offsets = [Math.max(0, Number(seg?.of) || 0)];
+    const base = Number(strip.bus?.start) || 0;
+    const inside = segs
+      .filter(s => Number(s?.stop) > Number(s?.start) && Number(s.start) >= base && Number(s.stop) <= base + strip.count)
+      .sort((a, b) => Number(a.start) - Number(b.start));
+    const ranges = zoneRanges(strip.count, inside.length || 1);
+    const equal = inside.length > 1 && ranges.length === inside.length
+      && ranges.every((r, i) => r.start + base === Number(inside[i].start) && r.stop + base === Number(inside[i].stop));
+    if (equal) {
+      strip.zones = inside.length;
+      strip.offsets = inside.map(s => Math.max(0, Number(s.of) || 0));
+    } else {
+      const seg = segs.find(s => Number(s?.start) === base);
+      strip.offsets = [Math.max(0, Number(seg?.of) || 0)];
+    }
   });
   return {
     ip,
     name: live?.name || 'WLED Controller',
     strips,
     lights: buses.filter(isPwmBus).map(newLight),
-    // Defaults match what the guide saved before it asked: Rainbow, everything at 100%
-    idle: { look: 'rainbow', color: '#00ff9d', bri: 100, lightBri: 100 }
+    // From preset 1 when it holds a look the guide offers; else what the guide saved before it asked
+    idle: idleFromPreset(preset, buses)
   };
 }
 
@@ -260,8 +301,9 @@ function choiceButtons(options, onpick) {
 }
 
 // Opens the guide for a controller. Resolves { name, hw_ins, seg } when the user applies it, or null.
-export function runControllerSetup(ip, live) {
-  const plan = planFromLive(ip, live);
+export async function runControllerSetup(ip, live) {
+  const preset = await api.get(`/api/wled/preset?ip=${encodeURIComponent(ip)}`, { timeout: 4000 }).catch(() => null);
+  const plan = planFromLive(ip, live, preset);
   const original = { hw_ins: structuredClone(live?.hw_ins || []), state: structuredClone(live?.state || {}) };
   let stepIndex = 0;
   let touched = false;      // a light test changed the controller's layout
@@ -334,6 +376,21 @@ export function runControllerSetup(ip, live) {
       return { on: true, bri: 110, transition: 0, seg };
     }
 
+    async function restoreAfterReboot(state) {
+      for (let waited = 0; waited < 30000; waited += 1500) {
+        await new Promise(done => setTimeout(done, 1500));
+        const ping = await api.get(`/api/ping?ip=${encodeURIComponent(ip)}`, { timeout: 3000 }).catch(() => null);
+        if (!ping?.online) continue;
+        try {
+          await api.post('/api/wled/setup-preview', { ip, hw_ins: null, state }, { timeout: 8000 });
+          return true;
+        } catch (err) {
+          return false;
+        }
+      }
+      return false;
+    }
+
     async function close(result) {
       if (dialog.dataset.closing) return;
       dialog.dataset.closing = 'true';
@@ -342,11 +399,15 @@ export function runControllerSetup(ip, live) {
       clearTimeout(startTimer);
       if (!result && touched) {
         cancelBtn.textContent = 'Restoring…';
+        const restoreOutputs = sentOutputs !== originalLayout && original.hw_ins.length ? original.hw_ins : null;
+        const restoreState = { on: original.state.on ?? true, bri: original.state.bri ?? 128, seg: (original.state.seg || []).map(s => ({ ...s, frz: false })) };
         try {
-          const restoreOutputs = sentOutputs !== originalLayout && original.hw_ins.length ? original.hw_ins : null;
-          await api.post('/api/wled/setup-preview', { ip, hw_ins: restoreOutputs, state: { on: original.state.on ?? true, bri: original.state.bri ?? 128, seg: (original.state.seg || []).map(s => ({ ...s, frz: false })) } }, { timeout: 8000 });
+          await api.post('/api/wled/setup-preview', { ip, hw_ins: restoreOutputs, state: restoreState }, { timeout: 8000 });
         } catch (err) {
-          toast.warning('Could not restore the controller\'s previous LED layout. Open its WLED page to check it.');
+          // Writing LED outputs can make WLED reboot mid-request; wait for it, then put the old state back
+          if (!(restoreOutputs && await restoreAfterReboot(restoreState))) {
+            toast.warning('Could not restore the controller\'s previous LED layout. Open its WLED page to check it.');
+          }
         }
       }
       dialog.close();
