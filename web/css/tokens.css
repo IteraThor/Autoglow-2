@@ -216,6 +216,24 @@
 
 .ui-btn-danger:hover { background: rgba(var(--danger-rgb), 0.85); }
 
+/* A button that reads as a text link (no box) */
+.ui-btn-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-primary);
+  font: 500 var(--fs-sm) var(--font-ui);
+  cursor: pointer;
+}
+
+.ui-btn-link:hover { text-decoration: underline; }
+
+.ui-btn-link:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* -----------------------------------------------------------------------------
  * Connection banner (web/js/core/connection.js)
  * ----------------------------------------------------------------------------- */
