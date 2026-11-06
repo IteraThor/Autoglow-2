@@ -43,6 +43,11 @@ def _preset_state(cfg, ip: str, with_profile: bool = True) -> dict:
     return out
 
 
+def _live_config(request: web.Request):
+    """The config the server is running with; every route changes this one, so saves never undo each other."""
+    return request.app.get("current_app_config") or load_app_config(request.app.get("config_path", "config.json"))
+
+
 def _apply(request: web.Request, cfg) -> None:
     request.app["current_app_config"] = cfg
     engine = request.app.get("engine")
@@ -55,10 +60,10 @@ async def handle_get_presets(request: web.Request) -> web.Response:
     """Return all available Event Matrix preset names and the currently active preset, syncing with presets/ folder."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     # Sync with presets/ directory
-    if sync_presets_with_disk(cfg, presets_dir=presets_dir):
+    if sync_presets_with_disk(cfg, presets_dir=presets_dir, export=False):
         save_app_config(cfg, config_path)
 
     ip = _target_ip(request)
@@ -76,7 +81,7 @@ async def handle_get_presets(request: web.Request) -> web.Response:
 async def handle_select_preset(request: web.Request) -> web.Response:
     """Switch the preset a segment or controller uses (or the shared default) and immediately sync the engine."""
     config_path = request.app.get("config_path", "config.json")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     data = await read_json(request)
 
@@ -106,7 +111,7 @@ async def handle_save_preset(request: web.Request) -> web.Response:
     """Save or create an Event Matrix preset and sync engine profile."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     data = await read_json(request)
 
@@ -154,7 +159,7 @@ async def handle_rename_preset(request: web.Request) -> web.Response:
     """Rename an existing Event Matrix preset."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     data = await read_json(request)
 
@@ -208,7 +213,7 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
     """Delete an existing Event Matrix preset; controllers that used it fall back to the shared default."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     try:
         data = await request.json()
@@ -251,8 +256,7 @@ async def handle_delete_preset(request: web.Request) -> web.Response:
 
 async def handle_export_preset(request: web.Request) -> web.Response:
     """Export an individual preset as a downloadable JSON file."""
-    config_path = request.app.get("config_path", "config.json")
-    cfg = load_app_config(config_path)
+    cfg = _live_config(request)
 
     target_name = request.query.get("name", "").strip() or cfg.active_profile
     profile = cfg.get_profile(target_name)
@@ -274,7 +278,6 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     """Import a preset from uploaded JSON and add to presets/ and config."""
     config_path = request.app.get("config_path", "config.json")
     presets_dir = request.app.get("presets_dir")
-    cfg = load_app_config(config_path)
 
     if request.content_type.startswith("multipart/"):
         reader = await request.multipart()
@@ -293,6 +296,8 @@ async def handle_import_preset(request: web.Request) -> web.Response:
     if not isinstance(data, dict):
         raise ValidationError("Preset file must contain a JSON object")
 
+    # After the upload: anything saved while it came in is part of the config this import changes
+    cfg = _live_config(request)
     preset_name = str(data.get("name", filename_stem)).strip() or filename_stem
     if len(preset_name) > 60:
         preset_name = preset_name[:60]

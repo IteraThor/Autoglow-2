@@ -81,12 +81,16 @@ async function loadConfig() {
   }
 }
 
-async function saveAllConfig({ quiet = false } = {}) {
+// fields: the setting names this save changes. The server keeps every other setting as it is now, so an
+// old copy in this tab cannot undo what other pages or tabs saved.
+async function saveAllConfig({ quiet = false, fields = null } = {}) {
   try {
+    const state = window.appState || appState;
+    const body = fields ? Object.fromEntries(fields.filter(k => k in state).map(k => [k, state[k]])) : state;
     const res = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(window.appState || appState)
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (data.status === 'ok') {

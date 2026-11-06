@@ -74,9 +74,12 @@ async def handle_save_player(request: web.Request) -> web.Response:
         if not isinstance(part, BodyPartReader):
             continue
         if part.name in pictures and part.filename:
-            data = await part.read(decode=False)
-            if len(data) > studio.MAX_IMAGE_BYTES:
-                raise ValidationError("Picture is larger than 5 MB")
+            # In chunks, so a huge file is refused at the limit instead of being held in memory first
+            data = bytearray()
+            while chunk := await part.read_chunk(64 * 1024):
+                data += chunk
+                if len(data) > studio.MAX_IMAGE_BYTES:
+                    raise ValidationError("Picture is larger than 5 MB")
             pictures[part.name] = bytes(data) if data else None
         elif part.name in fields:
             fields[part.name] = (await part.text())[:200]

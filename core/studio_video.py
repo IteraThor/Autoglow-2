@@ -67,6 +67,22 @@ def _ffmpeg_command() -> List[str]:
     ]
 
 
+async def _last_line(stream) -> str:
+    """Read a stream to its end and return its last non-empty line."""
+    last = ""
+    while stream is not None:
+        try:
+            raw = await stream.readline()
+        except ValueError:  # one absurdly long line: skip it
+            continue
+        if not raw:
+            break
+        line = raw.decode(errors="replace").strip()
+        if line:
+            last = line
+    return last
+
+
 def _codec_string(init: bytes) -> str:
     """'avc1.PPCCLL' for Media Source from the avcC box of the init segment."""
     i = init.find(b"avcC")
@@ -167,11 +183,14 @@ class H264Camera:
                 *_ffmpeg_command(), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            feeder = asyncio.get_running_loop().create_task(self._feed(source, proc))
+            loop = asyncio.get_running_loop()
+            feeder = loop.create_task(self._feed(source, proc))
+            # Read while ffmpeg runs: a full error pipe (a camera sending damaged frames) would stall the encoder
+            err_task = loop.create_task(_last_line(proc.stderr))
             await self._read(proc)
-            err = (await proc.stderr.read()).decode(errors="replace").strip() if proc.stderr else ""
+            err = await err_task
             if not self.error:
-                self.error = source.error or (err.splitlines()[-1] if err else "The video encoder stopped")
+                self.error = source.error or err or "The video encoder stopped"
         except (OSError, LookupError) as e:
             self.error = f"Video encoder not started: {e}"
         finally:

@@ -3,7 +3,7 @@ import json
 import logging
 import time
 import aiohttp
-from typing import Optional, Callable, Awaitable, List, Dict, Any, Set
+from typing import Optional, Callable, Awaitable, List, Dict, Any, Set, Tuple
 
 try:
     import websockets
@@ -454,7 +454,8 @@ class AutodartsClient:
         if not isinstance(payload, dict):
             return
 
-        logger.info(f"Autodarts WS RAW: channel='{channel}', topic='{topic}', payload={json.dumps(payload)}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Autodarts WS RAW: channel='{channel}', topic='{topic}', payload={json.dumps(payload)}")
 
         # 1. Match Start / Stop Detection from board.matches
         if channel == "autodarts.boards" and topic.endswith(".matches"):
@@ -776,17 +777,248 @@ class AutodartsClient:
             return bull_off
         return None
 
-    async def _parse_match_state(self, state: dict):
-        self.remember_match_state(state)
-        # Check if match was aborted / cancelled / deleted / stopped
-        status_val = str(state.get("status", "")).lower()
-        is_match_aborted = (
+    @staticmethod
+    def _is_aborted(state: dict, status_val: str) -> bool:
+        """The match state says the match was aborted, cancelled, deleted or stopped."""
+        return (
             status_val in ["aborted", "abort", "cancelled", "canceled", "cancel", "deleted", "delete", "stopped"]
             or state.get("aborted") is True
             or state.get("isAborted") is True
             or state.get("cancelled") is True
             or state.get("canceled") is True
         )
+
+    @staticmethod
+    def _read_throw(last_throw: dict) -> Tuple[int, int, str]:
+        """(score, multiplier, label) of a throw, from whichever of the segment, score and bed fields the state has."""
+        # Extract segment info
+        seg = last_throw.get("segment")
+        seg_name = ""
+        seg_number = None
+        seg_mult = None
+        seg_bed = ""
+
+        if isinstance(seg, dict):
+            seg_name = str(seg.get("name") or "").strip()
+            seg_number = seg.get("number")
+            seg_mult = seg.get("multiplier")
+            seg_bed = str(seg.get("bed") or "").strip().lower()
+        elif isinstance(seg, str):
+            seg_name = seg.strip()
+        elif isinstance(seg, (int, float)):
+            seg_number = int(seg)
+
+        # Extract raw throw score and multiplier
+        raw_score = last_throw.get("score")
+        raw_points = last_throw.get("points")
+        raw_mult = last_throw.get("multiplier")
+
+        # Compute score number (1..20, 25, 50, 0)
+        score = 0
+        if seg_number is not None and isinstance(seg_number, (int, float)):
+            score = int(seg_number)
+        elif raw_score is not None and isinstance(raw_score, (int, float)):
+            score = int(raw_score)
+        elif raw_points is not None and isinstance(raw_points, (int, float)):
+            score = int(raw_points)
+
+        # Compute multiplier (0, 1, 2, 3)
+        mult = 1
+        if seg_mult is not None and isinstance(seg_mult, (int, float)):
+            mult = int(seg_mult)
+        elif raw_mult is not None and isinstance(raw_mult, (int, float)):
+            mult = int(raw_mult)
+        elif seg_bed == "triple":
+            mult = 3
+        elif seg_bed == "double":
+            mult = 2
+        elif seg_bed == "single":
+            mult = 1
+        elif seg_bed in ["outside", "miss", "off"]:
+            mult = 0
+
+        # Parse segment name string if available (e.g. "T20", "D16", "S5", "Bull", "25", "Outside", "Miss")
+        u_name = seg_name.upper()
+        if u_name.startswith("T") and len(u_name) > 1 and u_name[1:].isdigit():
+            mult = 3
+            score = int(u_name[1:])
+        elif u_name.startswith("D") and len(u_name) > 1 and u_name[1:].isdigit():
+            mult = 2
+            score = int(u_name[1:])
+        elif u_name.startswith("S") and len(u_name) > 1 and u_name[1:].isdigit():
+            mult = 1
+            score = int(u_name[1:])
+        elif u_name in ["BULL", "DBULL", "DOUBLE BULL", "DOUBLE_BULL", "BULLSEYE", "50"]:
+            mult = 2
+            score = 25
+            seg_name = "Bull"
+        elif u_name in ["25", "SBULL", "SINGLE BULL", "SINGLE_BULL", "OUTER BULL"]:
+            mult = 1
+            score = 25
+            seg_name = "25"
+        elif u_name in ["MISS", "OUTSIDE", "OFF", "0", "NONE"]:
+            mult = 0
+            score = 0
+            if not seg_name:
+                seg_name = "Miss"
+
+        # Normalize seg_label notation
+        if seg_name:
+            seg_label = seg_name
+        elif score == 0 or mult == 0:
+            seg_label = "Miss"
+        elif score == 25 and mult == 2:
+            seg_label = "Bull"
+        elif score == 25 and mult == 1:
+            seg_label = "25"
+        elif mult == 3:
+            seg_label = f"T{score}"
+        elif mult == 2:
+            seg_label = f"D{score}"
+        elif mult == 1:
+            seg_label = f"S{score}"
+        else:
+            seg_label = str(score)
+        return score, mult, seg_label
+
+    async def _emit_throw_events(self, last_turn: dict, last_throw: dict, throws: list, throw_id: str,
+                                 score: int, mult: int, seg_label: str) -> None:
+        """The event for a new throw: 180 on the third dart, bust, miss, or the hit by multiplier."""
+        # 1. Check 180 (turn score == 180)
+        turn_points = last_turn.get("points", 0)
+        # The visit total rides on its third dart, so a flow can celebrate a ton (100+) or ton-40
+        visit_total = turn_points if (len(throws) == 3 and isinstance(turn_points, int)) else None
+        if len(throws) == 3 and turn_points == 180 and not self._last_180_fired:
+            self._last_180_fired = True
+            await self._emit_event(DartEvent(event_type=DartEventType.SCORE_180, score=180, segment_name="180", board_id=self.board_id))
+
+        # 2. Check Bust (Turn or throw marked as busted)
+        elif (last_turn.get("busted") is True or last_throw.get("busted") is True or last_turn.get("bust") is True or last_throw.get("bust") is True):
+            if not self._last_bust_fired:
+                self._last_bust_fired = True
+                logger.info(f"Bust detected on throw {throw_id} (Turn busted)")
+                await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=score, segment_name=seg_label or "Bust", board_id=self.board_id))
+
+        # 3. Check Miss (Score 0, Multiplier 0, Outside, or Miss)
+        elif ((score == 0 and mult == 0) or seg_label.lower() in ["miss", "outside", "off", "none"]):
+            logger.info(f"Miss detected on throw {throw_id} (Score: {score}, Multiplier: {mult}, Segment: {seg_label or 'Miss'})")
+            await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=0, multiplier=0, segment_number=0, segment_name=seg_label or "Miss", board_id=self.board_id))
+
+        # 4. Check Triple Hit
+        elif mult == 3:
+            logger.info(f"Triple hit detected on throw {throw_id}: {seg_label} (Multiplier: 3)")
+            await self._emit_event(DartEvent(event_type=DartEventType.TRIPLE, score=score * 3, multiplier=3, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
+
+        # 5. Check Bullseye (50 points)
+        elif (mult == 2 and score == 25) or seg_label in ["Bull", "50"]:
+            logger.info(f"Bullseye hit detected on throw {throw_id}: Bull (50)")
+            await self._emit_event(DartEvent(event_type=DartEventType.BULLSEYE, score=50, multiplier=2, segment_number=25, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
+
+        # 6. Check Double Hit (D1..D20)
+        elif mult == 2:
+            logger.info(f"Double hit detected on throw {throw_id}: {seg_label} (Multiplier: 2)")
+            await self._emit_event(DartEvent(event_type=DartEventType.DOUBLE, score=score * 2, multiplier=2, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
+
+        # 7. Check Single Hit (S1..S20, 25)
+        elif mult == 1:
+            logger.info(f"Single hit detected on throw {throw_id}: {seg_label} (Multiplier: 1)")
+            await self._emit_event(DartEvent(event_type=DartEventType.SINGLE, score=score, multiplier=1, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
+
+    @staticmethod
+    def _count_legs(state: dict) -> Tuple[int, bool, List[int]]:
+        """(legs won in total, whether the state has leg data at all, legs won per player)."""
+        # Multi-schema completed legs counting
+        total_legs = 0
+        has_leg_info = False
+
+        # Format 1: state["legs"] = [...] (list of completed leg objects)
+        legs_list = state.get("legs")
+        if isinstance(legs_list, list):
+            has_leg_info = True
+            won_legs = sum(1 for lg in legs_list if isinstance(lg, dict) and (lg.get("winner") is not None or lg.get("finished") is True))
+            total_legs = max(total_legs, won_legs)
+
+        # Format 2: state["players"] = [{"legs": N}, ...] or [{"legsWon": N}, ...] or [{"stats": {"legsWon": N}}]
+        players_list = state.get("players")
+        player_leg_counts: List[int] = []
+        if isinstance(players_list, list) and players_list:
+            for p in players_list:
+                if isinstance(p, dict):
+                    l_val = p.get("legsWon") if p.get("legsWon") is not None else p.get("legs") if p.get("legs") is not None else p.get("stats", {}).get("legs") if isinstance(p.get("stats"), dict) else None
+                    if isinstance(l_val, (int, float)) and int(l_val) < 100:  # < 100 ensures point scores like 501 are never treated as legs
+                        player_leg_counts.append(int(l_val))
+                        has_leg_info = True
+                    else:
+                        player_leg_counts.append(0)
+            if player_leg_counts:
+                total_legs = max(total_legs, sum(player_leg_counts))
+
+        # Format 3: state["scores"] = [{"legs": N}, ...] (only if items are dicts with explicit "legs" key)
+        scores = state.get("scores")
+        if isinstance(scores, list) and scores:
+            score_legs = 0
+            for idx, s in enumerate(scores):
+                if isinstance(s, dict):
+                    legs_val = s.get("legs") if s.get("legs") is not None else s.get("legsWon") if s.get("legsWon") is not None else s.get("legs_won")
+                    if isinstance(legs_val, (int, float)) and int(legs_val) < 100:
+                        score_legs += int(legs_val)
+                        has_leg_info = True
+                        if idx < len(player_leg_counts):
+                            player_leg_counts[idx] = max(player_leg_counts[idx], int(legs_val))
+                        else:
+                            player_leg_counts.append(int(legs_val))
+            if score_legs > total_legs:
+                total_legs = score_legs
+        return total_legs, has_leg_info, player_leg_counts
+
+    @staticmethod
+    def _legs_to_win(state: dict) -> Optional[int]:
+        """Legs needed to win the match (1..30; point targets like 501 are never taken for it)."""
+        legs_to_win = None
+        for key in ["targetLegs", "legsToWin"]:
+            val = state.get(key)
+            if isinstance(val, (int, float)) and 1 <= int(val) <= 30:
+                legs_to_win = int(val)
+                break
+        if not legs_to_win:
+            match_obj = state.get("match") or state.get("settings") or state.get("game") or state.get("rules")
+            if isinstance(match_obj, dict):
+                for key in ["targetLegs", "legsToWin", "legs"]:
+                    val = match_obj.get(key)
+                    if isinstance(val, (int, float)) and 1 <= int(val) <= 30:
+                        legs_to_win = int(val)
+                        break
+        return legs_to_win
+
+    def _explicit_winner(self, state: dict) -> Tuple[Any, bool]:
+        """(winner as the state names it, whether it names one)."""
+        # Check Match Winner & Finished
+        has_explicit_winner = False
+        raw_winner = state.get("winner")
+        if raw_winner is None and isinstance(state.get("match"), dict):
+            raw_winner = state.get("match", {}).get("winner")
+        # After a bull-off Autodarts lists the players winner-first, but "winner" still counts in the lobby
+        # order (seen in real games 2026-11-02). gameWinner, the winner of the deciding leg, uses the current
+        # order, so it names the match winner reliably once that leg is over.
+        game_winner = state.get("gameWinner")
+        if state.get("gameFinished") is True and isinstance(game_winner, int) and 0 <= game_winner < len(self.current_players):
+            raw_winner = game_winner
+
+        if isinstance(raw_winner, int) and 0 <= raw_winner < len(self.current_players):
+            has_explicit_winner = True
+        elif isinstance(raw_winner, str) and raw_winner.strip() and raw_winner.strip().lower() not in ["-1", "none", "null", "false", ""]:
+            has_explicit_winner = True
+        elif isinstance(raw_winner, dict) and (raw_winner.get("name") or raw_winner.get("username") or raw_winner.get("displayName")):
+            has_explicit_winner = True
+        else:
+            raw_winner = None
+        return raw_winner, has_explicit_winner
+
+    async def _parse_match_state(self, state: dict):
+        self.remember_match_state(state)
+        # Check if match was aborted / cancelled / deleted / stopped
+        status_val = str(state.get("status", "")).lower()
+        is_match_aborted = self._is_aborted(state, status_val)
         if is_match_aborted:
             logger.info(f"Match {self._active_match_id} state reported aborted/cancelled (status: {status_val}) -> emitting GAME_IDLE")
             self._active_match_id = None
@@ -856,198 +1088,17 @@ class AutodartsClient:
                 if throw_id != self._last_throw_id:
                     self._last_throw_id = throw_id
                     self._in_leg_break = False
-                    # Extract segment info
-                    seg = last_throw.get("segment")
-                    seg_name = ""
-                    seg_number = None
-                    seg_mult = None
-                    seg_bed = ""
+                    score, mult, seg_label = self._read_throw(last_throw)
 
-                    if isinstance(seg, dict):
-                        seg_name = str(seg.get("name") or "").strip()
-                        seg_number = seg.get("number")
-                        seg_mult = seg.get("multiplier")
-                        seg_bed = str(seg.get("bed") or "").strip().lower()
-                    elif isinstance(seg, str):
-                        seg_name = seg.strip()
-                    elif isinstance(seg, (int, float)):
-                        seg_number = int(seg)
-
-                    # Extract raw throw score and multiplier
-                    raw_score = last_throw.get("score")
-                    raw_points = last_throw.get("points")
-                    raw_mult = last_throw.get("multiplier")
-
-                    # Compute score number (1..20, 25, 50, 0)
-                    score = 0
-                    if seg_number is not None and isinstance(seg_number, (int, float)):
-                        score = int(seg_number)
-                    elif raw_score is not None and isinstance(raw_score, (int, float)):
-                        score = int(raw_score)
-                    elif raw_points is not None and isinstance(raw_points, (int, float)):
-                        score = int(raw_points)
-
-                    # Compute multiplier (0, 1, 2, 3)
-                    mult = 1
-                    if seg_mult is not None and isinstance(seg_mult, (int, float)):
-                        mult = int(seg_mult)
-                    elif raw_mult is not None and isinstance(raw_mult, (int, float)):
-                        mult = int(raw_mult)
-                    elif seg_bed == "triple":
-                        mult = 3
-                    elif seg_bed == "double":
-                        mult = 2
-                    elif seg_bed == "single":
-                        mult = 1
-                    elif seg_bed in ["outside", "miss", "off"]:
-                        mult = 0
-
-                    # Parse segment name string if available (e.g. "T20", "D16", "S5", "Bull", "25", "Outside", "Miss")
-                    u_name = seg_name.upper()
-                    if u_name.startswith("T") and len(u_name) > 1 and u_name[1:].isdigit():
-                        mult = 3
-                        score = int(u_name[1:])
-                    elif u_name.startswith("D") and len(u_name) > 1 and u_name[1:].isdigit():
-                        mult = 2
-                        score = int(u_name[1:])
-                    elif u_name.startswith("S") and len(u_name) > 1 and u_name[1:].isdigit():
-                        mult = 1
-                        score = int(u_name[1:])
-                    elif u_name in ["BULL", "DBULL", "DOUBLE BULL", "DOUBLE_BULL", "BULLSEYE", "50"]:
-                        mult = 2
-                        score = 25
-                        seg_name = "Bull"
-                    elif u_name in ["25", "SBULL", "SINGLE BULL", "SINGLE_BULL", "OUTER BULL"]:
-                        mult = 1
-                        score = 25
-                        seg_name = "25"
-                    elif u_name in ["MISS", "OUTSIDE", "OFF", "0", "NONE"]:
-                        mult = 0
-                        score = 0
-                        if not seg_name:
-                            seg_name = "Miss"
-
-                    # Normalize seg_label notation
-                    if seg_name:
-                        seg_label = seg_name
-                    elif score == 0 or mult == 0:
-                        seg_label = "Miss"
-                    elif score == 25 and mult == 2:
-                        seg_label = "Bull"
-                    elif score == 25 and mult == 1:
-                        seg_label = "25"
-                    elif mult == 3:
-                        seg_label = f"T{score}"
-                    elif mult == 2:
-                        seg_label = f"D{score}"
-                    elif mult == 1:
-                        seg_label = f"S{score}"
-                    else:
-                        seg_label = str(score)
-
-                    # 1. Check 180 (turn score == 180)
-                    turn_points = last_turn.get("points", 0)
-                    # The visit total rides on its third dart, so a flow can celebrate a ton (100+) or ton-40
-                    visit_total = turn_points if (len(throws) == 3 and isinstance(turn_points, int)) else None
-                    if len(throws) == 3 and turn_points == 180 and not self._last_180_fired:
-                        self._last_180_fired = True
-                        await self._emit_event(DartEvent(event_type=DartEventType.SCORE_180, score=180, segment_name="180", board_id=self.board_id))
-
-                    # 2. Check Bust (Turn or throw marked as busted)
-                    elif (last_turn.get("busted") is True or last_throw.get("busted") is True or last_turn.get("bust") is True or last_throw.get("bust") is True):
-                        if not self._last_bust_fired:
-                            self._last_bust_fired = True
-                            logger.info(f"Bust detected on throw {throw_id} (Turn busted)")
-                            await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=score, segment_name=seg_label or "Bust", board_id=self.board_id))
-
-                    # 3. Check Miss (Score 0, Multiplier 0, Outside, or Miss)
-                    elif ((score == 0 and mult == 0) or seg_label.lower() in ["miss", "outside", "off", "none"]):
-                        logger.info(f"Miss detected on throw {throw_id} (Score: {score}, Multiplier: {mult}, Segment: {seg_label or 'Miss'})")
-                        await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=0, multiplier=0, segment_number=0, segment_name=seg_label or "Miss", board_id=self.board_id))
-
-                    # 4. Check Triple Hit
-                    elif mult == 3:
-                        logger.info(f"Triple hit detected on throw {throw_id}: {seg_label} (Multiplier: 3)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.TRIPLE, score=score * 3, multiplier=3, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
-
-                    # 5. Check Bullseye (50 points)
-                    elif (mult == 2 and score == 25) or seg_label in ["Bull", "50"]:
-                        logger.info(f"Bullseye hit detected on throw {throw_id}: Bull (50)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.BULLSEYE, score=50, multiplier=2, segment_number=25, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
-
-                    # 6. Check Double Hit (D1..D20)
-                    elif mult == 2:
-                        logger.info(f"Double hit detected on throw {throw_id}: {seg_label} (Multiplier: 2)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.DOUBLE, score=score * 2, multiplier=2, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
-
-                    # 7. Check Single Hit (S1..S20, 25)
-                    elif mult == 1:
-                        logger.info(f"Single hit detected on throw {throw_id}: {seg_label} (Multiplier: 1)")
-                        await self._emit_event(DartEvent(event_type=DartEventType.SINGLE, score=score, multiplier=1, segment_number=score, segment_name=seg_label, round_score=visit_total, board_id=self.board_id))
+                    await self._emit_throw_events(last_turn, last_throw, throws, throw_id, score, mult, seg_label)
 
         if is_bull_off:
             # After the deciding dart's own hit effect, which arrives in the same message
             await self._check_bull_off_winner(state)
             return
 
-        # Multi-schema completed legs counting
-        total_legs = 0
-        has_leg_info = False
-
-        # Format 1: state["legs"] = [...] (list of completed leg objects)
-        legs_list = state.get("legs")
-        if isinstance(legs_list, list):
-            has_leg_info = True
-            won_legs = sum(1 for lg in legs_list if isinstance(lg, dict) and (lg.get("winner") is not None or lg.get("finished") is True))
-            total_legs = max(total_legs, won_legs)
-
-        # Format 2: state["players"] = [{"legs": N}, ...] or [{"legsWon": N}, ...] or [{"stats": {"legsWon": N}}]
-        players_list = state.get("players")
-        player_leg_counts: List[int] = []
-        if isinstance(players_list, list) and players_list:
-            for p in players_list:
-                if isinstance(p, dict):
-                    l_val = p.get("legsWon") if p.get("legsWon") is not None else p.get("legs") if p.get("legs") is not None else p.get("stats", {}).get("legs") if isinstance(p.get("stats"), dict) else None
-                    if isinstance(l_val, (int, float)) and int(l_val) < 100:  # < 100 ensures point scores like 501 are never treated as legs
-                        player_leg_counts.append(int(l_val))
-                        has_leg_info = True
-                    else:
-                        player_leg_counts.append(0)
-            if player_leg_counts:
-                total_legs = max(total_legs, sum(player_leg_counts))
-
-        # Format 3: state["scores"] = [{"legs": N}, ...] (only if items are dicts with explicit "legs" key)
-        scores = state.get("scores")
-        if isinstance(scores, list) and scores:
-            score_legs = 0
-            for idx, s in enumerate(scores):
-                if isinstance(s, dict):
-                    legs_val = s.get("legs") if s.get("legs") is not None else s.get("legsWon") if s.get("legsWon") is not None else s.get("legs_won")
-                    if isinstance(legs_val, (int, float)) and int(legs_val) < 100:
-                        score_legs += int(legs_val)
-                        has_leg_info = True
-                        if idx < len(player_leg_counts):
-                            player_leg_counts[idx] = max(player_leg_counts[idx], int(legs_val))
-                        else:
-                            player_leg_counts.append(int(legs_val))
-            if score_legs > total_legs:
-                total_legs = score_legs
-
-        # Legs to win check (Only check leg counts <= 30, never point targets like 501)
-        legs_to_win = None
-        for key in ["targetLegs", "legsToWin"]:
-            val = state.get(key)
-            if isinstance(val, (int, float)) and 1 <= int(val) <= 30:
-                legs_to_win = int(val)
-                break
-        if not legs_to_win:
-            match_obj = state.get("match") or state.get("settings") or state.get("game") or state.get("rules")
-            if isinstance(match_obj, dict):
-                for key in ["targetLegs", "legsToWin", "legs"]:
-                    val = match_obj.get(key)
-                    if isinstance(val, (int, float)) and 1 <= int(val) <= 30:
-                        legs_to_win = int(val)
-                        break
+        total_legs, has_leg_info, player_leg_counts = self._count_legs(state)
+        legs_to_win = self._legs_to_win(state)
 
         # Check if any player reached legs_to_win (must have won at least 1 leg)
         winning_player_idx = None
@@ -1057,26 +1108,7 @@ class AutodartsClient:
                     winning_player_idx = idx
                     break
 
-        # Check Match Winner & Finished
-        has_explicit_winner = False
-        raw_winner = state.get("winner")
-        if raw_winner is None and isinstance(state.get("match"), dict):
-            raw_winner = state.get("match", {}).get("winner")
-        # After a bull-off Autodarts lists the players winner-first, but "winner" still counts in the lobby
-        # order (seen in real games 2026-11-02). gameWinner, the winner of the deciding leg, uses the current
-        # order, so it names the match winner reliably once that leg is over.
-        game_winner = state.get("gameWinner")
-        if state.get("gameFinished") is True and isinstance(game_winner, int) and 0 <= game_winner < len(self.current_players):
-            raw_winner = game_winner
-
-        if isinstance(raw_winner, int) and 0 <= raw_winner < len(self.current_players):
-            has_explicit_winner = True
-        elif isinstance(raw_winner, str) and raw_winner.strip() and raw_winner.strip().lower() not in ["-1", "none", "null", "false", ""]:
-            has_explicit_winner = True
-        elif isinstance(raw_winner, dict) and (raw_winner.get("name") or raw_winner.get("username") or raw_winner.get("displayName")):
-            has_explicit_winner = True
-        else:
-            raw_winner = None
+        raw_winner, has_explicit_winner = self._explicit_winner(state)
 
         is_match_finished = (
             state.get("finished") is True

@@ -1105,6 +1105,7 @@ function locatorCheck() {
       seg.id !== null && segmented(['cw', 'ccw', 'off'], seg.locator === false ? 'off' : seg.clockwise === false ? 'ccw' : 'cw', async v => {
         try {
           await api.post('/api/flow/segment-direction', { ip: seg.ip, segment_id: seg.id, direction: v });
+          await window.loadConfig();
           await loadOverview();
           render();
         } catch (err) { toast.error(err); }

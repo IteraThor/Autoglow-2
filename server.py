@@ -4,6 +4,7 @@ Modularized modern web server with mDNS discovery, REST API, and WebSocket strea
 """
 
 import os
+import re
 import sys
 import secrets
 import socket
@@ -55,6 +56,19 @@ root_logger.addHandler(console_handler)
 root_logger.addHandler(file_handler)
 
 logger = logging.getLogger("autoglow.server")
+
+
+class _SkipRoutineReads(logging.Filter):
+    """Pages poll the API every few seconds; their successful GETs would fill the log. Writes, errors and
+    everything that is not a plain read stay in it."""
+    _OK_GET = re.compile(r'"GET [^"]*" [23]\d\d ')
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not self._OK_GET.search(record.getMessage())
+
+
+access_logger = logging.getLogger("autoglow.access")
+access_logger.addFilter(_SkipRoutineReads())
 
 
 def _asyncio_loop_exception_handler(loop: asyncio.AbstractEventLoop, context: dict):
@@ -325,7 +339,7 @@ async def run_server() -> bool:
     loop.set_exception_handler(_asyncio_loop_exception_handler)
 
     app = create_app()
-    runner = web.AppRunner(app, access_log=logger)
+    runner = web.AppRunner(app, access_log=access_logger)
     await runner.setup()
     await web.TCPSite(runner, host="0.0.0.0", port=PORT).start()
     # "localhost" resolves to ::1 first on many systems, so also listen on IPv6 where it exists

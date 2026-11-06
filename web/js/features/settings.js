@@ -104,8 +104,9 @@ export async function save() {
   try {
     if (timersChanged()) {
       const previous = { ...window.appState };
-      Object.assign(window.appState, window.readPowerDraft(), { auto_connect_udp_on_game_start: true });
-      if (await window.saveAllConfig({ quiet: true })) {
+      const changes = { ...window.readPowerDraft(), auto_connect_udp_on_game_start: true };
+      Object.assign(window.appState, changes);
+      if (await window.saveAllConfig({ quiet: true, fields: Object.keys(changes) })) {
         window.renderPowerTab();
       } else {
         window.appState = Object.assign(window.appState, previous);

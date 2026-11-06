@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import shutil
+import time
 import zipfile
 import logging
 from pathlib import Path
@@ -22,6 +23,7 @@ DEFAULT_CONFIG_PATH = str(PROJECT_ROOT / "config.json")
 BACKUPS_CONFIG_DIR = PROJECT_ROOT / "backups" / "configs"
 PRESETS_DIR = PROJECT_ROOT / "presets"
 DEFAULT_PROFILES_DIR = PROJECT_ROOT / "defaults" / "profiles"
+SNAPSHOT_MIN_SECONDS = 3600
 
 
 def resolve_config_path(config_path: Optional[str] = None) -> str:
@@ -166,11 +168,14 @@ def save_app_config(
             if os.path.abspath(target_path) == os.path.abspath(DEFAULT_CONFIG_PATH):
                 try:
                     os.makedirs(BACKUPS_CONFIG_DIR, exist_ok=True)
-                    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    snap_path = BACKUPS_CONFIG_DIR / f"config_{ts}.json"
-                    shutil.copy2(target_path, snap_path)
-
                     snaps = sorted(BACKUPS_CONFIG_DIR.glob("config_*.json"), key=os.path.getmtime)
+                    # At most one per hour: a burst of saves (one setup session) must not push out older snapshots
+                    if not snaps or time.time() - os.path.getmtime(snaps[-1]) >= SNAPSHOT_MIN_SECONDS:
+                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        snap_path = BACKUPS_CONFIG_DIR / f"config_{ts}.json"
+                        shutil.copy2(target_path, snap_path)
+                        snaps.append(snap_path)
+
                     if len(snaps) > 15:
                         for old_snap in snaps[:-15]:
                             try:
@@ -213,8 +218,11 @@ def save_preset_file(profile: ProfileConfig, presets_dir: Optional[str] = None) 
         p_dir = ensure_presets_dir(presets_dir)
         filename = sanitize_preset_filename(profile.name)
         target = p_dir / filename
-        with open(target, "w", encoding="utf-8") as f:
+        # Written beside the target and moved in, so a crash never leaves a half-written preset
+        tmp = target.with_name(target.name + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(profile.to_dict(), f, indent=4)
+        os.replace(tmp, target)
         return True
     except Exception as e:
         logger.warning(f"Could not write preset file for '{profile.name}': {e}")
@@ -273,10 +281,11 @@ def seed_default_profiles(cfg: AppConfig, defaults_dir: Optional[str] = None) ->
     return changed
 
 
-def sync_presets_with_disk(cfg: AppConfig, presets_dir: Optional[str] = None) -> bool:
+def sync_presets_with_disk(cfg: AppConfig, presets_dir: Optional[str] = None, export: bool = True) -> bool:
     """
     Bi-directionally synchronize presets between AppConfig and the presets/ folder:
-    1. Writes all current AppConfig profiles to individual files in presets/.
+    1. With export, writes all current AppConfig profiles to individual files in presets/ (at startup;
+       routes keep the files current when a preset changes, so a page load only looks for new files).
     2. Discovers any new .json preset files dropped into presets/ and loads them into cfg.profiles.
     Returns True if any new presets were added from disk.
     """
@@ -284,8 +293,9 @@ def sync_presets_with_disk(cfg: AppConfig, presets_dir: Optional[str] = None) ->
     changed = seed_default_profiles(cfg)
 
     # 1. Export current in-memory profiles to presets folder
-    for prof in cfg.profiles:
-        save_preset_file(prof, presets_dir=str(p_dir))
+    if export:
+        for prof in cfg.profiles:
+            save_preset_file(prof, presets_dir=str(p_dir))
 
     # 2. Scan presets folder for external preset files
     existing_names = {p.name.lower(): p for p in cfg.profiles}

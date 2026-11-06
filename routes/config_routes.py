@@ -28,14 +28,17 @@ async def handle_post_config(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
     data = await read_json(request)
+    existing_cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    # A page sends only the settings it edits; everything else stays as the server has it now. Other pages
+    # and tabs save profiles, timers or strip directions on their own, and a whole stale copy would undo them.
+    merged = {**existing_cfg.to_dict(), **data} if isinstance(data, dict) else data
     try:
-        cfg = AppConfig.from_dict(data)
+        cfg = AppConfig.from_dict(merged)
     except Exception:
         logger.warning("Rejected unparseable configuration", exc_info=True)
         raise ValidationError("Configuration is not valid") from None
 
     # Merge & preserve sensitive credentials and tokens if omitted or blank in incoming payload
-    existing_cfg = request.app.get("current_app_config") or load_app_config(config_path)
     # The PIN is only changed through /api/auth/pin, never through a config save
     cfg.extra.pop(PIN_HASH_KEY, None)
     if existing_cfg:

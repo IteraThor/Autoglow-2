@@ -23,6 +23,7 @@ import os
 import shutil
 import sys
 import tempfile
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -432,7 +433,20 @@ class GameFlowStorageManager:
                     return data
             except Exception as e:
                 logger.warning(f"Failed to read {path}: {e}")
+                if path == self.filepath:
+                    self._quarantine()
         return {}
+
+    def _quarantine(self) -> None:
+        """Keep an unreadable flow file under another name: it is replaced by the backup or the defaults next."""
+        try:
+            if os.path.getsize(self.filepath) == 0:
+                return
+            target = f"{self.filepath}.corrupt_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            shutil.copy2(self.filepath, target)
+            logger.error(f"Game flow file is not readable; kept a copy as {target}")
+        except OSError as e:
+            logger.warning(f"Could not keep a copy of the unreadable game flow file: {e}")
 
     def _data_now(self) -> Dict[str, Any]:
         """The file's contents in the current format (created or converted and saved on first use)."""

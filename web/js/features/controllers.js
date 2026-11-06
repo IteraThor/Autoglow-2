@@ -66,7 +66,7 @@ export async function saveDevices(next, successMessage) {
   // The server rebuilds a device from the legacy wifi_ip when the list is empty, so keep them in step
   window.appState.wifi_ip = next[0]?.ip || '';
   try {
-    await api.post('/api/config', window.appState);
+    await api.post('/api/config', { devices: window.appState.devices, wifi_ip: window.appState.wifi_ip });
     if (successMessage) toast.success(successMessage);
     await window.loadConfig();
     return true;
