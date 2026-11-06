@@ -784,15 +784,22 @@ async function load() {
 const STATUS_MS = 2000;
 let statusTimer = null;
 
-// Detection on this computer: the Board Manager's cameras (and so the Autodarts cameras) run only while it runs
-function autodartsRow(ad) {
-  if (!ad?.reachable) return statusRow('Autodarts', 'Board Manager not found', 'warn');
-  if (ad.running) return statusRow('Autodarts', 'Running', 'ok');
-  return [h('dt', {}, 'Autodarts'), h('dd', { class: 'warn studio-status-action' }, 'Stopped', startButton(refreshStatus))];
+// One checklist step, styled like Setup › Autodarts: state is done, todo (needs you) or wait (not yet)
+function step(state, title, detail, extra = [], action = null) {
+  return h('li', { class: 'ad-step', 'data-state': state },
+    h('span', { class: 'ad-step-mark', 'aria-hidden': 'true' }),
+    h('div', { class: 'ad-step-body' },
+      h('div', { class: 'ad-step-title' }, title),
+      h('div', { class: 'ad-step-detail', title: String(detail) }, detail),
+      ...extra.map(([label, value, warn]) => h('div', { class: `ad-step-events${warn ? ' is-warn' : ''}` }, `${label}: `, h('strong', {}, value)))),
+    action);
 }
 
-function statusRow(label, value, tone) {
-  return [h('dt', {}, label), h('dd', { class: tone || null, title: String(value) }, value)];
+// Detection on this computer: the Board Manager's cameras (and so the Autodarts cameras) run only while it runs
+function autodartsStep(ad) {
+  if (!ad?.reachable) return step('todo', 'Autodarts', 'Board Manager not found');
+  if (ad.running) return step('done', 'Autodarts', 'Running');
+  return step('todo', 'Autodarts', 'Stopped', [], h('span', { class: 'ad-step-action' }, startButton(refreshStatus)));
 }
 
 async function refreshStatus() {
@@ -805,18 +812,22 @@ async function refreshStatus() {
     const src = st.source || { connected: !!st.source_connected };
     const names = (st.players || []).map(p => p.name).join(' vs ');
     const ago = src.updated_ago;
+    const details = st.live || names ? [
+      ['Score', (st.players || []).map(p => p.remaining ?? '–').join(' : ')],
+      ['Legs / sets', (st.players || []).map(p => `${p.legs}/${p.sets}`).join(' : ')],
+      ['Format', [st.variant, st.base_score, st.target].filter(Boolean).join(' · ') || 'Unknown', !st.target]
+    ] : [];
     host.replaceChildren(
-      ...statusRow('Bridge extension', src.connected ? `Connected${src.extension_version ? ` (v${src.extension_version})` : ''}` : 'Not connected', src.connected ? 'ok' : 'bad'),
-      ...statusRow('Autodarts tab', src.tab_attached ? 'Open' : 'Not open', src.tab_attached ? 'ok' : 'warn'),
-      ...autodartsRow(ad),
-      ...statusRow('Match', st.live ? (names || 'Running') : names ? `Over: ${names}` : 'None', st.live ? 'ok' : null),
-      ...(st.live || names ? [
-        ...statusRow('Score', (st.players || []).map(p => p.remaining ?? '–').join(' : ')),
-        ...statusRow('Legs / sets', (st.players || []).map(p => `${p.legs}/${p.sets}`).join(' : ')),
-        ...statusRow('Format', [st.variant, st.base_score, st.target].filter(Boolean).join(' · ') || 'Unknown', st.target ? null : 'warn')
-      ] : []),
-      ...statusRow('Last data', typeof ago === 'number' ? `${Math.round(ago)} s ago` : 'Nothing received yet', typeof ago === 'number' ? null : 'warn')
+      step(src.connected ? 'done' : 'todo', 'Bridge extension', src.connected ? `Connected${src.extension_version ? ` (v${src.extension_version})` : ''}` : 'Not connected'),
+      step(src.tab_attached ? 'done' : src.connected ? 'todo' : 'wait', 'Autodarts tab', src.tab_attached ? 'Open' : 'Not open'),
+      autodartsStep(ad),
+      step(st.live ? 'done' : 'wait', 'Match', st.live ? (names || 'Running') : names ? `Over: ${names}` : 'None', details)
     );
+    const last = $('studioLastData');
+    if (last) {
+      last.textContent = typeof ago === 'number' ? `Last data ${Math.round(ago)} s ago` : 'Nothing received yet';
+      last.classList.toggle('is-warn', typeof ago !== 'number');
+    }
   } catch {
     // Shown again on the next refresh
   }

@@ -306,27 +306,40 @@
   min-width: 0;
 }
 
-.studio-status {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2) var(--space-4);
-  margin: 0;
-  font-size: var(--fs-sm);
+/* The checklist itself is .ad-steps in pages.css; here it sits in a panel and numbers itself */
+.ad-steps-compact {
+  padding: 0;
+  counter-reset: ad-step;
 }
 
-.studio-status dt { color: var(--text-secondary); }
+.ad-steps-compact .ad-step {
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  counter-increment: ad-step;
+}
 
-.studio-status dd {
-  margin: 0;
-  min-width: 0;
+.ad-steps-compact .ad-step:first-child { padding-top: 0; }
+.ad-steps-compact .ad-step:last-child { padding-bottom: 0; }
+
+.ad-steps-compact .ad-step-mark::before { content: counter(ad-step); }
+
+.ad-steps-compact .ad-step-detail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.studio-status .ok { color: var(--status-success); }
-.studio-status .warn { color: var(--status-warning); }
-.studio-status .bad { color: var(--status-danger); }
+.ad-step-events.is-warn strong { color: var(--status-warning); }
+
+.studio-last-data {
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.studio-last-data.is-warn { color: var(--status-warning); }
 
 /* --- Player profile fields and scene buttons ---------------------------------------------- */
 .studio-fields {
@@ -614,12 +627,6 @@
   gap: var(--space-2);
 }
 
-.studio-status dd.studio-status-action {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  overflow: visible;
-}
 
 /* --- Texts panel ------------------------------------------------------------------------------- */
 .studio-texts {
