@@ -554,16 +554,6 @@
             <h1 class="page-title">Power</h1>
           </div>
 
-          <!-- Lighting engine: decides what plays; the Lighting page shows the matching workspace -->
-          <div class="card pw-card">
-            <div class="card-head"><h2 class="card-title">Lighting engine</h2></div>
-            <div class="mode-switch pw-mode" id="modeSwitch" role="group" aria-label="Lighting engine">
-              <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
-              <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
-            </div>
-            <p class="form-hint" title="Chooses what plays during a game; the Lighting page opens the matching workspace. The Event Matrix still works, but it is not supported and gets no fixes or new features.">The Event Matrix still works but gets no updates.</p>
-          </div>
-
           <!-- Inactivity & standby timers (all controllers): one clock from the last dart -->
           <div class="card pw-card" id="powerGlobalTimersArea">
             <div class="card-head"><h2 class="card-title">When nobody plays</h2></div>
@@ -639,6 +629,16 @@
               <button class="ui-btn ui-btn-danger" id="btnRemovePin" type="button" aria-pressed="false" style="display: none;">Remove PIN</button>
             </div>
           </details>
+
+          <!-- Lighting engine: decides what plays; the Lighting page shows the matching workspace -->
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Lighting engine</h2></div>
+            <div class="mode-switch pw-mode" id="modeSwitch" role="group" aria-label="Lighting engine">
+              <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
+              <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
+            </div>
+            <p class="form-hint" title="Chooses what plays during a game; the Lighting page opens the matching workspace. The Event Matrix still works, but it is not supported and gets no fixes or new features.">The Event Matrix still works but gets no updates.</p>
+          </div>
 
           <!-- One save for everything on this page -->
           <div class="settings-savebar" id="settingsSaveBar">
