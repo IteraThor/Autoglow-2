@@ -11,7 +11,7 @@ import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 import { runControllerSetup } from './controller-setup.js';
 import { createIdleEditor } from './idle-lighting.js';
-import { applySetup, devices, layoutSummary, saveDevices } from './controllers.js';
+import { applySetup, devices, saveDevices } from './controllers.js';
 import {
   COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicatePins, isPwmOutput, outputTypeLabel, pinOf,
   removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
@@ -181,7 +181,7 @@ function segmentProfile(seg, pwm) {
   const current = entry.profile ?? profiles.default;
   const el = select(profiles.names.map(name => ({ value: name, label: name })), current, {
     class: 'ui-select ui-select-sm led-summary-seg-profile-select',
-    'aria-label': `Profile for ${seg.name}`, title: 'Flow Matrix profile this strip plays during a game',
+    'aria-label': `Profile for ${seg.name}`, title: 'Flow Matrix profile: what this strip plays during a game, and its look between games',
     onchange: () => assignSegmentProfile(seg, entry, el)
   });
   return el;
@@ -243,16 +243,20 @@ function ledCells(count, scale) {
   return Array.from({ length: n }, () => h('span', { class: 'wz-led' }));
 }
 
+// A whole strip is just its LEDs (name, count and profile are in the strip's header); a zone adds its number,
+// name, profile and LED range
 function zoneBlock(seg, index, whole, scale) {
   const count = seg.stop - seg.start;
-  const block = h('div', { class: 'wz-zone', dataset: { tone: whole ? 'whole' : String(index % 4) } },
-    h('div', { class: 'wz-zone-head' },
-      h('span', { class: 'wz-zone-tag', title: whole ? 'Whole strip' : `Zone ${index + 1}` }, whole ? 'All' : String(index + 1)),
-      // A whole strip is renamed in the strip's header, so its name shows once
-      whole ? h('span', { class: 'wz-zone-label' }, `LEDs ${seg.start + 1}–${seg.stop}`) : segmentNameInput(seg),
-      segmentProfile(seg, false)),
-    h('div', { class: 'wz-leds', role: 'img', 'aria-label': `LEDs ${seg.start + 1} to ${seg.stop}` }, ledCells(count, scale)),
-    h('div', { class: 'wz-range' }, h('span', {}, String(seg.start + 1)), h('span', {}, `${count} LEDs`), h('span', {}, String(seg.stop))));
+  const leds = h('div', { class: 'wz-leds', role: 'img', 'aria-label': `LEDs ${seg.start + 1} to ${seg.stop}` }, ledCells(count, scale));
+  const block = whole
+    ? h('div', { class: 'wz-zone', dataset: { tone: 'whole' } }, leds)
+    : h('div', { class: 'wz-zone', dataset: { tone: String(index % 4) } },
+      h('div', { class: 'wz-zone-head' },
+        h('span', { class: 'wz-zone-tag', title: `Zone ${index + 1}` }, String(index + 1)),
+        segmentNameInput(seg),
+        segmentProfile(seg, false)),
+      leds,
+      h('div', { class: 'wz-range', title: `${count} LEDs` }, `${seg.start + 1}–${seg.stop}`));
   // Width follows the zone's LED count
   block.style.flexGrow = String(count);
   return block;
@@ -261,28 +265,47 @@ function zoneBlock(seg, index, whole, scale) {
 function stripCard(hw, busIdx, segs) {
   const pwm = isPwmOutput(hw);
   const order = COLOR_ORDERS.find(o => o.value === hw.order)?.label;
+  // The full technical line stays one hover away
+  const tech = [`Output ${busIdx + 1}`, outputTypeLabel(hw.type), `GPIO ${pinOf(hw)}`].join(' · ');
   const wire = h('div', { class: 'wz-wire' }, h('span', { class: 'wz-pin' }, `GPIO ${pinOf(hw)}`));
   if (pwm) {
     const seg = segs[0];
+    // Its brightness between games is set right here (the idle editor fills the slot)
     return h('li', { class: 'wz-row', dataset: { kind: 'pwm' } }, wire,
-      h('div', { class: 'wz-strip' },
+      h('div', { class: 'wz-strip', title: tech },
         h('div', { class: 'wz-strip-head' },
           seg ? segmentNameInput(seg) : h('strong', {}, `Output ${busIdx + 1}`),
-          h('span', { class: 'wz-meta' }, `Output ${busIdx + 1} · ${outputTypeLabel(hw.type)} · brightness only`),
-          h('span', { class: 'wz-badge' }, segmentProfile(seg || {}, true))),
-        h('div', { class: 'wz-white' })));
+          h('span', { class: 'wz-meta' }, 'Brightness only, no game effects'),
+          seg && h('span', { class: 'wz-idle-switch', dataset: { seg: String(seg.id) } })),
+        h('div', { class: 'wz-white' }),
+        seg && h('div', { class: 'wz-idle', dataset: { seg: String(seg.id) } })));
   }
   const whole = segs.length <= 1;
   const scale = Math.min(1, LED_CELLS_MAX / Math.max(1, hw.len));
   return h('li', { class: 'wz-row', dataset: { kind: 'rgb' } }, wire,
     h('div', { class: 'wz-strip' },
-      h('div', { class: 'wz-strip-head' },
+      h('div', { class: 'wz-strip-head', title: tech },
         whole && segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
-        h('span', { class: 'wz-meta' }, [`Output ${busIdx + 1}`, outputTypeLabel(hw.type), `${hw.len} LEDs`, order].filter(Boolean).join(' · ')),
-        h('span', { class: `wz-badge${whole ? '' : ' is-zones'}` }, whole ? 'Whole strip' : `${segs.length} zones`)),
+        h('span', { class: 'wz-meta' }, [`${hw.len} LEDs`, order].filter(Boolean).join(' · ')),
+        whole
+          ? segs[0] && h('span', { class: 'wz-head-profile' }, segmentProfile(segs[0], false))
+          : h('span', { class: 'wz-badge is-zones' }, `${segs.length} zones`)),
       segs.length
         ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale)))
         : h('p', { class: 'wz-none' }, 'No segment')));
+}
+
+// Put each light strip's idle controls into its card in the wiring
+function placeIdle() {
+  if (!page?.idle) return;
+  page.bodies.leds.querySelectorAll('.wz-idle-switch[data-seg]').forEach(slot => {
+    const el = page.idle.switchFor(slot.dataset.seg);
+    if (el) slot.replaceChildren(el);
+  });
+  page.bodies.leds.querySelectorAll('.wz-idle[data-seg]').forEach(slot => {
+    const el = page.idle.elementFor(slot.dataset.seg);
+    if (el) slot.replaceChildren(h('span', { class: 'wz-idle-label', title: 'Changes show right away; Save keeps them on the controller.' }, 'Between games'), el);
+  });
 }
 
 function renderLedSummary(body) {
@@ -294,8 +317,7 @@ function renderLedSummary(body) {
           svg('rect', { x: 5, y: 5, width: 14, height: 14, rx: 2 }), svg('rect', { x: 9, y: 9, width: 6, height: 6 }),
           svg('path', { d: 'M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3' })),
         h('strong', {}, 'Controller'),
-        page.live?.info?.arch && h('span', { class: 'wz-arch' }, page.live.info.arch.toUpperCase()),
-        page.live?.version && h('span', {}, `WLED ${page.live.version}`)),
+        page.live?.info?.arch && h('span', { class: 'wz-arch' }, page.live.info.arch.toUpperCase())),
       h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => stripCard(hw, busIdx, layout.segments.filter(seg => seg.busIdx === busIdx))))),
     h('div', { class: 'led-summary-actions' },
       h('button', {
@@ -303,6 +325,7 @@ function renderLedSummary(body) {
         title: 'Answer a few questions and let AutoGlow configure the LEDs'
       }, 'Run guided setup'),
       h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…')));
+  placeIdle();
 }
 
 async function openLedEditor() {
@@ -335,6 +358,7 @@ function renderLeds(body) {
     body.replaceChildren(offlineNotice('to edit its LEDs'));
     return;
   }
+  if (page.idle) renderIdle(page.bodies.idle);
   if (!page.ledsAdvanced) {
     renderLedSummary(body);
     return;
@@ -443,7 +467,6 @@ function renderHead() {
   // replaceChildren would print false/null as text, so drop them
   page.meta.replaceChildren(...[
     h('a', { class: 'ctl-ip', href: `http://${dev.ip}`, target: '_blank', rel: 'noopener noreferrer', title: 'Open the WLED web interface' }, `${dev.ip} ↗`),
-    online && h('span', {}, layoutSummary(live)),
     online && live.version && h('span', {}, `WLED ${live.version}`)].filter(Boolean));
   // save() only renames in WLED when the controller is reachable
   page.nameInput.title = page.layout && online ? 'Rename. Also changes the name shown in WLED.' : 'Rename.';
@@ -478,6 +501,13 @@ function renderIdle(body) {
     page.idle.load().then(sync);
   }
   if (!page.idle) return;
+  // Normally the controls sit in the light strip's card in the wiring; the manual editor replaces that view
+  page.sections.idle.hidden = !page.ledsAdvanced;
+  if (!page.ledsAdvanced) {
+    body.replaceChildren();
+    placeIdle();
+    return;
+  }
   body.replaceChildren(...page.idleSegments.map(seg => h('div', { class: 'idle-light' },
     h('div', { class: 'idle-light-head' }, h('strong', {}, seg.name), page.idle.switchFor(seg.id)),
     page.idle.elementFor(seg.id))));
@@ -654,7 +684,7 @@ export async function openDetail(ip, { force = false } = {}) {
     page.meta);
 
   page.bodies.leds = h('div');
-  page.sections.leds = section('leds', 'Wiring', 'What is connected to the controller. To change it, run the guided setup.', page.bodies.leds);
+  page.sections.leds = section('leds', 'Wiring', null, page.bodies.leds);
   page.bodies.idle = h('div', { class: 'idle-lights' });
   page.sections.idle = section('idle', 'Light strips between games', 'How bright the light strips are when no game is running. Changes show right away; Save keeps them on the controller. RGB strips show the idle effect of their profile.', page.bodies.idle);
   page.saveNote = h('span', { class: 'savebar-note' });
