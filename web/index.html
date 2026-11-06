@@ -539,146 +539,109 @@
         </section>
 
         <!-- TAB 5: SETTINGS (lighting engine, inactivity & standby timers, access PIN) -->
-        <section id="tab-settings" class="tab-pane">
+        <section id="tab-settings" class="tab-pane pw-page">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Power</h1>
+              <p class="page-lead">What plays during a game, and when the lights go back to idle and switch off.</p>
+            </div>
+          </div>
 
           <!-- Lighting engine: decides what plays; the Lighting page shows the matching workspace -->
-          <div class="ide-panel">
-            <div class="panel-header">
-              <span class="panel-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                <span>Lighting Engine</span>
-              </span>
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Lighting engine</h2></div>
+            <div class="mode-switch pw-mode" id="modeSwitch" role="group" aria-label="Lighting engine">
+              <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
+              <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
             </div>
-            <div class="panel-body" style="display: flex; flex-direction: column; gap: 10px;">
-              <div class="mode-switch" style="align-self: flex-start;" id="modeSwitch" role="group" aria-label="Lighting engine">
-                <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
-                <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
-              </div>
-              <div style="font-size: 11.5px; color: var(--text-secondary);">Chooses what plays during a game. The Lighting page opens the matching workspace. Flow Matrix is the default. The Event Matrix is the old engine: it still works, but it is not supported and gets no fixes or new features.</div>
-            </div>
+            <p class="form-hint">Chooses what plays during a game. The Lighting page opens the matching workspace. Flow Matrix is the default. The Event Matrix is the old engine: it still works, but it is not supported and gets no fixes or new features.</p>
           </div>
 
-          
-          <!-- Inactivity & standby timers (all controllers) -->
-          <div id="powerGlobalTimersArea" style="margin-bottom: 16px;">
-            <div class="ide-panel" style="margin-bottom: 0;">
-              <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--status-warning)" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-                  <span>Inactivity &amp; Standby Timers</span>
+          <!-- Inactivity & standby timers (all controllers), drawn as what happens after a game -->
+          <div class="card pw-card" id="powerGlobalTimersArea">
+            <div class="card-head"><h2 class="card-title">After a game</h2></div>
+            <ol class="pw-timeline">
+              <li class="pw-stop">
+                <span class="pw-dot pw-dot-live" aria-hidden="true"></span>
+                <span class="pw-stop-title">Game running</span>
+                <span class="pw-stop-desc">Live effects, streamed to the controllers (UDP)</span>
+              </li>
+
+              <li class="pw-link power-setting-row" id="inactivityTimeoutRow">
+                <label class="switch" title="Enable / Disable Inactivity Timeout">
+                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange()">
+                  <span class="switch-slider"></span>
+                </label>
+                <span class="power-setting-controls pw-link-controls" id="inactivityControlsGroup">
+                  after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Inactivity timeout in minutes" onchange="handleInactivityTimeoutChange()" oninput="handleInactivityTimeoutChange()"> min without throws
                 </span>
-              </div>
-              <div class="panel-body" style="display: flex; flex-direction: column; gap: 12px;">
-                
-                <!-- Inactivity Timeout (Minutes) -->
-                <div class="power-setting-row" id="inactivityTimeoutRow" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px;">
-                    <label class="switch" title="Enable / Disable Inactivity Timeout" style="margin: 0; flex-shrink: 0;">
-                      <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange()">
-                      <span class="switch-slider"></span>
-                    </label>
-                    <div class="power-setting-info" style="margin: 0;">
-                      <span class="power-setting-title">Inactivity Timeout</span>
-                      <span class="power-setting-desc">Minutes without throws before releasing UDP mode and going back to each controller's idle lighting.</span>
-                    </div>
-                  </div>
-                  <div id="inactivityControlsGroup" class="power-setting-controls" style="display: flex; align-items: center; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                      <input type="number" class="input-text" id="inactivityTimeoutMinInput" value="5" min="1" max="240" style="width: 55px; height: 26px; padding: 0 6px; box-sizing: border-box; font-size: 11px;" onchange="handleInactivityTimeoutChange()" oninput="handleInactivityTimeoutChange()">
-                      <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">min</span>
-                    </div>
-                  </div>
-                </div>
+              </li>
 
-                <!-- Disconnect UDP on Match Ending / Abortion -->
-                <div class="power-setting-row" id="matchEndDisconnectRow" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px;">
-                    <label class="switch" title="Enable / Disable UDP disconnect on match ending or abortion" style="margin: 0; flex-shrink: 0;">
-                      <input type="checkbox" id="disconnectUdpOnMatchEndToggle" onchange="handleMatchEndDisconnectToggleChange()">
-                      <span class="switch-slider"></span>
-                    </label>
-                    <div class="power-setting-info" style="margin: 0;">
-                      <span class="power-setting-title">Inactivity Timeout: on Match End</span>
-                      <span class="power-setting-desc">Automatically release UDP stream and go back to the idle lighting when a match finishes or is aborted.</span>
-                    </div>
-                  </div>
-                </div>
+              <li class="pw-stop">
+                <span class="pw-dot pw-dot-idle" aria-hidden="true"></span>
+                <span class="pw-stop-title">Idle lighting</span>
+                <span class="pw-stop-desc">Releases the UDP stream; each controller goes back to its own idle lighting.</span>
+                <label class="pw-check power-setting-row" id="matchEndDisconnectRow" title="Enable / Disable UDP disconnect on match ending or abortion">
+                  <span class="switch">
+                    <input type="checkbox" id="disconnectUdpOnMatchEndToggle" onchange="handleMatchEndDisconnectToggleChange()">
+                    <span class="switch-slider"></span>
+                  </span>
+                  <span class="power-setting-info">Also right away when a match finishes or is aborted</span>
+                </label>
+              </li>
 
-                <!-- Auto-Off Timer (Minutes) -->
-                <div class="power-setting-row" id="standbyTimeoutRow" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-                  <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px;">
-                    <label class="switch" title="Enable / Disable Auto-Off Timeout" style="margin: 0; flex-shrink: 0;">
-                      <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange()">
-                      <span class="switch-slider"></span>
-                    </label>
-                    <div class="power-setting-info" style="margin: 0;">
-                      <span class="power-setting-title">Auto-Off Timeout</span>
-                      <span class="power-setting-desc">Minutes of inactivity before completely turning off lights.</span>
-                    </div>
-                  </div>
-                  <div id="standbyControlsGroup" class="power-setting-controls" style="display: flex; align-items: center; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                      <input type="number" class="input-text" id="idlePowerOffMinInput" value="30" min="1" max="240" style="width: 55px; height: 26px; padding: 0 6px; box-sizing: border-box; font-size: 11px;" onchange="handleStandbyTimeoutChange()" oninput="handleStandbyTimeoutChange()">
-                      <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">min</span>
-                    </div>
-                    <button class="btn-ide" id="btnTestAutoOff" onclick="testPowerOff()" style="height: 26px; font-size: 10.5px; padding: 0 10px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--status-danger); border-color: rgba(239, 68, 68, 0.35);" title="Simulate auto-off (powers off lights)">Test</button>
-                    <button class="btn-ide" id="btnRevertPowerOff" onclick="testWakeBoard()" style="width: 26px; height: 26px; padding: 0; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-primary); border-color: rgba(var(--accent-rgb), 0.35); border-radius: var(--radius-sm);" title="Revert / Turn lights back on">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                        <path d="M3 3v5h5"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-
-              </div>
-            </div>
-          </div>
-
-          <!-- Security settings -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; align-items: start;">
-            
-            <!-- Access PIN Panel -->
-            <div class="ide-panel" style="margin-bottom: 0;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span>Access PIN</span>
+              <li class="pw-link power-setting-row" id="standbyTimeoutRow">
+                <label class="switch" title="Enable / Disable Auto-Off Timeout">
+                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange()">
+                  <span class="switch-slider"></span>
+                </label>
+                <span class="power-setting-controls pw-link-controls" id="standbyControlsGroup">
+                  after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Auto-off timeout in minutes" onchange="handleStandbyTimeoutChange()" oninput="handleStandbyTimeoutChange()"> min of inactivity
                 </span>
-              </div>
-              <div class="panel-body" style="display: flex; flex-direction: column; gap: 10px;">
-                <div id="pinSettingsStatus" style="font-family: var(--font-mono); font-size: 11.5px;">Checking...</div>
-                <p style="color: var(--text-secondary); font-size: 11px; line-height: 1.5; margin: 0;">
-                  Require a numeric PIN (4-32 digits) before any browser on your network can change settings or control lights. Forgot it? Stop AutoGlow and delete <code>access_pin_hash</code> from <code>config.json</code>.
-                </p>
-                <div class="input-group" id="pinCurrentGroup" style="display: none; flex-direction: column;">
-                  <label class="input-label" for="pinCurrentInput">Current PIN</label>
-                  <input type="password" inputmode="numeric" autocomplete="current-password" id="pinCurrentInput" class="input-text" maxlength="32">
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                  <div class="input-group">
-                    <label class="input-label" for="pinNewInput">New PIN</label>
-                    <input type="password" inputmode="numeric" autocomplete="new-password" id="pinNewInput" class="input-text" maxlength="32">
-                  </div>
-                  <div class="input-group">
-                    <label class="input-label" for="pinConfirmInput">Confirm</label>
-                    <input type="password" inputmode="numeric" autocomplete="new-password" id="pinConfirmInput" class="input-text" maxlength="32" onkeydown="if(event.key==='Enter'){event.preventDefault();settingsPage.save();}">
-                  </div>
-                </div>
-                <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                  <button class="btn-ide btn-ide-danger" id="btnRemovePin" type="button" aria-pressed="false" style="display: none;">Remove PIN</button>
-                </div>
-              </div>
-            </div>
+              </li>
 
+              <li class="pw-stop">
+                <span class="pw-dot pw-dot-off" aria-hidden="true"></span>
+                <span class="pw-stop-title">Lights off</span>
+                <span class="pw-stop-desc">Turns the lights off completely.</span>
+                <span class="pw-stop-actions">
+                  <button type="button" class="ui-btn ui-btn-sm" id="btnTestAutoOff" onclick="testPowerOff()" title="Simulate auto-off (powers off lights)">Test: off now</button>
+                  <button type="button" class="ui-btn ui-btn-sm" id="btnRevertPowerOff" onclick="testWakeBoard()" title="Revert / Turn lights back on">Turn back on</button>
+                </span>
+              </li>
+            </ol>
           </div>
+
+          <!-- Security settings: one line while the PIN is off, the fields fold out -->
+          <details class="card pw-card pw-pin">
+            <summary class="pw-pin-summary">
+              <span class="card-title">Access PIN</span>
+              <span id="pinSettingsStatus" class="pw-pin-status">Checking...</span>
+              <span class="pw-pin-open">Set or change…</span>
+            </summary>
+            <p class="form-hint">Require a numeric PIN (4-32 digits) before any browser on your network can change settings or control lights. Forgot it? Stop AutoGlow and delete <code>access_pin_hash</code> from <code>config.json</code>.</p>
+            <div class="pw-pin-fields">
+              <label class="form-field" id="pinCurrentGroup" style="display: none;">
+                <span class="form-label">Current PIN</span>
+                <input type="password" inputmode="numeric" autocomplete="current-password" id="pinCurrentInput" class="ui-input" maxlength="32">
+              </label>
+              <label class="form-field">
+                <span class="form-label">New PIN</span>
+                <input type="password" inputmode="numeric" autocomplete="new-password" id="pinNewInput" class="ui-input" maxlength="32">
+              </label>
+              <label class="form-field">
+                <span class="form-label">Confirm</span>
+                <input type="password" inputmode="numeric" autocomplete="new-password" id="pinConfirmInput" class="ui-input" maxlength="32" onkeydown="if(event.key==='Enter'){event.preventDefault();settingsPage.save();}">
+              </label>
+              <button class="ui-btn ui-btn-danger" id="btnRemovePin" type="button" aria-pressed="false" style="display: none;">Remove PIN</button>
+            </div>
+          </details>
 
           <!-- One save for everything on this page -->
           <div class="settings-savebar" id="settingsSaveBar">
             <span class="settings-savebar-note" id="settingsSaveNote" aria-live="polite">No unsaved changes</span>
-            <button class="btn-ide" id="btnSettingsDiscard" type="button" disabled>Discard</button>
-            <button class="btn-ide btn-ide-primary" id="btnSettingsSave" type="button" disabled>Save</button>
+            <button class="ui-btn" id="btnSettingsDiscard" type="button" disabled>Discard</button>
+            <button class="ui-btn ui-btn-primary" id="btnSettingsSave" type="button" disabled>Save</button>
           </div>
 
         </section>

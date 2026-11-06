@@ -2311,6 +2311,177 @@ input.ui-input.sf-name-input {
   .sf-done-row { grid-template-columns: 1fr; }
 }
 
+/* -----------------------------------------------------------------------------
+ * Power (web/js/power.js + features/settings.js): engine, after-game timeline, PIN
+ * ----------------------------------------------------------------------------- */
+.pw-page {
+  max-width: 820px;
+}
+
+.pw-page.active {
+  gap: var(--space-4);
+}
+
+.pw-card .form-hint {
+  margin: var(--space-3) 0 0;
+}
+
+.pw-mode {
+  align-self: flex-start;
+}
+
+.pw-timeline {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 34px;
+  list-style: none;
+}
+
+/* The line the stops sit on */
+.pw-timeline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 9px;
+  border-left: 2px solid var(--border-subtle);
+}
+
+.pw-stop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) 0;
+}
+
+.pw-dot {
+  position: absolute;
+  top: 6px;
+  left: -34px;
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--bg-panel);
+  border-radius: 50%;
+}
+
+/* The line stops at the last dot */
+.pw-stop:last-child::before {
+  content: "";
+  position: absolute;
+  top: 26px;
+  bottom: 0;
+  left: -27px;
+  width: 6px;
+  background: var(--bg-panel);
+}
+
+.pw-dot-live { background: var(--accent-primary); box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.6); }
+.pw-dot-idle { background: rgba(var(--accent-rgb), 0.35); }
+.pw-dot-off { background: var(--text-muted); }
+
+.pw-stop-title {
+  color: var(--text-primary);
+  font: 600 var(--fs-md) var(--font-ui);
+  line-height: 26px;
+}
+
+.pw-stop-desc {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* The wait between two stops: switch + "after N min" */
+.pw-timeline .power-setting-row {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  justify-content: flex-start;
+}
+
+.pw-timeline .pw-link {
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  width: fit-content;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.pw-link .switch {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.pw-link-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.pw-link-controls .ui-input-num {
+  width: 64px;
+  height: 30px;
+}
+
+.pw-timeline .pw-check {
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.pw-check .switch {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.pw-stop-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.pw-pin-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.pw-pin-summary::-webkit-details-marker { display: none; }
+
+.pw-pin-status {
+  font-size: var(--fs-sm);
+}
+
+.pw-pin-open {
+  margin-left: auto;
+  color: var(--accent-primary);
+  font-size: var(--fs-sm);
+}
+
+.pw-pin[open] .pw-pin-open { visibility: hidden; }
+
+.pw-pin-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.pw-page .settings-savebar-note {
+  font-size: var(--fs-sm);
+}
+
 /* Settings: single Save / Discard bar, pinned to the bottom right */
 .settings-savebar {
   position: sticky;
