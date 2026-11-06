@@ -551,10 +551,7 @@
         <!-- TAB 5: SETTINGS (lighting engine, inactivity & standby timers, access PIN) -->
         <section id="tab-settings" class="tab-pane pw-page">
           <div class="page-head">
-            <div>
-              <h1 class="page-title">Power</h1>
-              <p class="page-lead">What plays during a game, and when the lights go back to idle and switch off.</p>
-            </div>
+            <h1 class="page-title">Power</h1>
           </div>
 
           <!-- Lighting engine: decides what plays; the Lighting page shows the matching workspace -->
@@ -564,13 +561,13 @@
               <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
               <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
             </div>
-            <p class="form-hint">Chooses what plays during a game. The Lighting page opens the matching workspace. Flow Matrix is the default. The Event Matrix is the old engine: it still works, but it is not supported and gets no fixes or new features.</p>
+            <p class="form-hint" title="Chooses what plays during a game; the Lighting page opens the matching workspace. The Event Matrix still works, but it is not supported and gets no fixes or new features.">The Event Matrix still works but gets no updates.</p>
           </div>
 
           <!-- Inactivity & standby timers (all controllers): one clock from the last dart -->
           <div class="card pw-card" id="powerGlobalTimersArea">
             <div class="card-head"><h2 class="card-title">When nobody plays</h2></div>
-            <p class="pw-lead">One clock, started by the last dart. Any dart or a new game brings the live effects back.</p>
+            <p class="pw-lead">Counted from the last dart. A dart or a new game wakes the lights.</p>
 
             <!-- What the lights do over time, drawn to scale (power.js fills it) -->
             <div class="pw-clock" id="powerClock" aria-hidden="true">
@@ -586,7 +583,7 @@
                 </label>
                 <div class="pw-rule-text power-setting-controls" id="inactivityControlsGroup">
                   <span class="pw-rule-main"><span class="pw-key" data-phase="dim"></span>Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange(); renderPowerClock()" oninput="handleInactivityTimeoutChange(); renderPowerClock()"> min without a dart</span>
-                  <span class="pw-rule-hint" id="powerDimHint">Live effects stop. Each controller shows its idle look; light strips dim.</span>
+                  <span class="pw-rule-hint" id="powerDimHint">Idle look; light strips dim.</span>
                 </div>
               </div>
 
@@ -596,8 +593,7 @@
                   <span class="switch-slider"></span>
                 </label>
                 <div class="pw-rule-text power-setting-controls" id="standbyControlsGroup">
-                  <span class="pw-rule-main"><span class="pw-key" data-phase="off"></span>Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange(); renderPowerClock()" oninput="handleStandbyTimeoutChange(); renderPowerClock()"> min without a dart</span>
-                  <span class="pw-rule-hint">All controllers off. Also counted from the last dart, so never sooner than dimming.</span>
+                  <span class="pw-rule-main" title="All controllers off. Counted from the last dart, so never sooner than dimming."><span class="pw-key" data-phase="off"></span>Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange(); renderPowerClock()" oninput="handleStandbyTimeoutChange(); renderPowerClock()"> min without a dart</span>
                 </div>
               </div>
 
@@ -607,14 +603,13 @@
                   <span class="switch-slider"></span>
                 </span>
                 <span class="pw-rule-text power-setting-info">
-                  <span class="pw-rule-main">When a match ends, go straight to the idle look</span>
-                  <span class="pw-rule-hint">Right after the win effect, also when a match is aborted. Off: the winner’s colour stays until the lights dim.</span>
+                  <span class="pw-rule-main" title="Right after the win effect, also when a match is aborted. Off: the winner’s colour stays until the lights dim.">Idle look right after a match</span>
                 </span>
               </label>
             </div>
 
             <div class="pw-tests">
-              <span class="pw-rule-hint">Try it on your lights:</span>
+              <span class="pw-rule-hint" title="These act on your real lights">Test:</span>
               <button type="button" class="ui-btn ui-btn-sm" onclick="testInactivityDim()" title="Same as when the dim timer runs out">Dim now</button>
               <button type="button" class="ui-btn ui-btn-sm" id="btnTestAutoOff" onclick="testPowerOff()" title="Same as when the switch-off timer runs out">Switch off now</button>
               <button type="button" class="ui-btn ui-btn-sm" id="btnRevertPowerOff" onclick="testWakeBoard()" title="Turn the lights back on">Turn back on</button>

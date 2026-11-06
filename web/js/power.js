@@ -113,14 +113,14 @@ function renderPowerClock() {
     el.append(key, label);
     return el;
   };
-  const items = [item('live', dimAt !== null || offAt !== null ? `Live effects · 0–${live} min` : 'Live effects, no timer')];
+  const items = [item('live', dimAt !== null || offAt !== null ? `Live · 0–${live} min` : 'Live, no timer')];
   if (dimAt !== null) items.push(item('dim', offAt !== null ? `Dimmed · ${dimAt}–${offAt} min` : `Dimmed · from ${dimAt} min`));
   if (offAt !== null) items.push(item('off', `Off · after ${offAt} min`));
   clock.querySelector('.pw-clock-ticks').replaceChildren(...items);
   // How dim the light strips go comes from the config (0-255)
   const hint = document.getElementById('powerDimHint');
   const bri = window.appState?.idle_dimming_brightness;
-  if (hint && typeof bri === 'number') hint.textContent = `Live effects stop. Each controller shows its idle look; light strips go to ${Math.round((bri / 255) * 100)}%.`;
+  if (hint && typeof bri === 'number') hint.textContent = `Idle look; light strips at ${Math.round((bri / 255) * 100)}%.`;
 }
 window.renderPowerClock = renderPowerClock;
 

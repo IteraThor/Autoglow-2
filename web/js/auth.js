@@ -84,7 +84,8 @@ function renderPinSettings() {
   const currentGroup = document.getElementById('pinCurrentGroup');
   const removeBtn = document.getElementById('btnRemovePin');
   if (status) {
-    status.textContent = authState.pinEnabled ? 'PIN protection is ON' : 'PIN protection is OFF (open on your network)';
+    status.textContent = authState.pinEnabled ? 'On' : 'Off';
+    status.title = authState.pinEnabled ? 'A PIN is needed to change settings or control lights' : 'Open: any browser on your network can change settings';
     status.style.color = authState.pinEnabled ? 'var(--status-success)' : 'var(--status-warning)';
   }
   if (currentGroup) currentGroup.style.display = authState.pinEnabled ? 'flex' : 'none';
