@@ -29,12 +29,6 @@
   min-width: 220px;
 }
 
-.fm-used {
-  padding-bottom: 9px;
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-}
-
 .fm-profile-actions {
   display: flex;
   flex-wrap: wrap;
@@ -837,4 +831,23 @@ input.ui-input.fm-player-name {
 .fm-link-go {
   color: var(--accent-bright);
   font-size: var(--fs-sm);
+}
+
+/* Standby panel: on/off switch + minutes on one row */
+.fm-standby-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fm-minutes-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+
+.fm-minutes {
+  width: 64px;
 }

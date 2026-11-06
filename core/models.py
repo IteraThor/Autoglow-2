@@ -801,7 +801,7 @@ class AppConfig:
     autodarts_password: str = ""
     autodarts_board_id: str = ""
     game_mode_spotlight_brightness: int = 255
-    lighting_mode: LightingMode = LightingMode.MATRIX
+    lighting_mode: LightingMode = LightingMode.FLOW
     auto_connect_udp_on_game_start: bool = True
     disconnect_udp_on_match_end: bool = False
     inactivity_timeout_enabled: bool = True
@@ -938,7 +938,7 @@ class AppConfig:
             "autodarts_password": self.autodarts_password,
             "autodarts_board_id": self.autodarts_board_id,
             "game_mode_spotlight_brightness": self.game_mode_spotlight_brightness,
-            "lighting_mode": self.lighting_mode.value if isinstance(self.lighting_mode, LightingMode) else str(self.lighting_mode or "matrix"),
+            "lighting_mode": self.lighting_mode.value if isinstance(self.lighting_mode, LightingMode) else str(self.lighting_mode or "flow"),
             "auto_connect_udp_on_game_start": self.auto_connect_udp_on_game_start,
             "disconnect_udp_on_match_end": self.disconnect_udp_on_match_end,
             "inactivity_timeout_enabled": self.inactivity_timeout_enabled,
@@ -1028,7 +1028,7 @@ class AppConfig:
             autodarts_password=str(data.get("autodarts_password", "")),
             autodarts_board_id=str(data.get("autodarts_board_id", "")),
             game_mode_spotlight_brightness=_safe_int(data.get("game_mode_spotlight_brightness"), 255),
-            lighting_mode=LightingMode.FLOW if str(data.get("lighting_mode", "")).lower() == "flow" else LightingMode.MATRIX,
+            lighting_mode=LightingMode.MATRIX if str(data.get("lighting_mode", "")).lower() == "matrix" else LightingMode.FLOW,
             auto_connect_udp_on_game_start=bool(data.get("auto_connect_udp_on_game_start", True)),
             disconnect_udp_on_match_end=bool(data.get("disconnect_udp_on_match_end", False)),
             inactivity_timeout_enabled=bool(data.get("inactivity_timeout_enabled", True)),

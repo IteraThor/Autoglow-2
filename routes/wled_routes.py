@@ -15,7 +15,7 @@ from core.models import (
 )
 from core.storage import load_app_config, save_app_config
 from core.engine import _is_pwm_segment
-from core.wled_driver import WLEDDriver
+from core.wled_driver import WLEDDriver, sanitize_wled_name
 from core.discovery import DiscoveryService
 
 logger = logging.getLogger("autoglow.routes.wled")
@@ -190,6 +190,46 @@ async def handle_wled_update(request: web.Request) -> web.Response:
         "hardware_applied": hardware_applied,
         "readback": readback_data
     })
+
+
+async def handle_rename_segment(request: web.Request) -> web.Response:
+    """Rename one segment: on the controller (live and in preset 1, so a reboot keeps it) and in AutoGlow's config.
+    The LED outputs are not touched, so the controller does not rebuild its LEDs."""
+    config_path = request.app.get("config_path", "config.json")
+    data = await read_json(request)
+    ip = str(data.get("ip") or "").strip()
+    seg_id = _safe_int(data.get("segment_id"), -1)
+    name = sanitize_wled_name(str(data.get("name") or "")).strip()
+    if not ip:
+        raise ValidationError("No IP specified", field="ip")
+    if seg_id < 0:
+        raise ValidationError("Choose a segment.", field="segment_id")
+    if not name:
+        raise ValidationError("Give the segment a name (letters, numbers, spaces, - and _).", field="name")
+
+    def apply() -> None:
+        WLEDDriver.rename_wled_segment(ip, seg_id, name)
+
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, apply)
+    except Exception as e:
+        logger.warning(f"Could not rename segment {seg_id} on {ip}: {e}")
+        raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
+
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    engine = request.app.get("engine")
+    for config in {id(c): c for c in (cfg, getattr(engine, "app_config", None)) if c}.values():
+        for dev in config.devices:
+            if dev.ip != ip:
+                continue
+            for seg in dev.segments or []:
+                if _safe_int(getattr(seg, "id", None), -1) == seg_id:
+                    seg.name = name
+    if not save_app_config(cfg, config_path):
+        raise PersistenceError("Renamed on the controller, but AutoGlow could not save the name.")
+    request.app["current_app_config"] = cfg
+    return web.json_response({"status": "ok", "name": name})
 
 
 async def handle_get_wled_preset(request: web.Request) -> web.Response:

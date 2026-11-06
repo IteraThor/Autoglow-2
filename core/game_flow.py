@@ -9,6 +9,8 @@ A flow profile describes how the light strips follow a match:
   comes in with. A step that is off is skipped: the next step simply comes in with its own transition.
 - Hits (1x, 180, Bull ...) play on top of the current look and fade back into it.
 - Players: up to six colours; a colour can be tied to a player name.
+- Waiting (idle): one effect from the controller's own WLED library. It is not streamed: whenever a
+  segment gets this profile (or the profile changes), AutoGlow writes it into the controller's idle preset.
 
 game_flows.json holds named profiles and which controller / segment uses which profile.
 """
@@ -37,7 +39,7 @@ DEFAULT_FLOW_TEMPLATE = os.path.join(PROJECT_ROOT, "defaults", "game_flows.json"
 
 FILE_VERSION = 2
 
-# Steps in match order. Waiting is not a step: it is the idle lighting saved in Setup.
+# Steps in match order. Waiting is not a step: it is the profile's idle look (FlowIdle), played by WLED itself.
 STEP_IDS: Tuple[str, ...] = ("bull_off", "game_start", "turn", "takeout", "leg_won", "match_won")
 STEP_LABELS = {
     "bull_off": "Bull-off",
@@ -123,6 +125,52 @@ class FlowTransition:
 
 
 @dataclass
+class FlowIdle:
+    """What a strip shows between games: a WLED effect (id from the controller's library) with its settings."""
+    on: bool = True
+    fx: int = 9            # WLED effect id (9 = Rainbow)
+    speed: int = 128       # WLED sx, 0-255
+    intensity: int = 128   # WLED ix, 0-255
+    brightness: int = 100  # percent
+    colors: List[RGBColor] = field(default_factory=lambda: [RGBColor(0, 255, 157), RGBColor(0, 0, 0), RGBColor(0, 0, 0)])
+
+    def __post_init__(self) -> None:
+        clamp = lambda v, lo, hi, d: max(lo, min(hi, int(v))) if isinstance(v, (int, float)) and not isinstance(v, bool) else d
+        self.fx = clamp(self.fx, 0, 255, 9)
+        self.speed = clamp(self.speed, 0, 255, 128)
+        self.intensity = clamp(self.intensity, 0, 255, 128)
+        self.brightness = clamp(self.brightness, 0, 100, 100)
+        self.colors = (list(self.colors) + [RGBColor(0, 0, 0)] * 3)[:3]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"on": bool(self.on), "fx": self.fx, "speed": self.speed, "intensity": self.intensity,
+                "brightness": self.brightness, "colors": [c.to_list() for c in self.colors]}
+
+    @classmethod
+    def from_dict(cls, data: Any) -> "FlowIdle":
+        if isinstance(data, FlowIdle):
+            return data
+        if not isinstance(data, dict):
+            return cls()
+        base = cls()
+        raw_cols = _as_list(data.get("colors"))
+        return cls(
+            on=bool(data.get("on", True)),
+            fx=data.get("fx", base.fx),
+            speed=data.get("speed", base.speed),
+            intensity=data.get("intensity", base.intensity),
+            brightness=data.get("brightness", base.brightness),
+            colors=[RGBColor.from_dict(raw_cols[i], default=base.colors[i]) if i < len(raw_cols) else base.colors[i]
+                    for i in range(3)],
+        )
+
+    def wled_segment(self) -> Dict[str, Any]:
+        """The look as WLED segment fields (merged into a preset segment)."""
+        return {"on": bool(self.on), "bri": round(self.brightness / 100 * 255), "fx": self.fx, "sx": self.speed,
+                "ix": self.intensity, "col": [[c.r, c.g, c.b, 0] for c in self.colors]}
+
+
+@dataclass
 class FlowStep:
     effect: EffectConfig = field(default_factory=lambda: EffectConfig(options={}))
     transition: FlowTransition = field(default_factory=FlowTransition)
@@ -176,6 +224,7 @@ class GameFlow:
     camera_friendly: bool = True
     hit_locator: bool = False
     preset: Optional[str] = None  # the preset this profile started from ("Reset to preset")
+    idle: FlowIdle = field(default_factory=FlowIdle)
 
     def __post_init__(self) -> None:
         for sid in STEP_IDS:
@@ -208,6 +257,7 @@ class GameFlow:
             "players": [p.to_dict() for p in self.players],
             "camera_friendly": bool(self.camera_friendly),
             "hit_locator": bool(self.hit_locator),
+            "idle": self.idle.to_dict(),
         }
         if self.preset:
             out["preset"] = self.preset
@@ -232,6 +282,7 @@ class GameFlow:
             camera_friendly=bool(data.get("camera_friendly", True)),
             hit_locator=bool(data.get("hit_locator", False)),
             preset=str(data["preset"]) if data.get("preset") else None,
+            idle=FlowIdle.from_dict(data.get("idle")),
         )
 
 
@@ -595,7 +646,7 @@ def _adopt_flow_file_from_cwd(target: str) -> None:
 
 
 __all__ = [
-    "ALWAYS_ON_STEPS", "AnimationType", "DEFAULT_PROFILE_NAME", "FlowPlayer", "FlowStep", "FlowTransition",
+    "ALWAYS_ON_STEPS", "AnimationType", "DEFAULT_PROFILE_NAME", "FlowIdle", "FlowPlayer", "FlowStep", "FlowTransition",
     "GameFlow", "GameFlowStorageManager", "HIT_IDS", "HIT_LABELS", "MAX_PLAYERS", "PLAYER_COLOURS",
     "STEP_IDS", "STEP_LABELS", "TIMED_STEPS", "convert_v1_flow", "create_default_game_flow", "player_colour_index",
 ]

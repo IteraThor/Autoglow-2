@@ -7,6 +7,7 @@ import { choiceDialog, confirmDialog, promptDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import { blendFlow, compositeHit, renderFlowFrame } from './flow-looks.js';
+import { effectPicker as wledEffectPicker, loadEffects } from './idle-lighting.js';
 
 const STRIP_LEDS = 48;
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
@@ -229,6 +230,7 @@ async function save() {
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
     toast.success(`Saved '${page.name}'`);
+    idleWarning(data);
     render();
     return true;
   } catch (err) {
@@ -240,6 +242,11 @@ async function save() {
 function discard() {
   page.draft = JSON.parse(page.saved);
   render();
+}
+
+// The waiting look is written to the controllers on save; say which ones were not reachable
+function idleWarning(data) {
+  if (data?.idle_failed?.length) toast.warning(`Could not set the waiting lights on ${data.idle_failed.join(', ')}. They get them the next time the profile is saved.`);
 }
 
 function change(mutator, { rerender = true } = {}) {
@@ -319,6 +326,7 @@ async function deleteProfile() {
   try {
     const data = await api.post('/api/flow/profile/delete', { name: page.name });
     page.overview = { ...page.overview, ...data };
+    idleWarning(data);
     page.saved = null;
     page.draft = null;
     await refresh(data.default);
@@ -339,6 +347,7 @@ async function resetProfile() {
   try {
     const data = await api.post('/api/flow/profile/reset', { name: page.name });
     page.overview = { ...page.overview, ...data };
+    idleWarning(data);
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
     render();
@@ -352,6 +361,7 @@ async function makeDefault() {
   try {
     const data = await api.post('/api/flow/profile/default', { name: page.name });
     page.overview = { ...page.overview, ...data };
+    idleWarning(data);
     render();
     toast.success(`New controllers use '${page.name}'`);
   } catch (err) {
@@ -402,10 +412,10 @@ function statusNotes() {
   if (!o.lights.length) {
     notes.push({ tone: 'warn', text: 'No controller yet.', link: ['Add one in Setup', '/setup/controllers'] });
   } else if (!lightsUsing(page.name).length) {
-    notes.push({ tone: 'warn', text: 'No light strip plays this profile.', link: ['Choose it for a controller in Setup', '/setup/controllers'] });
+    notes.push({ tone: 'warn', text: 'No light strip plays this profile.', action: ['Choose strips', () => select({ kind: 'profile' })] });
   }
   if (o.lighting_mode !== 'flow') {
-    notes.push({ tone: 'warn', text: 'Games use the Event Matrix right now.', action: ['Use the Flow Matrix', () => window.switchLightingMode('flow')] });
+    notes.push({ tone: 'warn', text: 'Games use the legacy Event Matrix right now (not supported).', action: ['Use the Flow Matrix', () => window.switchLightingMode('flow')] });
   }
   if (o.match_running) notes.push({ tone: 'live', text: 'A match is running. The chart follows it live.' });
   for (const s of o.steps) {
@@ -447,7 +457,7 @@ function isSelected(kind, id) {
 
 function currentView() {
   if (window.matchMedia('(max-width: 1100px)').matches) return 'vertical';
-  return page.view === 'vertical' ? 'vertical' : 'horizontal';
+  return page.view === 'horizontal' ? 'horizontal' : 'vertical';
 }
 
 function setView(view) {
@@ -595,7 +605,7 @@ function chartNode(id, box) {
     if (isSelected('waiting')) el.classList.add('is-selected');
     el.onclick = () => select({ kind: 'waiting' });
     el.append(h('span', { class: 'fc-title' }, h('span', { class: 'fc-dot fc-dot-idle' }), 'Waiting'),
-      h('span', { class: 'fc-meta' }, 'Idle lighting · Setup'));
+      h('span', { class: 'fc-meta' }, idleSummary()));
     return el;
   }
   if (id === 'timeout' || id === 'auto_off') {
@@ -947,15 +957,46 @@ function transitionPanel(id) {
   ];
 }
 
+// Save the standby timers (shared with Settings > Power) and redraw the chart
+async function saveStandby(patch) {
+  const o = page.overview;
+  const s = { ...(o.standby || {}), match_end_to_waiting: !!o.match_end_to_waiting, ...patch };
+  try {
+    const r = await api.post('/api/flow/standby', s);
+    o.standby = { dim_on: r.inactivity_timeout_enabled, dim_minutes: r.inactivity_timeout_minutes,
+      off_on: r.idle_power_off_enabled, off_minutes: r.idle_power_off_minutes };
+    o.match_end_to_waiting = r.disconnect_udp_on_match_end;
+    if (window.appState) {
+      for (const k of ['inactivity_timeout_enabled', 'inactivity_timeout_minutes', 'idle_power_off_enabled',
+        'idle_power_off_minutes', 'disconnect_udp_on_match_end']) window.appState[k] = r[k];
+    }
+    toast.success('Standby saved');
+  } catch (err) { toast.error(err); }
+  render();
+}
+
+function minutesField(label, value, enabled, onset) {
+  const input = h('input', { type: 'number', class: 'input-text fm-minutes', min: 1, max: 240, value, disabled: !enabled,
+    'aria-label': label,
+    onchange: e => { const v = Math.max(1, Math.min(240, parseInt(e.target.value, 10) || value)); if (v !== value) onset(v); else e.target.value = value; } });
+  return h('label', { class: 'fm-minutes-row' }, input, h('span', {}, 'minutes'));
+}
+
 function standbyPanel() {
   const s = page.overview.standby || {};
   return [
     h('div', { class: 'fm-panel-head' }, h('div', {}, h('span', { class: 'fm-kicker' }, 'Standby'), h('h2', { class: 'fm-panel-title' }, 'When nobody plays'))),
-    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These timers are the same for every profile.'),
-    h('ul', { class: 'fm-users' },
-      h('li', {}, s.dim_on ? `Dim after ${s.dim_minutes} minutes` : 'Dimming is off'),
-      h('li', {}, s.off_on ? `Switch off after ${s.off_minutes} minutes` : 'Switching off is off')),
-    h('a', { class: 'card-link', href: '/settings', 'data-link': true }, 'Change the timers in Settings')
+    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These are the same timers as in Settings › Power and apply to every profile. Changes save right away.'),
+    section('Dim', h('div', { class: 'fm-standby-row' },
+      onOff(!!s.dim_on, v => saveStandby({ dim_on: v }), 'Dimming on or off'),
+      minutesField('Dim after minutes', s.dim_minutes, s.dim_on, v => saveStandby({ dim_minutes: v })))),
+    section('Lights off', h('div', { class: 'fm-standby-row' },
+      onOff(!!s.off_on, v => saveStandby({ off_on: v }), 'Switching off on or off'),
+      minutesField('Switch off after minutes', s.off_minutes, s.off_on, v => saveStandby({ off_minutes: v }))),
+      h('p', { class: 'fm-panel-help' }, 'Counted from the last dart, never sooner than dimming.')),
+    section('When a match ends', h('div', { class: 'fm-standby-row' },
+      onOff(!!page.overview.match_end_to_waiting, v => saveStandby({ match_end_to_waiting: v }), 'Back to waiting when a match ends'),
+      h('span', { class: 'fm-panel-help' }, 'Go straight back to Waiting'))),
   ];
 }
 
@@ -997,16 +1038,59 @@ function playersPanel() {
   ];
 }
 
+function idleSummary() {
+  const idle = page.draft.idle || IDLE_DEFAULT;
+  if (!idle.on) return 'Off';
+  wledEffects();
+  return page.wledEffects?.find(e => e.id === idle.fx)?.name || (idle.fx === 0 ? 'Solid' : 'WLED effect');
+}
+
+// Waiting: the profile's idle effect, one from the WLED library. WLED plays it itself between games;
+// every segment that gets this profile in Setup is set to it (and again whenever the profile is saved).
+const IDLE_DEFAULT = { on: true, fx: 9, speed: 128, intensity: 128, brightness: 100, colors: [[0, 255, 157], [0, 0, 0], [0, 0, 0]] };
+
+function wledEffects() {
+  if (page.wledEffects) return page.wledEffects;
+  if (!page.wledEffectsLoading) {
+    page.wledEffectsLoading = true;
+    // Any controller's library will do (they share WLED's list); without one the bundled list is used
+    loadEffects(page.overview.lights?.[0]?.ip || '').then(list => {
+      page.wledEffects = list;
+      if (page.selected?.kind === 'waiting') render();
+    });
+  }
+  return null;
+}
+
 function waitingPanel() {
-  const first = page.overview.lights[0];
-  return [
+  const head = [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting')),
-    h('p', { class: 'fm-panel-help' }, 'Outside a match the strips show each controller\'s idle lighting. It is set per controller in Setup, so it is the same in every profile. Switching to it happens without a transition.'),
-    h('p', {}, first
-      ? h('a', { class: 'card-link', href: `/setup/controllers/${encodeURIComponent(first.ip)}`, 'data-link': true }, 'Change the idle lighting in Setup')
-      : h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Add a controller in Setup')),
-    h('p', { class: 'form-hint' }, 'Inactivity and auto-off timers are in Settings.')
+    h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every strip that plays this profile (Setup) gets it when you save.')
   ];
+  page.draft.idle ||= structuredClone(IDLE_DEFAULT);
+  const idle = page.draft.idle;
+  const effects = wledEffects();
+  if (!effects) return [...head, h('p', { class: 'form-hint' }, 'Loading the WLED effects…')];
+  const meta = effects.find(e => e.id === idle.fx) || { id: idle.fx, name: `Effect ${idle.fx}`, colorSlots: [], speed: true, intensity: true };
+  const slots = meta.colorSlots || [];
+  return [...head,
+    section('Lights between games',
+      h('div', { class: 'fm-toggle-row' }, onOff(idle.on, v => change(d => { d.idle.on = v; }), 'Lights on between games')),
+      !idle.on && h('p', { class: 'form-hint' }, 'The strips stay dark between games.')),
+    idle.on && section('Effect',
+      h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Effect'),
+        wledEffectPicker(effects, idle.fx, effect => change(d => { d.idle.fx = effect.id; }))),
+      ...(slots.length
+        ? slots.map(slot => colourField(slot.label || 'Colour', idle.colors[slot.slot] || [0, 0, 0],
+          (rgb, done) => change(d => { d.idle.colors[slot.slot] = rgb; }, { rerender: done })))
+        : [h('p', { class: 'form-hint' }, 'This effect uses its own colours.')]),
+      rangeField('Brightness', { min: 0, max: 100, step: 1, value: idle.brightness, format: v => `${v}%`,
+        onset: (v, done) => change(d => { d.idle.brightness = v; }, { rerender: done }) }),
+      meta.speed && rangeField(meta.speedLabel || 'Speed', { min: 0, max: 255, step: 1, value: idle.speed, format: v => String(v),
+        onset: (v, done) => change(d => { d.idle.speed = v; }, { rerender: done }) }),
+      meta.intensity && rangeField(meta.intensityLabel || 'Intensity', { min: 0, max: 255, step: 1, value: idle.intensity, format: v => String(v),
+        onset: (v, done) => change(d => { d.idle.intensity = v; }, { rerender: done }) }))
+  ].filter(Boolean);
 }
 
 function locatorCheck() {
@@ -1040,14 +1124,25 @@ function profilePanel() {
       h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
       h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
       flow.hit_locator && locatorCheck()),
-    section('Used by',
-      users.length
-        ? h('ul', { class: 'fm-users' }, ...users.map(u => h('li', {}, `${u.controller} · ${u.segment_name}`)))
-        : h('p', { class: 'form-hint' }, 'No light strip uses this profile.'),
-      h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Choose profiles per light in Setup'),
+    section('Plays on',
+      ...playsOnRows(),
       page.overview.default !== page.name
-        ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Use this profile for lights without a choice'))
-        : h('p', { class: 'form-hint' }, 'Lights without their own choice use this profile.'))
+        ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Use this profile for new lights'))
+        : h('p', { class: 'form-hint' }, 'New lights play this profile until you choose another.'))
+  ];
+}
+
+// Which RGB strips play this profile. Read-only: strips get their profile in Setup, on the controller's page.
+function playsOnRows() {
+  const segs = allSegments();
+  if (!segs.length) return [h('p', { class: 'form-hint' }, 'Add a controller in Setup first.')];
+  const mine = segs.filter(seg => seg.profile === page.name);
+  return [
+    mine.length
+      ? h('ul', { class: 'fm-plays-on' }, ...mine.map(seg => h('li', {},
+        h('a', { href: `/setup/controllers/${encodeURIComponent(seg.ip)}`, 'data-link': true }, `${seg.controller} · ${seg.name}`))))
+      : h('p', { class: 'form-hint' }, 'No strip plays this profile yet.'),
+    h('p', { class: 'form-hint' }, 'Choose which profile a strip plays in Setup, on its controller\'s page.')
   ];
 }
 
@@ -1073,13 +1168,10 @@ function inspector() {
 
 function profileBar() {
   const o = page.overview;
-  const users = lightsUsing(page.name);
-  const usedText = users.length ? `Used by ${users.map(u => u.segment_name).join(', ')}` : 'Not used by any light';
   return h('div', { class: 'fm-profile-bar' },
     h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Profile'),
       h('select', { class: 'ui-select', onchange: e => switchProfile(e.target.value) },
         ...o.profiles.map(p => h('option', { value: p.name, selected: p.name === page.name }, p.name + (p.name === o.default ? ' (default)' : ''))))),
-    h('span', { class: 'fm-used' }, usedText),
     h('div', { class: 'fm-profile-actions' },
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: newProfile }, '+ New'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
@@ -1136,8 +1228,7 @@ function render() {
   root.replaceChildren(
     h('header', { class: 'page-head' },
       h('div', {},
-        h('h1', { class: 'page-title' }, 'Flow Matrix'),
-        h('p', { class: 'page-lead' }, 'How your light strips follow a match. Click any part to change it.'))),
+        h('h1', { class: 'page-title' }, 'Flow Matrix'))),
     profileBar(),
     statusLine(),
     h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
@@ -1187,7 +1278,8 @@ function updateLive() {
 
 export function initFlowMatrix() {
   window.flowPage = { isDirty, save, discard };
-  try { page.view = localStorage.getItem(VIEW_KEY) || 'horizontal'; } catch (err) { page.view = 'horizontal'; }
+  // Vertical until someone picks a view; then the last one used
+  try { page.view = localStorage.getItem(VIEW_KEY) || 'vertical'; } catch (err) { page.view = 'vertical'; }
   window.addEventListener('resize', () => {
     const wanted = currentView();
     if (page.root?.isConnected && !page.root.querySelector(`.fc-${wanted}`)) render();

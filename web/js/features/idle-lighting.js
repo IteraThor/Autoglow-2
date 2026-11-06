@@ -11,7 +11,7 @@ const PWM_STEPS = [0, 25, 50, 100];
 
 let effectsCache = null;
 
-async function loadEffects(ip) {
+export async function loadEffects(ip) {
   if (effectsCache) return effectsCache;
   try {
     const data = await api.get(`/api/wled/effects?ip=${encodeURIComponent(ip)}`, { timeout: 8000 });
@@ -33,7 +33,7 @@ const toRgb = hex => {
 const percent = bri => Math.round((Math.max(0, Math.min(255, Number(bri))) / 255) * 100);
 
 // Searchable effect picker: a button that opens a filtered list
-function effectPicker(effects, current, onPick) {
+export function effectPicker(effects, current, onPick) {
   const label = h('span', { class: 'fx-picker-value' }, effects.find(e => e.id === current)?.name || `Effect ${current}`);
   const trigger = h('button', { type: 'button', class: 'fx-picker-trigger', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, label);
   const search = h('input', { type: 'search', class: 'ui-input fx-picker-search', placeholder: `Search ${effects.length} effects`, 'aria-label': 'Search effects' });
@@ -98,7 +98,7 @@ function effectPicker(effects, current, onPick) {
   return root;
 }
 
-function slider({ label, min, max, value, unit = '', onInput }) {
+export function slider({ label, min, max, value, unit = '', onInput }) {
   const out = h('output', { class: 'idle-slider-value' }, `${value}${unit}`);
   const input = h('input', {
     type: 'range', class: 'ui-range', min, max, value, 'aria-label': label,

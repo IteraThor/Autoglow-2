@@ -12,6 +12,7 @@ from aiohttp import web
 
 from core.effects.flow import catalog_for_ui
 from core.errors import AppError, PersistenceError, ServiceUnavailable, ValidationError, read_json
+from core.flow_idle import apply_idle
 from core.flow_presets import build_preset, presets_for_ui
 from core.flow_runtime import EngineFlowOutput
 from core.game_flow import (
@@ -99,7 +100,7 @@ def _overview(request: web.Request) -> Dict[str, Any]:
         profiles.append({"name": name, "preset": flow.preset, "used_by": used_by})
     engine = request.app.get("engine")
     cfg = getattr(engine, "app_config", None)
-    mode = cfg.lighting_mode.value if cfg and isinstance(cfg.lighting_mode, LightingMode) else "matrix"
+    mode = cfg.lighting_mode.value if cfg and isinstance(cfg.lighting_mode, LightingMode) else "flow"
     return {
         "status": "ok",
         "profiles": profiles,
@@ -155,7 +156,9 @@ async def handle_save_profile(request: web.Request) -> web.Response:
     flow = GameFlow.from_dict({**raw, "name": name}, name=name)
     if not storage.save_profile(flow, old_name=old_name or None):
         raise PersistenceError("Could not save the flow profile.")
-    return web.json_response({"status": "ok", "flow": storage.get_profile(name).to_dict(), **_overview(request)})
+    failed = await apply_idle(request.app.get("engine"), storage, profile=name)
+    return web.json_response({"status": "ok", "flow": storage.get_profile(name).to_dict(), "idle_failed": failed,
+                              **_overview(request)})
 
 
 async def handle_create_profile(request: web.Request) -> web.Response:
@@ -188,7 +191,9 @@ async def handle_delete_profile(request: web.Request) -> web.Response:
         raise ValidationError("The last profile cannot be deleted.")
     if not storage.delete_profile(name):
         raise PersistenceError("Could not delete the flow profile.")
-    return web.json_response({"status": "ok", **_overview(request)})
+    # Its segments now play the default profile, and with it its waiting look
+    failed = await apply_idle(request.app.get("engine"), storage)
+    return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
 
 
 async def handle_reset_profile(request: web.Request) -> web.Response:
@@ -202,7 +207,8 @@ async def handle_reset_profile(request: web.Request) -> web.Response:
     flow = build_preset(current.preset or "classic", name=name)
     if not storage.save_profile(flow):
         raise PersistenceError("Could not reset the flow profile.")
-    return web.json_response({"status": "ok", "flow": flow.to_dict(), **_overview(request)})
+    failed = await apply_idle(request.app.get("engine"), storage, profile=name)
+    return web.json_response({"status": "ok", "flow": flow.to_dict(), "idle_failed": failed, **_overview(request)})
 
 
 async def handle_set_default(request: web.Request) -> web.Response:
@@ -211,7 +217,8 @@ async def handle_set_default(request: web.Request) -> web.Response:
     name = str(data.get("name") or "")
     if not storage.set_default(name):
         raise ValidationError(f"There is no profile called '{name}'.")
-    return web.json_response({"status": "ok", **_overview(request)})
+    failed = await apply_idle(request.app.get("engine"), storage)
+    return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
 
 
 async def handle_assign(request: web.Request) -> web.Response:
@@ -227,7 +234,17 @@ async def handle_assign(request: web.Request) -> web.Response:
         raise ValidationError("Choose a controller.")
     if not storage.assign(ip, name, None if seg is None else int(seg)):
         raise PersistenceError("Could not save the profile choice.")
-    return web.json_response({"status": "ok", **_overview(request)})
+    # The segment takes the profile's waiting look straight away
+    failed = await apply_idle(request.app.get("engine"), storage, ips=[ip])
+    return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
+
+
+async def handle_apply_idle(request: web.Request) -> web.Response:
+    """Write the waiting look of the assigned profiles to one controller (ip) or all of them."""
+    data = await read_json(request)
+    ip = str(data.get("ip") or "").strip()
+    failed = await apply_idle(request.app.get("engine"), _storage(request), ips=[ip] if ip else None)
+    return web.json_response({"status": "ok", "idle_failed": failed})
 
 
 def _targets(engine: Any, ip: Optional[str], seg: Any) -> List[tuple]:
@@ -351,18 +368,19 @@ async def handle_segment_direction(request: web.Request) -> web.Response:
 async def handle_get_lighting_mode(request: web.Request) -> web.Response:
     """Return the current active lighting mode (matrix or flow)."""
     engine = request.app.get("engine")
-    mode = "matrix"
+    mode = "flow"
     if engine and hasattr(engine, "app_config") and hasattr(engine.app_config, "lighting_mode"):
         mode = engine.app_config.lighting_mode.value if isinstance(engine.app_config.lighting_mode, LightingMode) else str(engine.app_config.lighting_mode)
     return web.json_response({"status": "ok", "mode": mode})
 
 
 async def handle_set_lighting_mode(request: web.Request) -> web.Response:
-    """Switch the active lighting mode between Classic Event Matrix and Flow Matrix."""
+    """Switch the lighting engine: Flow Matrix (default) or the legacy Event Matrix."""
     try:
         data = await read_json(request)
-        mode_str = str(data.get("mode", "matrix")).strip().lower()
-        mode = LightingMode.FLOW if mode_str == "flow" else LightingMode.MATRIX
+        # Flow Matrix is the default; the Event Matrix (legacy, unsupported) only when asked for by name
+        mode_str = str(data.get("mode", "flow")).strip().lower()
+        mode = LightingMode.MATRIX if mode_str == "matrix" else LightingMode.FLOW
 
         engine = request.app.get("engine")
         if engine and hasattr(engine, "set_lighting_mode"):
@@ -384,12 +402,47 @@ async def handle_set_lighting_mode(request: web.Request) -> web.Response:
             await engine._broadcast_telemetry({"type": "lighting_mode_changed", "mode": mode.value})
 
         logger.info(f"Lighting mode changed to '{mode.value}' and persisted.")
-        return web.json_response({"status": "ok", "mode": mode.value})
+        # Back on the Flow Matrix: the strips wait with their profiles' look again
+        failed = await apply_idle(engine, _storage(request)) if mode == LightingMode.FLOW else []
+        return web.json_response({"status": "ok", "mode": mode.value, "idle_failed": failed})
     except AppError:
         raise
     except Exception as e:
         logger.exception(f"Error setting lighting mode: {e}")
         raise AppError("Could not change the lighting mode") from e
+
+
+async def handle_standby(request: web.Request) -> web.Response:
+    """Save the standby timers (the same values as Settings > Power) from the Flow Matrix chart."""
+    engine = _engine(request)
+    data = await read_json(request)
+    from core.storage import load_app_config, save_app_config
+    config_path = request.app.get("config_path") or "config.json"
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    base = cfg or engine.app_config
+
+    def minutes(key: str, fallback: int) -> int:
+        try:
+            return max(1, min(240, int(data.get(key, fallback))))
+        except (TypeError, ValueError):
+            raise ValidationError("Minutes must be a whole number.") from None
+
+    values = {
+        "inactivity_timeout_enabled": bool(data.get("dim_on", base.inactivity_timeout_enabled)),
+        "inactivity_timeout_minutes": minutes("dim_minutes", base.inactivity_timeout_minutes),
+        "idle_power_off_enabled": bool(data.get("off_on", base.idle_power_off_enabled)),
+        "idle_power_off_minutes": minutes("off_minutes", base.idle_power_off_minutes),
+        "disconnect_udp_on_match_end": bool(data.get("match_end_to_waiting", base.disconnect_udp_on_match_end)),
+    }
+    # Same rule as Settings > Power: switching off never comes before dimming
+    values["idle_power_off_minutes"] = max(values["idle_power_off_minutes"], values["inactivity_timeout_minutes"])
+    for config in {id(c): c for c in (cfg, engine.app_config) if c}.values():
+        for key, value in values.items():
+            setattr(config, key, value)
+    if not save_app_config(cfg, config_path):
+        raise PersistenceError("Could not save the standby timers.")
+    request.app["current_app_config"] = cfg
+    return web.json_response({"status": "ok", **values})
 
 
 def register_flow_routes(app: web.Application) -> None:
@@ -402,9 +455,11 @@ def register_flow_routes(app: web.Application) -> None:
     app.router.add_post("/api/flow/profile/reset", handle_reset_profile)
     app.router.add_post("/api/flow/profile/default", handle_set_default)
     app.router.add_post("/api/flow/assign", handle_assign)
+    app.router.add_post("/api/flow/idle/apply", handle_apply_idle)
     app.router.add_post("/api/flow/try", handle_try)
     app.router.add_post("/api/flow/preview", handle_preview)
     app.router.add_post("/api/flow/preview/stop", handle_preview_stop)
     app.router.add_post("/api/flow/segment-direction", handle_segment_direction)
+    app.router.add_post("/api/flow/standby", handle_standby)
     app.router.add_get("/api/flow/mode", handle_get_lighting_mode)
     app.router.add_post("/api/flow/mode", handle_set_lighting_mode)

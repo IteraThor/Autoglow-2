@@ -118,6 +118,13 @@ LED_TYPE_NAMES: Dict[int, str] = {
 }
 
 
+def _safe_seg_id(seg: dict) -> int:
+    try:
+        return int(seg.get("id", -1))
+    except (TypeError, ValueError):
+        return -1
+
+
 def sanitize_wled_name(name: str) -> str:
     """Strip characters unsupported by WLED ESP32 firmware (quotes, apostrophes, etc.) and limit to 32 chars."""
     if not name:
@@ -1557,6 +1564,38 @@ class WLEDDriver:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             resp.read()
         return True
+
+    @staticmethod
+    def rename_wled_segment(ip: str, seg_id: int, name: str, timeout: float = 2.5) -> None:
+        """Rename one segment live, and in preset 1 (the idle and boot look) when it holds that segment.
+        Re-saving preset 1 keeps its look; only the segment's name changes."""
+        def post_state(body: dict) -> None:
+            req = urllib.request.Request(
+                f"http://{ip}/json/state",
+                data=json.dumps(body).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                resp.read()
+
+        post_state({"seg": [{"id": seg_id, "n": name}]})
+        try:
+            with urllib.request.urlopen(f"http://{ip}/presets.json", timeout=timeout) as resp:
+                presets = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Renamed segment {seg_id} on {ip} live, but could not read its presets: {e}")
+            return
+        preset = presets.get("1") if isinstance(presets, dict) else None
+        segs = [s for s in (preset or {}).get("seg", []) if isinstance(s, dict)]
+        if not any(_safe_seg_id(s) == seg_id for s in segs):
+            return
+        for s in segs:
+            if _safe_seg_id(s) == seg_id:
+                s["n"] = name
+        WLEDDriver.save_wled_preset(
+            ip, 1, str(preset.get("n") or "AutoGlow Default"), segs,
+            int(preset.get("bri", 255)), boot_default=True, timeout=timeout
+        )
 
     @staticmethod
     def save_wled_preset(

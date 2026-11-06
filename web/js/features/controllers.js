@@ -94,6 +94,8 @@ export async function applySetup(ip, setup, successMessage) {
     await window.loadConfig();
     if (result.hardware_applied) toast.success(successMessage);
     else toast.warning('Saved in AutoGlow, but the controller did not take the new layout. Run the setup again once it is reachable.');
+    // The setup saved a default idle look; the RGB strips wait with their profile's effect instead
+    if (result.hardware_applied) await api.post('/api/flow/idle/apply', { ip }).catch(() => {});
   } catch (err) {
     toast.error(err, { onRetry: () => applySetup(ip, setup, successMessage) });
   }

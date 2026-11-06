@@ -172,9 +172,19 @@
 
 .ui-dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+/* Many choices wrap onto more rows; a long label shortens with an ellipsis instead of breaking the button */
+.ui-dialog-actions .ui-btn {
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ui-btn {

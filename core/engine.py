@@ -97,6 +97,7 @@ class AutoGlowEngine:
 
         # Flow Matrix: profiles on disk, and the runtime that follows the match
         self.game_flow_storage = GameFlowStorageManager()
+        self.flow_idle_pending = False  # see core/flow_idle.py
         self.flow_runtime = FlowRuntime(EngineFlowOutput(self))
         self.flow_preview_task: Optional[asyncio.Task] = None
 
@@ -295,6 +296,11 @@ class AutoGlowEngine:
                 if not ok:
                     all_ok = False
             await self._broadcast_telemetry({"type": "protocol_state", "mode": "http"})
+            if self.flow_idle_pending:
+                # A profile's waiting look changed during the match: write it now that WLED plays its idle preset
+                self.flow_idle_pending = False
+                from core.flow_idle import apply_idle
+                await apply_idle(self, self.game_flow_storage)
         return all_ok
 
     async def set_board_light(self, brightness: int, target_ip: Optional[str] = None) -> bool:

@@ -1,4 +1,4 @@
-// AutoGlow 2 - Header mode switch: chooses what the engine plays (Event Matrix or Flow Matrix)
+// AutoGlow 2 - Header mode switch: chooses what the engine plays (Flow Matrix, the default, or the legacy Event Matrix)
 // The switch changes only after the server confirms; a failed switch leaves the old mode selected.
 
 import { api } from '../core/api.js';
@@ -6,13 +6,13 @@ import { navigate } from '../core/router.js';
 import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 
-export const MODE_LABELS = { matrix: 'Event Matrix', flow: 'Flow Matrix' };
+export const MODE_LABELS = { matrix: 'Event Matrix (legacy)', flow: 'Flow Matrix' };
 
 let pending = null;
 
 // Resolves true when the engine now plays the mode. quiet skips the success toast (the Settings page reports its own).
 export async function setLightingMode(mode, { quiet = false } = {}) {
-  const target = mode === 'flow' ? 'flow' : 'matrix';
+  const target = mode === 'matrix' ? 'matrix' : 'flow';
   if (pending) return false;
   if (appStore.get().lightingMode === target) return true;
   pending = target;

@@ -305,6 +305,21 @@ function copyBridgeValue(elementId, label) {
   }
 }
 
+// Chrome refuses to open chrome:// links from a web page, so the link copies the address instead
+function copyChromeExtensionsLink(event) {
+  if (event) event.preventDefault();
+  const value = 'chrome://extensions';
+  const hint = 'Paste it into the Chrome address bar.';
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(value)
+      .then(() => showToast(`${value} copied. ${hint}`, 'success'))
+      .catch(() => showToast(`Open ${value} in the Chrome address bar.`, 'info'));
+  } else {
+    showToast(`Open ${value} in the Chrome address bar.`, 'info');
+  }
+  return false;
+}
+
 let activeDeviceLinkPolling = null;
 let activeDeviceLinkTimer = null;
 let deviceLinkExpirySeconds = 0;
@@ -473,6 +488,7 @@ if (typeof window !== "undefined") {
   window.cancelDeviceLink = cancelDeviceLink;
   window.copyDeviceLinkCode = copyDeviceLinkCode;
   window.copyBridgeValue = copyBridgeValue;
+  window.copyChromeExtensionsLink = copyChromeExtensionsLink;
 }
 
 

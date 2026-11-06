@@ -5,7 +5,6 @@
 import { appStore } from './store.js';
 
 export const VIEWS = [
-  { id: 'hub', label: 'Hub', path: '/hub', pane: 'tab-dashboard' },
   {
     id: 'setup', label: 'Setup', path: '/setup',
     subs: [
@@ -17,7 +16,7 @@ export const VIEWS = [
   {
     id: 'lighting', label: 'Lighting', path: '/lighting',
     subs: [
-      { id: 'matrix', label: 'Event Matrix', pane: 'tab-effects', mode: 'matrix' },
+      { id: 'matrix', label: 'Event Matrix (legacy)', pane: 'tab-effects', mode: 'matrix' },
       { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator', mode: 'flow' }
     ]
   },
@@ -30,11 +29,11 @@ export const VIEWS = [
       { id: 'cameras', label: 'Cameras', pane: 'tab-studio-cameras' }
     ]
   },
-  { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
+  { id: 'settings', label: 'Power', path: '/settings', pane: 'tab-settings' }
 ];
 
 const ALIASES = {
-  '/': '/hub', '/index.html': '/hub', '/home': '/hub', '/dashboard': '/hub',
+  '/': '/lighting/flow', '/index.html': '/lighting/flow', '/hub': '/lighting/flow', '/home': '/lighting/flow', '/dashboard': '/lighting/flow',
   '/devices': '/setup/controllers', '/wled-devices': '/setup/controllers',
   '/autodarts': '/setup/connection', '/autodarts-account': '/setup/connection',
   '/matrix': '/lighting/matrix', '/event-matrix': '/lighting/matrix',
@@ -46,7 +45,8 @@ const ALIASES = {
 function defaultSub(view) {
   if (view.id === 'lighting') {
     const mode = appStore.get().lightingMode;
-    return view.subs.find(s => s.mode === mode) || view.subs[0];
+    // Flow Matrix unless the legacy Event Matrix engine is chosen
+    return view.subs.find(s => s.mode === mode) || view.subs.find(s => s.id === 'flow');
   }
   return view.subs[0];
 }
@@ -56,7 +56,7 @@ export function resolve(rawPath) {
   const clean = (rawPath || '/').toLowerCase().replace(/\/+$/, '') || '/';
   const path = ALIASES[clean] || clean;
   const [, viewId, subId, rawParam] = path.split('/');
-  const view = VIEWS.find(v => v.id === viewId) || VIEWS[0];
+  const view = VIEWS.find(v => v.id === viewId) || VIEWS.find(v => v.id === 'lighting');
   if (!view.subs) return { view, sub: null, param: null, pane: view.pane, path: view.path };
   // Lighting always shows the engine selected in Settings
   const sub = view.id === 'lighting' ? defaultSub(view) : view.subs.find(s => s.id === subId) || defaultSub(view);
@@ -71,7 +71,7 @@ function pathForPane(paneId) {
     const sub = view.subs?.find(s => s.pane === paneId);
     if (sub) return `${view.path}/${sub.id}`;
   }
-  return '/hub';
+  return '/lighting/flow';
 }
 
 // A page can veto leaving it: guard(fromRoute, toRoute) returns true to allow, or a promise of true/false

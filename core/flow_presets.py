@@ -7,7 +7,7 @@ Each preset uses only the curated Flow Matrix looks. "Player colour" means the c
 
 from typing import Dict, List, Optional, Tuple
 
-from core.game_flow import FlowStep, FlowTransition, GameFlow
+from core.game_flow import FlowIdle, FlowStep, FlowTransition, GameFlow
 from core.models import AnimationType, EffectConfig, RGBColor
 
 Rgb = Tuple[int, int, int]
@@ -71,6 +71,7 @@ def _minimal() -> GameFlow:
         },
         hits={},
         camera_friendly=True,
+        idle=FlowIdle(fx=0, brightness=50, colors=[RGBColor(255, 190, 130), RGBColor(0, 0, 0), RGBColor(0, 0, 0)]),  # Waiting: WLED effect (0 Solid, 9 Rainbow, 38 Aurora)
     )
 
 
@@ -89,6 +90,7 @@ def _classic() -> GameFlow:
             "bullseye": look("flash", RED, duration=1.0, pulses=1),
         },
         camera_friendly=True,
+        idle=FlowIdle(fx=9, brightness=70),  # Waiting: WLED effect (0 Solid, 9 Rainbow, 38 Aurora)
     )
 
 
@@ -110,6 +112,7 @@ def _arena() -> GameFlow:
         },
         camera_friendly=True,
         hit_locator=True,
+        idle=FlowIdle(fx=38, brightness=80),  # Waiting: WLED effect (0 Solid, 9 Rainbow, 38 Aurora)
     )
 
 
@@ -133,6 +136,7 @@ def _show() -> GameFlow:
         },
         camera_friendly=True,
         hit_locator=True,
+        idle=FlowIdle(fx=38),  # Waiting: WLED effect (0 Solid, 9 Rainbow, 38 Aurora)
     )
 
 
@@ -158,6 +162,7 @@ def _party() -> GameFlow:
         },
         camera_friendly=False,
         hit_locator=True,
+        idle=FlowIdle(fx=9, speed=170),  # Waiting: WLED effect (0 Solid, 9 Rainbow, 38 Aurora)
     )
 
 

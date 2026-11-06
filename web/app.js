@@ -11,7 +11,6 @@ function activatePane(targetId) {
   const pane = document.getElementById(targetId);
   if (pane) pane.classList.add('active');
 
-  if (targetId === 'tab-dashboard') renderDashboard();
   if (targetId === 'tab-devices') renderDevicesTab();
   if (targetId === 'tab-autodarts') renderAutodartsTab();
   if (targetId === 'tab-effects') renderEffectsTable();
@@ -51,7 +50,6 @@ async function loadConfig() {
         if (typeof localStorage !== 'undefined') localStorage.removeItem('autoglow_selected_matrix_device');
       }
 
-      renderDashboard();
       renderDevicesTab();
       renderAutodartsTab();
       renderEffectsTable();
@@ -105,11 +103,6 @@ async function saveAllConfig({ quiet = false } = {}) {
 }
 window.saveAllConfig = saveAllConfig;
 window.loadConfig = loadConfig;
-
-// --- Dashboard View ---
-function renderDashboard() {
-  if (typeof window.renderHub === 'function') window.renderHub();
-}
 
 // --- Live Telemetry WebSocket ---
 function initTelemetryWebSocket() {

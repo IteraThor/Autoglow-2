@@ -1,6 +1,6 @@
 // AutoGlow 2 - Setup › Controllers › <controller>
-// One page per controller: name and on/off in the header, then one card per light (its idle look and game profile)
-// and the wiring at the bottom.
+// One page per controller: name and on/off in the header, then the wiring.
+// Then the wiring, where each RGB strip gets its profile (which also sets its idle effect), and the light strips' idle brightness.
 // Everything is a draft until the save bar's Save; leaving with unsaved changes asks first.
 
 import { api } from '../core/api.js';
@@ -10,8 +10,8 @@ import { router } from '../core/router.js';
 import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 import { runControllerSetup } from './controller-setup.js';
-import { applySetup, devices, layoutSummary, saveDevices } from './controllers.js';
 import { createIdleEditor } from './idle-lighting.js';
+import { applySetup, devices, layoutSummary, saveDevices } from './controllers.js';
 import {
   COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicatePins, isPwmOutput, outputTypeLabel, pinOf,
   removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
@@ -19,10 +19,7 @@ import {
 import { confirmLeave } from './lighting-guard.js';
 
 // Names of the unsaved parts in the save bar
-const PART_LABELS = { general: 'name & status', leds: 'wiring', idle: 'idle lighting', profile: 'game profile' };
-
-// PWM / white segments are driven by brightness and play no matrix effects, so they get no profile
-const isPwmSegment = seg => /pwm|white/i.test(`${seg.type || ''} ${seg.name || ''}`);
+const PART_LABELS = { general: 'name & status', leds: 'wiring', idle: 'light strip brightness' };
 
 // The open page; null on the controller list
 let page = null;
@@ -35,7 +32,6 @@ function dirtyParts() {
   if (snapshot(page.general) !== page.savedGeneral) parts.push('general');
   if (page.layout && snapshot(page.layout) !== page.savedLayout) parts.push('leds');
   if (page.idle?.isDirty()) parts.push('idle');
-  if (page.profiles && snapshot(page.profiles) !== page.savedProfiles) parts.push('profile');
   return parts;
 }
 
@@ -124,6 +120,105 @@ function stripBar(layout) {
     }));
 }
 
+// Segment names are edited in place and saved on their own (Enter or leaving the field): no LED rewrite
+function segmentNameInput(seg) {
+  const input = h('input', {
+    type: 'text', class: 'led-summary-seg-name', value: seg.name, maxlength: 32, 'aria-label': `Name of ${seg.name}`,
+    title: 'Click to rename', spellcheck: false,
+    onkeydown: e => {
+      if (e.key === 'Enter') e.target.blur();
+      if (e.key === 'Escape') { e.target.value = seg.name; e.target.blur(); }
+    },
+    onchange: () => renameSegment(seg, input)
+  });
+  return input;
+}
+
+async function renameSegment(seg, input) {
+  const name = cleanName(input.value).trim();
+  if (!name) {
+    toast.error('Give the segment a name (letters, numbers, spaces, - and _).');
+    input.value = seg.name;
+    return;
+  }
+  if (name === seg.name) {
+    input.value = name;
+    return;
+  }
+  input.disabled = true;
+  try {
+    await api.post('/api/wled/segment-name', { ip: page.ip, segment_id: seg.id, name });
+    // Rename in the draft and the saved layout alike, so it is not an unsaved wiring change
+    const old = seg.name;
+    for (const layout of [page.layout, JSON.parse(page.savedLayout)]) {
+      const target = layout.segments.find(s => s.id === seg.id);
+      if (target) target.name = name;
+      if (layout !== page.layout) page.savedLayout = snapshot(layout);
+    }
+    delete window.lastFetchedLiveDeviceData?.[page.ip];
+    await window.loadConfig?.();
+    toast.success(`Renamed ${old} to ${name}`);
+  } catch (err) {
+    input.value = seg.name;
+    toast.error(err);
+  } finally {
+    input.disabled = false;
+    if (page) renderLeds(page.bodies.leds);
+  }
+}
+
+// What a segment plays during a game (Flow Matrix profile; light strips play none).
+// RGB strips get a dropdown that switches the profile straight away (not part of the wiring draft).
+function segmentProfile(seg, pwm) {
+  const text = (label, muted) => h('span', { class: `led-summary-seg-profile${muted ? ' is-none' : ''}` }, label);
+  if (pwm) return text('No game effects', true);
+  if (appStore.get().lightingMode === 'matrix') return text('Event Matrix (legacy)', true);
+  const profiles = page.segProfiles;
+  if (!profiles) return text('…', true);
+  const entry = profiles.segments[String(seg.id)];
+  // A segment that is only in the draft has no saved profile yet
+  if (!entry || !profiles.names.length) return text(entry?.profile ?? profiles.default ?? '—', !entry);
+  const current = entry.profile ?? profiles.default;
+  const el = select(profiles.names.map(name => ({ value: name, label: name })), current, {
+    class: 'ui-select ui-select-sm led-summary-seg-profile-select',
+    'aria-label': `Profile for ${seg.name}`, title: 'Flow Matrix profile this strip plays during a game',
+    onchange: () => assignSegmentProfile(seg, entry, el)
+  });
+  return el;
+}
+
+async function assignSegmentProfile(seg, entry, el) {
+  const name = el.value;
+  const opened = page;
+  el.disabled = true;
+  try {
+    const data = await api.post('/api/flow/assign', { ip: page.ip, segment_id: entry.id, name });
+    entry.profile = name;
+    if (data.idle_failed?.length) toast.warning(`${seg.name} plays '${name}', but its idle effect could not be set: the controller did not answer.`);
+    else toast.success(`${seg.name} plays '${name}'`);
+  } catch (err) {
+    el.value = entry.profile ?? opened.segProfiles.default;
+    toast.error(err);
+  } finally {
+    el.disabled = false;
+  }
+}
+
+async function loadSegmentProfiles() {
+  try {
+    const data = await api.get('/api/flow/overview');
+    const dev = data.lights.find(d => d.ip === page.ip);
+    return {
+      default: data.default,
+      names: data.profiles.map(p => p.name),
+      // Keyed like the layout's segment ids; id stays null for a controller without segments
+      segments: Object.fromEntries((dev?.segments || []).map(seg => [String(seg.id ?? 0), { id: seg.id, profile: seg.profile }]))
+    };
+  } catch (err) {
+    return { default: null, names: [], segments: {} };
+  }
+}
+
 // Read-only view of the layout. The guided setup is the normal way to change it; the editor is for experts.
 function renderLedSummary(body) {
   const { layout } = page;
@@ -132,11 +227,17 @@ function renderLedSummary(body) {
     h('ul', { class: 'led-summary' }, layout.outputs.map((hw, busIdx) => {
       const pwm = isPwmOutput(hw);
       const segs = layout.segments.filter(s => s.busIdx === busIdx);
-      return h('li', { class: 'led-summary-output' },
-        h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
-        h('strong', {}, `Output ${busIdx + 1}`),
-        h('span', {}, [outputTypeLabel(hw.type), `GPIO ${pinOf(hw)}`, !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · ')),
-        h('span', { class: 'led-summary-segs' }, `→ ${segs.map(seg => seg.name).join(', ') || 'no segment'}`));
+      // One box per output: its GPIO pin up top, the segments it drives inside
+      return h('li', { class: 'led-summary-output', dataset: { kind: pwm ? 'pwm' : 'rgb' } },
+        h('div', { class: 'led-summary-head' },
+          h('span', { class: 'led-summary-gpio' }, `GPIO ${pinOf(hw)}`),
+          h('strong', {}, `Output ${busIdx + 1}`),
+          h('span', {}, [outputTypeLabel(hw.type), !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · '))),
+        h('ul', { class: 'led-summary-segs' }, ...(segs.length ? segs.map(seg => h('li', {},
+          segmentNameInput(seg),
+          h('span', { class: 'led-summary-seg-range' }, pwm ? 'brightness only' : `LEDs ${seg.start + 1}–${seg.stop}`),
+          segmentProfile(seg, pwm)))
+          : [h('li', { class: 'led-summary-seg-none' }, 'No segment')])));
     })),
     h('div', { class: 'led-summary-actions' },
       h('button', {
@@ -265,102 +366,6 @@ function renderLeds(body) {
   );
 }
 
-// --- Lights: one card per segment with its idle look and game profile -------
-
-// The game profiles of the lighting engine that plays (Flow Matrix profiles, or legacy Event Matrix presets)
-const flowMode = () => appStore.get().lightingMode === 'flow';
-
-async function loadFlowProfiles() {
-  const data = await api.get('/api/flow/overview');
-  const names = data.profiles.map(p => p.name);
-  const dev = data.lights.find(d => d.ip === page.ip);
-  const segs = (Array.isArray(page.dev.segments) ? page.dev.segments : []).filter(seg => !isPwmSegment(seg));
-  const fromServer = Object.fromEntries((dev?.segments || []).map(seg => [String(seg.id), seg.profile]));
-  const profiles = segs.length
-    ? Object.fromEntries(segs.map(seg => [String(seg.id), fromServer[String(seg.id)] || data.default]))
-    : { all: fromServer.null || data.default };
-  return { names, profiles };
-}
-
-async function loadProfiles() {
-  try {
-    if (flowMode()) return await loadFlowProfiles();
-    const data = await api.get('/api/matrix/presets');
-    const names = data.presets?.length ? [...data.presets] : ['Default'];
-    const fallback = data.device_profiles?.[page.ip] || data.active_profile || 'Default';
-    const segs = (Array.isArray(page.dev.segments) ? page.dev.segments : []).filter(seg => !isPwmSegment(seg));
-    const assigned = data.segment_profiles?.[page.ip] || {};
-    const profiles = segs.length
-      ? Object.fromEntries(segs.map(seg => [String(seg.id), assigned[String(seg.id)] || fallback]))
-      : { all: fallback };
-    return { names, profiles };
-  } catch (err) {
-    toast.error(err);
-    return null;
-  }
-}
-
-// The saved LED layout when the controller is reachable, else the segments in AutoGlow's config
-function lightList() {
-  if (page.savedLayout) {
-    const saved = JSON.parse(page.savedLayout);
-    return saved.segments.map(seg => ({ id: seg.id, name: seg.name, pwm: isPwmOutput(saved.outputs[seg.busIdx]) }));
-  }
-  return (Array.isArray(page.dev.segments) ? page.dev.segments : []).map(seg => ({ id: seg.id, name: seg.name || 'Segment', pwm: isPwmSegment(seg) }));
-}
-
-function profileControl(key, name) {
-  if (!page.profiles) return h('p', { class: 'detail-empty' }, page.profilesFailed ? 'Profiles could not be loaded.' : 'Loading…');
-  const current = page.profiles[key];
-  if (current === undefined) return h('p', { class: 'detail-empty' }, 'Save the wiring first to pick a profile.');
-  const options = (page.profileNames.includes(current) ? page.profileNames : [current, ...page.profileNames]).map(n => ({ value: n, label: n }));
-  return select(options, current, { 'aria-label': `Game profile for ${name}`, onchange: e => { page.profiles[key] = e.target.value; sync(); } });
-}
-
-function lightRow(label, content) {
-  return h('div', { class: 'light-row' }, h('span', { class: 'light-row-label' }, label), h('div', { class: 'light-row-body' }, content));
-}
-
-function lightCard(light) {
-  const key = String(light.id);
-  const titleId = `ctl-light-${key}`;
-  const idle = page.idle?.elementFor(light.id)
-    || h('p', { class: 'detail-empty' }, page.online === null ? 'Connecting…' : 'Needs the controller online.');
-  const game = light.pwm ? h('p', { class: 'detail-empty' }, 'Light strips play no game effects.') : profileControl(key, light.name);
-  return h('section', { class: 'card light-card', 'aria-labelledby': titleId },
-    h('header', { class: 'light-head' },
-      h('span', { class: 'seg-swatch', dataset: { kind: light.pwm ? 'pwm' : 'rgb' } }),
-      h('h2', { class: 'light-name', id: titleId }, light.name, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
-      page.idle?.switchFor(light.id)),
-    lightRow('During a game', game),
-    lightRow('Idle', idle));
-}
-
-function renderLights() {
-  if (page.layout && !page.idle) {
-    const saved = JSON.parse(page.savedLayout);
-    page.idle = createIdleEditor(page.ip, saved.segments.map(seg => ({ ...seg, pwm: isPwmOutput(saved.outputs[seg.busIdx]) })));
-    page.idle.onChange = sync;
-    page.idle.load().then(sync);
-  }
-  const lights = lightList();
-  page.lightCards = Object.fromEntries(lights.map(light => [String(light.id), lightCard(light)]));
-  // No segments yet: one profile for the whole controller
-  if (page.profiles?.all !== undefined) {
-    page.lightCards.all = lightCard({ id: 'all', name: 'Whole controller', pwm: false });
-    page.lightCards.all.querySelector('.light-row:last-child').remove();
-  }
-  const offline = !page.layout && page.online !== null && offlineNotice('to change the idle lighting');
-  page.lightsBody.replaceChildren(...[
-    offline,
-    ...Object.values(page.lightCards),
-    !lights.length && page.layout && notice('No lights are set up on this controller yet. Run the guided setup under Wiring.'),
-    flowMode()
-      ? h('a', { class: 'card-link', href: '/lighting/flow', 'data-link': true }, 'Edit flow profiles in the Flow Matrix')
-      : h('a', { class: 'card-link', href: '/lighting/matrix', 'data-link': true }, 'Edit game profiles on the Lighting page')
-  ].filter(Boolean));
-}
-
 // --- Page -------------------------------------------------------------------
 
 function offlineNotice(what) {
@@ -387,19 +392,45 @@ function renderHead() {
 }
 
 // Mark dirty parts, lock what depends on the saved LED layout, show or hide the save bar
+// --- Light strips between games ----------------------------------------------
+// RGB strips wait with their profile's idle effect. Light strips (PWM) play no profile, so their idle brightness
+// is set here; it is saved in the controller's idle preset (WLED preset 1, also its boot look).
+
+function renderIdle(body) {
+  if (page.dev.enabled === false) {
+    body.replaceChildren(notice('This controller is switched off in AutoGlow.'));
+    return;
+  }
+  if (!page.layout) {
+    body.replaceChildren(h('p', { class: 'detail-empty' }, page.online === false ? 'Needs the controller online.' : 'Loading…'));
+    return;
+  }
+  // Built from the saved wiring, so a wiring draft never changes which segments the idle preset covers
+  if (!page.idle) {
+    const saved = JSON.parse(page.savedLayout);
+    const segs = saved.segments.map(seg => ({ ...seg, pwm: isPwmOutput(saved.outputs[seg.busIdx]) }));
+    page.idleSegments = segs.filter(seg => seg.pwm);
+    page.sections.idle.hidden = !page.idleSegments.length;
+    if (!page.idleSegments.length) return;
+    // The editor saves the whole preset, so it holds the RGB strips too (as the controller has them)
+    page.idle = createIdleEditor(page.ip, segs);
+    page.idle.onChange = sync;
+    page.idle.load().then(sync);
+  }
+  if (!page.idle) return;
+  body.replaceChildren(...page.idleSegments.map(seg => h('div', { class: 'idle-light' },
+    h('div', { class: 'idle-light-head' }, h('strong', {}, seg.name), page.idle.switchFor(seg.id)),
+    page.idle.elementFor(seg.id))));
+}
+
 function sync() {
   if (!page) return;
   const parts = dirtyParts();
   const ledsDirty = parts.includes('leds');
   if (page.closeEditorBtn) page.closeEditorBtn.disabled = ledsDirty;
   page.sections.leds.toggleAttribute('data-dirty', ledsDirty);
+  page.sections.idle.toggleAttribute('data-dirty', parts.includes('idle'));
   page.head.toggleAttribute('data-dirty', parts.includes('general'));
-  const savedProfiles = page.savedProfiles ? JSON.parse(page.savedProfiles) : {};
-  for (const [key, card] of Object.entries(page.lightCards)) {
-    card.toggleAttribute('data-dirty', Boolean(page.idle?.isDirty(key) || (page.profiles && page.profiles[key] !== savedProfiles[key])));
-  }
-  page.lights.classList.toggle('is-locked', ledsDirty);
-  page.lightsBody.inert = ledsDirty;
   page.saveBar.hidden = parts.length === 0;
   page.saveNote.textContent = `Unsaved changes: ${parts.map(p => PART_LABELS[p]).join(', ')}`;
   page.saveBtn.disabled = page.saving;
@@ -440,23 +471,14 @@ async function save() {
       delete window.lastFetchedLiveDeviceData[ip];
       await window.loadConfig();
     }
+    if (parts.includes('idle')) await page.idle.save();
     if (parts.includes('general')) {
       const next = devices().map(d => (d.ip === ip ? { ...d, name: general.name || d.name, enabled: general.enabled } : d));
       if (!await saveDevices(next, null)) return false;
     }
-    if (parts.includes('idle')) await page.idle.save();
-    if (parts.includes('profile')) {
-      const saved = JSON.parse(page.savedProfiles);
-      for (const [key, name] of Object.entries(page.profiles)) {
-        if (saved[key] === name) continue;
-        const target = { name, ip, ...(key === 'all' ? {} : { segment_id: Number(key) }) };
-        await api.post(flowMode() ? '/api/flow/assign' : '/api/matrix/presets/select', target);
-      }
-    }
     if (ledsPending) {
       // Everything else is saved; reloading the page now would throw the LED draft away
       page.savedGeneral = snapshot(page.general);
-      if (page.profiles) page.savedProfiles = snapshot(page.profiles);
       toast.warning('The controller did not respond, so the LED layout was not applied. Your LED changes are kept: save again when it is back online.');
       return false;
     }
@@ -479,11 +501,10 @@ function discard() {
   if (!page) return;
   page.general = JSON.parse(page.savedGeneral);
   if (page.layout) page.layout = JSON.parse(page.savedLayout);
-  if (page.profiles) page.profiles = JSON.parse(page.savedProfiles);
   page.idle?.discard();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderLights();
+  renderIdle(page.bodies.idle);
   sync();
 }
 
@@ -557,8 +578,7 @@ export async function openDetail(ip, { force = false } = {}) {
     ip, dev, live: null, online: dev.enabled === false ? false : null,
     general, savedGeneral: snapshot(general),
     layout: null, savedLayout: null, idle: null,
-    profiles: null, savedProfiles: null, profileNames: [],
-    saving: false, sections: {}, bodies: {}, lightCards: {}
+    saving: false, sections: {}, bodies: {}
   };
 
   buildHeaderControls();
@@ -573,15 +593,10 @@ export async function openDetail(ip, { force = false } = {}) {
     h('div', { class: 'detail-actions' }, page.enabledToggle),
     page.meta);
 
-  page.lightsBody = h('div', { class: 'detail-lights-body' });
-  page.lights = h('div', { class: 'detail-lights' },
-    h('div', { class: 'detail-group-head' },
-      h('h2', { class: 'detail-group-title' }, 'Lights'),
-      h('p', { class: 'detail-lead' }, 'Idle changes show on the lights right away.')),
-    h('div', { class: 'detail-lock-note' }, 'Save or discard the wiring changes first: the lights follow the saved wiring.'),
-    page.lightsBody);
   page.bodies.leds = h('div');
   page.sections.leds = section('leds', 'Wiring', 'What is connected to the controller. To change it, run the guided setup.', page.bodies.leds);
+  page.bodies.idle = h('div', { class: 'idle-lights' });
+  page.sections.idle = section('idle', 'Light strips between games', 'How bright the light strips are when no game is running. Changes show right away; Save keeps them on the controller. RGB strips show the idle effect of their profile.', page.bodies.idle);
   page.saveNote = h('span', { class: 'savebar-note' });
   page.discardBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: discard }, 'Discard');
   page.saveBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: save }, 'Save changes');
@@ -591,8 +606,8 @@ export async function openDetail(ip, { force = false } = {}) {
   host.replaceChildren(
     h('a', { class: 'detail-back', href: '/setup/controllers', 'data-link': true }, '← Controllers'),
     page.head,
-    page.lights,
     page.sections.leds,
+    page.sections.idle,
     h('div', { class: 'detail-footer' },
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', title: 'AutoGlow stops using it. The controller keeps its own settings.', onclick: removeThis }, 'Remove this controller…')),
     page.saveBar);
@@ -600,22 +615,16 @@ export async function openDetail(ip, { force = false } = {}) {
   renderHead();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderLights();
+  renderIdle(page.bodies.idle);
   sync();
 
   const opened = page;
-  const [live, profiles] = await Promise.all([
+  const [live, segProfiles] = await Promise.all([
     dev.enabled === false ? null : window.pingDeviceCached(ip, true).catch(() => null),
-    loadProfiles()
+    loadSegmentProfiles()
   ]);
   if (page !== opened) return;
-  if (profiles) {
-    page.profileNames = profiles.names;
-    page.profiles = profiles.profiles;
-    page.savedProfiles = snapshot(profiles.profiles);
-  } else {
-    page.profilesFailed = true;
-  }
+  page.segProfiles = segProfiles;
   if (dev.enabled !== false) {
     page.live = live;
     page.online = live?.status === 'ok' && live.online === true;
@@ -628,7 +637,7 @@ export async function openDetail(ip, { force = false } = {}) {
   renderHead();
   renderGeneral();
   renderLeds(page.bodies.leds);
-  renderLights();
+  renderIdle(page.bodies.idle);
   sync();
 }
 

@@ -18,7 +18,7 @@ from routes.wled_routes import (
     handle_ping_device, handle_wled_update, handle_get_wled_preset,
     handle_save_wled_preset, handle_get_wled_effects, handle_preview_wled_state,
     handle_wled_setup_preview, handle_scan_network, handle_test_effect, handle_test_light, handle_test_end,
-    handle_get_protocol_mode, handle_post_protocol_mode
+    handle_get_protocol_mode, handle_post_protocol_mode, handle_rename_segment
 )
 from routes.autodarts_routes import (
     handle_autodarts_login, handle_get_autodarts_boards,
@@ -102,6 +102,7 @@ def register_routes(app: web.Application, web_dir: str):
     app.router.add_post("/api/wled/update", handle_wled_update)
     app.router.add_get("/api/wled/preset", handle_get_wled_preset)
     app.router.add_post("/api/wled/preset", handle_save_wled_preset)
+    app.router.add_post("/api/wled/segment-name", handle_rename_segment)
     app.router.add_get("/api/wled/effects", handle_get_wled_effects)
     app.router.add_post("/api/wled/preview", handle_preview_wled_state)
     app.router.add_post("/api/wled/setup-preview", handle_wled_setup_preview)

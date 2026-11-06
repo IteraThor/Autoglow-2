@@ -536,7 +536,31 @@
       ],
       "camera_friendly": true,
       "hit_locator": false,
-      "preset": "classic"
+      "preset": "classic",
+      "idle": {
+        "on": true,
+        "fx": 9,
+        "speed": 128,
+        "intensity": 128,
+        "brightness": 70,
+        "colors": [
+          [
+            0,
+            255,
+            157
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      }
     }
   },
   "assign": {}

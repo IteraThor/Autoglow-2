@@ -26,6 +26,8 @@ REMOVED_FILES = (
     # Old UI files replaced by the redesign
     "web/style.css",
     "web/js/hub.js",
+    "web/js/features/hub.js",
+    "web/css/hub.css",
     "web/flow_design_examples.html",
     "web/flow_outcome_examples.html",
     "web/flow_takeout_examples.html",
