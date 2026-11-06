@@ -87,68 +87,58 @@
 
 
         <!-- TAB 3: AUTODARTS INTEGRATION -->
-        <section id="tab-autodarts" class="tab-pane" style="max-width: 820px;">
-          
-          <!-- Top Row (active source): AutoGlow Chrome Extension bridge -->
-          <div id="autodartsExtensionRow" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: stretch;">
-
-            <!-- Left Half: Extension Status -->
-            <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
-                  <span>Chrome Extension</span>
-                </span>
-                <span style="font-family: var(--font-mono); font-size: 11px;" id="bridgeBadge"><span class="dot dot-gray" style="display: inline-block; width: 6px; height: 6px; margin-right: 4px;"></span>Waiting</span>
-              </div>
-              <div class="panel-body" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                  <div class="input-group">
-                    <label class="input-label">Extension Link</label>
-                    <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 8px; min-height: 33px;">
-                      <span class="dot dot-gray" id="bridgeLinkDot" style="width: 7px; height: 7px;"></span>
-                      <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); font-weight: 600;" id="bridgeLinkText">Not connected</span>
-                    </div>
-                  </div>
-                  <div class="input-group">
-                    <label class="input-label">Autodarts Tab</label>
-                    <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 8px; min-height: 33px; overflow: hidden;">
-                      <span class="dot dot-gray" id="bridgeTabDot" style="width: 7px; height: 7px; flex: none;"></span>
-                      <span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="bridgeTabText">Not open</span>
-                    </div>
-                  </div>
-                  <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);" id="bridgeMeta">&mdash;</div>
-                </div>
-                <a href="https://play.autodarts.com" target="_blank" rel="noopener noreferrer" class="btn-ide btn-ide-primary" style="width: 100%; height: 32px; justify-content: center; text-decoration: none; display: flex; align-items: center;">Open play.autodarts.com ↗</a>
-              </div>
-            </div>
-
-            <!-- Right Half: Extension Setup -->
-            <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                  <span>Extension Setup</span>
-                </span>
-              </div>
-              <div class="panel-body" style="flex: 1; display: flex; flex-direction: column; gap: 8px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.5;">
-                <span style="color: var(--text-muted);">Use Chrome on this computer: AutoGlow only accepts the extension from the machine it runs on. Linux: <code>setup.sh</code> installs the extension automatically (restart Chrome once). Otherwise:</span>
-                <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px;">
-                  <li>In Chrome, open <a href="chrome://extensions" onclick="return copyChromeExtensionsLink(event)" title="Copies the address: Chrome does not let web pages open chrome:// links" style="color: var(--accent-primary);"><code>chrome://extensions</code></a> and switch on <strong>Developer mode</strong>.</li>
-                  <li>Click <strong>Load unpacked</strong> and select this folder:
-                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
-                      <code id="bridgeExtensionDir" style="flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 11px;">chrome_extension</code>
-                      <button class="btn-ide" onclick="copyBridgeValue('bridgeExtensionDir', 'Folder path')" style="font-size: 10.5px; padding: 3px 8px;">Copy</button>
-                    </div>
-                  </li>
-                  <li>Open <strong>play.autodarts.com</strong> and play as usual. The toolbar icon shows <strong>ON</strong> while AutoGlow receives the game.</li>
-                </ol>
-              </div>
+        <section id="tab-autodarts" class="tab-pane true-size ad-page">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Autodarts</h1>
+              <p class="page-lead">AutoGlow follows the game through the AutoGlow Bridge extension in Chrome on this computer.</p>
             </div>
           </div>
 
+          <!-- Active source: AutoGlow Chrome Extension bridge, as a 3-step checklist -->
+          <ol id="autodartsExtensionRow" class="card ad-steps">
+            <li class="ad-step" id="adStepExtension" data-state="todo">
+              <span class="ad-step-mark" aria-hidden="true">1</span>
+              <div class="ad-step-body">
+                <div class="ad-step-title">Bridge extension connected</div>
+                <div class="ad-step-detail" id="bridgeLinkText">Checking…</div>
+                <details class="ad-install" id="bridgeInstall">
+                  <summary>How to install the extension</summary>
+                  <p>Use Chrome on this computer: AutoGlow only accepts the extension from the machine it runs on. Linux: <code>setup.sh</code> installs the extension automatically (restart Chrome once). Otherwise:</p>
+                  <ol>
+                    <li>In Chrome, open <a href="chrome://extensions" onclick="return copyChromeExtensionsLink(event)" title="Copies the address: Chrome does not let web pages open chrome:// links"><code>chrome://extensions</code></a> and switch on <strong>Developer mode</strong>.</li>
+                    <li>Click <strong>Load unpacked</strong> and select this folder:
+                      <div class="ad-path">
+                        <code id="bridgeExtensionDir">chrome_extension</code>
+                        <button type="button" class="ui-btn ui-btn-sm" onclick="copyBridgeValue('bridgeExtensionDir', 'Folder path')">Copy</button>
+                      </div>
+                    </li>
+                    <li>Open <strong>play.autodarts.com</strong> and play as usual. The toolbar icon shows <strong>ON</strong> while AutoGlow receives the game.</li>
+                  </ol>
+                </details>
+              </div>
+            </li>
+            <li class="ad-step" id="adStepTab" data-state="todo">
+              <span class="ad-step-mark" aria-hidden="true">2</span>
+              <div class="ad-step-body">
+                <div class="ad-step-title">Autodarts tab open</div>
+                <div class="ad-step-detail" id="bridgeTabText">Not open</div>
+              </div>
+              <a id="bridgeOpenAutodarts" class="ui-btn ui-btn-primary ui-btn-sm ad-step-action" href="https://play.autodarts.com" target="_blank" rel="noopener noreferrer">Open play.autodarts.com ↗</a>
+            </li>
+            <li class="ad-step" id="adStepGame" data-state="todo">
+              <span class="ad-step-mark" aria-hidden="true">3</span>
+              <div class="ad-step-body">
+                <div class="ad-step-title" id="adGameTitle">Receiving the game</div>
+                <div class="ad-step-detail" id="adGameDetail">Waiting for a match. Start one in Autodarts.</div>
+                <div class="ad-step-events" id="adGameEvents" hidden>Last: <strong id="liveMatchLastEvent">Standby</strong> · before: <span id="liveMatchPrevEvent">—</span></div>
+              </div>
+              <a id="liveMatchLink" class="ui-btn ui-btn-sm ad-step-action" href="#" target="_blank" rel="noopener noreferrer" hidden>Open match ↗</a>
+            </li>
+          </ol>
+
           <!-- Top Row (on hold): direct Autodarts cloud login, hidden until Autodarts approves it -->
-          <div id="autodartsCloudLoginRow" style="display: none; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: stretch;">
+          <div id="autodartsCloudLoginRow" class="legacy-scale" style="display: none; grid-template-columns: repeat(2, 1fr); gap: 12px; align-items: stretch;">
             
             <!-- Left Half: Autodarts Account -->
             <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
@@ -270,56 +260,6 @@
               </div>
             </div>
 
-          </div>
-
-          <!-- Bottom Row: Live Match Status -->
-          <div style="display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch;">
-            <!-- Right Half: Live Match Status -->
-            <div class="ide-panel" style="margin-bottom: 0; display: flex; flex-direction: column; height: 100%;">
-              <div class="panel-header">
-                <span class="panel-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-                  <span>Live Match Status</span>
-                </span>
-                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); display: inline-flex; align-items: center;" id="liveMatchBadge"><span class="dot dot-gray" style="display: inline-block; width: 6px; height: 6px; margin-right: 5px;"></span>Standby</span>
-              </div>
-              <div class="panel-body" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;">
-                <div class="input-group">
-                  <label class="input-label">Match Status</label>
-                  <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; min-height: 33px;">
-                    <span style="color: var(--text-primary); font-family: var(--font-mono); font-weight: 600; font-size: 12px;" id="liveMatchName">No Match in Progress</span>
-                    <div id="liveMatchLinkContainer" style="display: none;">
-                      <a id="liveMatchLink" href="#" target="_blank" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; text-decoration: none; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600; transition: opacity 0.15s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                        <span>Open Match ↗</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="input-group">
-                  <label class="input-label">Active Players</label>
-                  <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); min-height: 33px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;" id="liveMatchPlayersContainer">
-                    <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;" id="liveMatchPlayers">None</span>
-                  </div>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                  <div class="input-group">
-                    <label class="input-label">Last Detected</label>
-                    <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); min-height: 33px; display: flex; align-items: center; overflow: hidden;">
-                      <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="liveMatchLastEvent">Standby</span>
-                    </div>
-                  </div>
-
-                  <div class="input-group">
-                    <label class="input-label">Previous</label>
-                    <div style="padding: 7px 10px; background: var(--bg-input); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); min-height: 33px; display: flex; align-items: center; overflow: hidden;">
-                      <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="liveMatchPrevEvent">&mdash;</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 

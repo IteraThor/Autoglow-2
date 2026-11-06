@@ -224,6 +224,156 @@ input.ui-input:focus {
 }
 
 /* -----------------------------------------------------------------------------
+ * Setup › Autodarts: 3-step checklist (web/js/autodarts.js)
+ * ----------------------------------------------------------------------------- */
+.ad-page {
+  max-width: 820px;
+}
+
+.ad-page.active {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ad-steps {
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+  list-style: none;
+}
+
+.ad-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.ad-step + .ad-step {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ad-step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--border-subtle);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font: 600 var(--fs-sm) var(--font-ui);
+}
+
+.ad-step[data-state="done"] .ad-step-mark {
+  border-color: var(--status-success);
+  background: var(--status-success);
+  color: #0b1416;
+  font-size: 0;
+}
+
+.ad-step[data-state="done"] .ad-step-mark::before {
+  content: "✓";
+  font-size: var(--fs-md);
+}
+
+.ad-step[data-state="todo"] .ad-step-mark {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+.ad-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ad-step-title {
+  color: var(--text-primary);
+  font: 600 var(--fs-md) var(--font-ui);
+  line-height: 26px;
+}
+
+.ad-step[data-state="wait"] .ad-step-title {
+  color: var(--text-muted);
+}
+
+.ad-step-detail,
+.ad-step-events {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ad-step[data-state="todo"] .ad-step-detail {
+  color: var(--status-warning);
+}
+
+.ad-step-events strong {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.ad-step-action {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  text-decoration: none;
+}
+
+.ad-step-action[hidden],
+.ad-step-events[hidden] {
+  display: none;
+}
+
+.ad-install {
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.ad-install summary {
+  width: fit-content;
+  color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.ad-install p {
+  margin: var(--space-2) 0;
+  color: var(--text-muted);
+}
+
+.ad-install ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ad-install a {
+  color: var(--accent-primary);
+}
+
+.ad-path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.ad-path code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-xs);
+}
+
+/* -----------------------------------------------------------------------------
  * Setup › Controllers: list
  * ----------------------------------------------------------------------------- */
 .ctl-page {

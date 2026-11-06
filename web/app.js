@@ -159,81 +159,8 @@ function handleTelemetryMessage(msg) {
   }
 
   if (msg.type === 'event' || msg.type === 'game_event') {
-    const evName = msg.event?.toUpperCase() || 'MATCH';
-    const matchLastEvent = document.getElementById('liveMatchLastEvent');
-    const matchPrevEvent = document.getElementById('liveMatchPrevEvent');
-    const matchBadge = document.getElementById('liveMatchBadge');
-    const matchName = document.getElementById('liveMatchName');
-    const matchPlayers = document.getElementById('liveMatchPlayers');
-
-    if (msg.event === 'idle' || msg.event === 'game_idle') {
-      if (matchLastEvent) {
-        matchLastEvent.innerText = 'Standby';
-        matchLastEvent.style.color = 'var(--text-primary)';
-      }
-      if (matchPrevEvent) {
-        matchPrevEvent.innerText = '—';
-        matchPrevEvent.style.color = 'var(--text-muted)';
-      }
-      if (matchBadge) {
-        matchBadge.innerHTML = `<span class="dot dot-gray" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px;"></span>Standby`;
-      }
-      if (matchName) {
-        matchName.innerText = 'No Match in Progress';
-        matchName.style.color = 'var(--text-primary)';
-      }
-      if (matchPlayers) {
-        matchPlayers.innerHTML = `<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">None</span>`;
-      }
-      const matchLinkContainer = document.getElementById('liveMatchLinkContainer');
-      if (matchLinkContainer) matchLinkContainer.style.display = 'none';
-    } else if (msg.event === 'takeout') {
-      if (matchPrevEvent && matchLastEvent && matchLastEvent.innerText !== 'Standby') {
-        matchPrevEvent.innerText = matchLastEvent.innerText;
-        matchPrevEvent.style.color = 'var(--text-secondary)';
-      }
-      if (matchLastEvent) {
-        matchLastEvent.innerText = 'TAKEOUT (Fired)';
-        matchLastEvent.style.color = 'var(--accent-primary)';
-      }
-    } else {
-      const displayEv = msg.display_event || (msg.segment_name ? `${msg.event} ; ${msg.segment_name}` : msg.event);
-      if (matchPrevEvent) {
-        const prev = msg.previous_event || (matchLastEvent && matchLastEvent.innerText !== 'Standby' ? matchLastEvent.innerText : '—');
-        matchPrevEvent.innerText = prev;
-        matchPrevEvent.style.color = 'var(--text-secondary)';
-      }
-      if (matchLastEvent) {
-        matchLastEvent.innerText = displayEv;
-        matchLastEvent.style.color = 'var(--accent-primary)';
-      }
-      if (matchBadge) {
-        matchBadge.innerHTML = `<span class="dot dot-green" style="display: inline-block; width: 8px; height: 8px; margin-right: 4px;"></span><span style="color: var(--status-success); font-weight: bold;">LIVE IN MATCH</span>`;
-      }
-      if (matchName) {
-        matchName.innerText = 'Match Active';
-        matchName.style.color = 'var(--status-success)';
-      }
-      if (matchPlayers && msg.players && msg.players.length > 0) {
-        const activeIdx = msg.active_player_idx ?? 0;
-        matchPlayers.innerHTML = formatPlayerNamePlates(msg.players, activeIdx);
-      }
-    }
+    if (typeof window.onAutodartsGameEvent === 'function') window.onAutodartsGameEvent(msg);
   }
-}
-
-function formatPlayerNamePlates(players, activeIdx = 0) {
-  if (!players || players.length === 0) {
-    return `<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">None</span>`;
-  }
-  return players.map((name, idx) => {
-    const isActive = (idx === activeIdx);
-    if (isActive) {
-      return `<span style="color: var(--status-success); font-family: var(--font-mono); font-size: 12px; font-weight: 700;">● ${escapeHtml(name)}</span>`;
-    } else {
-      return `<span style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 12px; font-weight: 500;">${escapeHtml(name)}</span>`;
-    }
-  }).join('<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin: 0 6px;">vs</span>');
 }
 
 // --- Lighting mode (Event Matrix vs Flow Matrix) ---

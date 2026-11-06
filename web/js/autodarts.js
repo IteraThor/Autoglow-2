@@ -49,67 +49,8 @@ async function renderAutodartsTab() {
 
     }
 
-    // 2. Live Match Status Panel
-    const matchBadge = document.getElementById('liveMatchBadge');
-    const matchName = document.getElementById('liveMatchName');
-    const matchPlayers = document.getElementById('liveMatchPlayers');
-    const matchLastEvent = document.getElementById('liveMatchLastEvent');
-    const matchPrevEvent = document.getElementById('liveMatchPrevEvent');
-    const matchLinkContainer = document.getElementById('liveMatchLinkContainer');
-    const matchLink = document.getElementById('liveMatchLink');
-
-    if (data.match && data.match.active_match_id) {
-      if (matchBadge) {
-        matchBadge.innerHTML = `<span class="dot dot-green" style="display: inline-block; width: 8px; height: 8px; margin-right: 4px;"></span><span style="color: var(--status-success); font-weight: bold;">LIVE IN MATCH</span>`;
-      }
-      if (matchName) {
-        matchName.innerText = `Match Active`;
-        matchName.style.color = `var(--status-success)`;
-      }
-      if (matchPlayers) {
-        const players = data.match.players || [];
-        const activeIdx = data.match.active_player_idx ?? 0;
-        if (players.length > 0) {
-          matchPlayers.innerHTML = formatPlayerNamePlates(players, activeIdx);
-        } else {
-          matchPlayers.innerHTML = formatPlayerNamePlates([email || 'Player'], 0);
-        }
-      }
-      if (matchLinkContainer && matchLink) {
-        matchLinkContainer.style.display = 'block';
-        matchLink.href = `https://play.autodarts.com/matches/${data.match.active_match_id}`;
-      }
-    } else {
-      if (matchBadge) {
-        matchBadge.innerHTML = `<span class="dot dot-gray" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px;"></span>Standby`;
-      }
-      if (matchName) {
-        matchName.innerText = `No Match in Progress`;
-        matchName.style.color = `var(--text-primary)`;
-      }
-      if (matchPlayers) {
-        matchPlayers.innerHTML = `<span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px;">None</span>`;
-      }
-      if (matchLinkContainer) {
-        matchLinkContainer.style.display = 'none';
-      }
-    }
-
-    if (matchLastEvent) {
-      const lastEv = (data.match?.last_event || 'Standby').replace(/\(Ready.*\)/gi, '').replace(/\(Idle.*\)/gi, '').trim() || 'Standby';
-      matchLastEvent.innerText = lastEv;
-      if (data.match?.active_match_id && lastEv !== 'Standby') {
-        matchLastEvent.style.color = 'var(--accent-primary)';
-      } else {
-        matchLastEvent.style.color = 'var(--text-primary)';
-      }
-    }
-
-    if (matchPrevEvent) {
-      const prevEv = (data.match?.previous_event || '—').replace(/\(Ready.*\)/gi, '').replace(/\(Idle.*\)/gi, '').trim() || '—';
-      matchPrevEvent.innerText = prevEv;
-      matchPrevEvent.style.color = 'var(--text-secondary)';
-    }
+    // 2. Step 3 of the checklist: is a match coming in?
+    renderGameStep(data.match || {}, !!(data.bridge && data.bridge.tab_attached));
 
   } catch (err) {
     console.error('Failed to render Autodarts status:', err);
@@ -243,28 +184,76 @@ function setTextById(id, text) {
   if (el) el.innerText = text;
 }
 
+function setStep(id, state) {
+  const el = document.getElementById(id);
+  if (el) el.dataset.state = state;
+}
+
+let bridgeWasLinked = null;
 function renderBridgePanel(bridge) {
   const linked = !!bridge.extension_connected;
   const tabOpen = linked && !!bridge.tab_attached;
 
-  const badge = document.getElementById('bridgeBadge');
-  if (badge) {
-    const [dot, color, label] = tabOpen
-      ? ['dot-green', 'var(--status-success)', 'Receiving']
-      : linked ? ['dot-yellow', 'var(--status-warning)', 'No game tab'] : ['dot-gray', 'var(--text-muted)', 'Waiting'];
-    badge.innerHTML = `<span class="dot ${dot}" style="display: inline-block; width: 7px; height: 7px; margin-right: 4px;"></span><span style="color: ${color};">${label}</span>`;
-  }
+  setStep('adStepExtension', linked ? 'done' : 'todo');
+  setTextById('bridgeLinkText', linked
+    ? `Connected${bridge.extension_version ? ` (v${bridge.extension_version})` : ''}`
+    : 'Not connected: is the extension installed? Chrome must be running with the AutoGlow Bridge extension.');
+  // The install steps open by themselves only when the extension goes missing; the user can still fold them
+  const install = document.getElementById('bridgeInstall');
+  if (install && bridgeWasLinked !== linked) install.open = !linked;
+  bridgeWasLinked = linked;
 
-  setDot('bridgeLinkDot', linked ? 'dot-green' : 'dot-red');
-  setTextById('bridgeLinkText', linked ? `Connected${bridge.extension_version ? ` (v${bridge.extension_version})` : ''}` : 'Not connected: is the extension installed?');
-
-  setDot('bridgeTabDot', tabOpen ? 'dot-green' : (linked ? 'dot-yellow' : 'dot-gray'));
+  setStep('adStepTab', tabOpen ? 'done' : linked ? 'todo' : 'wait');
   setTextById('bridgeTabText', tabOpen ? (bridge.tab_url || 'play.autodarts.com').replace(/^https?:\/\//, '') : 'Not open');
-
-  setTextById('bridgeMeta', linked ? '' : 'Chrome must be running with the AutoGlow Bridge extension.');
+  const open = document.getElementById('bridgeOpenAutodarts');
+  if (open) open.hidden = tabOpen;
 
   loadBridgeSetupInfo();
 }
+
+function cleanEventName(text, fallback) {
+  return (text || fallback).replace(/\(Ready.*\)/gi, '').replace(/\(Idle.*\)/gi, '').trim() || fallback;
+}
+
+// Step 3: no match yet, or the running match with its players and the last two events
+function renderGameStep(match, tabOpen) {
+  const live = !!match.active_match_id;
+  setStep('adStepGame', live ? 'done' : tabOpen ? 'todo' : 'wait');
+  const players = match.players || [];
+  const active = match.active_player_idx ?? 0;
+  setTextById('adGameDetail', live
+    ? `Match running${players.length ? ` · ${players.map((p, i) => (i === active ? `● ${p}` : p)).join(' vs ')}` : ''}`
+    : 'Waiting for a match. Start one in Autodarts.');
+  const events = document.getElementById('adGameEvents');
+  if (events) events.hidden = !live;
+  setTextById('liveMatchLastEvent', cleanEventName(match.last_event, 'Standby'));
+  setTextById('liveMatchPrevEvent', cleanEventName(match.previous_event, '—'));
+  const link = document.getElementById('liveMatchLink');
+  if (link) {
+    link.hidden = !live;
+    if (live) link.href = `https://play.autodarts.com/matches/${match.active_match_id}`;
+  }
+}
+
+// Live events from the telemetry socket move the last/previous event along between status polls
+function onAutodartsGameEvent(msg) {
+  const last = document.getElementById('liveMatchLastEvent');
+  const prev = document.getElementById('liveMatchPrevEvent');
+  if (!last || !prev) return;
+  if (msg.event === 'idle' || msg.event === 'game_idle') {
+    renderGameStep({}, document.getElementById('adStepTab')?.dataset.state === 'done');
+    return;
+  }
+  const shown = msg.event === 'takeout'
+    ? 'Takeout'
+    : msg.display_event || (msg.segment_name ? `${msg.event} ; ${msg.segment_name}` : msg.event);
+  prev.innerText = msg.previous_event || (last.innerText !== 'Standby' ? last.innerText : '—');
+  last.innerText = shown;
+  setStep('adStepGame', 'done');
+  const events = document.getElementById('adGameEvents');
+  if (events) events.hidden = false;
+}
+window.onAutodartsGameEvent = onAutodartsGameEvent;
 
 let bridgeSetupLoaded = false;
 async function loadBridgeSetupInfo(force = false) {
