@@ -975,7 +975,7 @@ input.led-summary-seg-name:focus {
   height: 10px;
   border-radius: 2px;
   background: var(--wz-tone);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--wz-tone) 45%, transparent);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--wz-tone) var(--led-glow-mix), transparent);
 }
 
 .wz-zone[data-tone="whole"] .wz-leds {
@@ -985,7 +985,7 @@ input.led-summary-seg-name:focus {
 
 .wz-zone[data-tone="whole"] .wz-led {
   background: rgba(var(--accent-rgb), 0.75);
-  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.35);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--accent-primary) var(--led-glow-mix), transparent);
 }
 
 .wz-range {
@@ -1000,7 +1000,7 @@ input.led-summary-seg-name:focus {
   height: 10px;
   border-radius: 4px;
   background: #fff3dc;
-  box-shadow: 0 0 14px rgba(255, 236, 200, 0.45);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffecc8 var(--led-glow-mix), transparent);
 }
 
 .wz-none {
@@ -1739,13 +1739,13 @@ input.led-summary-seg-name:focus {
 .sf-pad[data-kind="rgb"] {
   border-color: var(--accent-bright);
   background: var(--accent-bright);
-  box-shadow: 0 0 10px var(--accent-bright);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--accent-bright) var(--led-glow-mix), transparent);
 }
 
 .sf-pad[data-kind="light"] {
   border-color: #fcd34d;
   background: #fcd34d;
-  box-shadow: 0 0 10px #fcd34d;
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #fcd34d var(--led-glow-mix), transparent);
 }
 
 .sf-pad:disabled {
@@ -1778,12 +1778,12 @@ input.led-summary-seg-name:focus {
   height: 8px;
   border-radius: 4px;
   background: linear-gradient(90deg, #2dd4bf, #38bdf8, #a855f7);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #38bdf8 var(--led-glow-mix), transparent);
 }
 
 .sf-glyph[data-kind="light"] {
   background: #fff3dc;
-  box-shadow: 0 0 12px rgba(255, 236, 200, 0.5);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffecc8 var(--led-glow-mix), transparent);
 }
 
 .sf-card-text {
@@ -1901,7 +1901,7 @@ input.sf-count:focus {
   height: 12px;
   border-radius: 3px;
   background: #fff;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffffff var(--led-glow-mix), transparent);
 }
 
 .sf-track {
@@ -1973,10 +1973,10 @@ input.sf-count:focus {
   background: transparent;
 }
 
-.sf-led[data-tone="r"] { background: #ff3b3b; box-shadow: 0 0 12px #ff3b3b; }
-.sf-led[data-tone="g"] { background: #2bff6a; box-shadow: 0 0 12px #2bff6a; }
-.sf-led[data-tone="b"] { background: #3b82ff; box-shadow: 0 0 12px #3b82ff; }
-.sf-led[data-tone="end"] { background: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.8); }
+.sf-led[data-tone="r"] { background: #ff3b3b; box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ff3b3b var(--led-glow-mix), transparent); }
+.sf-led[data-tone="g"] { background: #2bff6a; box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #2bff6a var(--led-glow-mix), transparent); }
+.sf-led[data-tone="b"] { background: #3b82ff; box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #3b82ff var(--led-glow-mix), transparent); }
+.sf-led[data-tone="end"] { background: #fff; box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffffff var(--led-glow-mix), transparent); }
 
 .sf-colors {
   display: flex;
@@ -2064,7 +2064,7 @@ input.sf-count:focus {
   height: 18px;
   border-radius: 5px;
   background: var(--c);
-  box-shadow: 0 0 10px var(--c);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--c) var(--led-glow-mix), transparent);
 }
 
 /* A light strip */
@@ -2076,7 +2076,7 @@ input.sf-count:focus {
   height: 22px;
   border-radius: 8px;
   background: #fff3dc;
-  box-shadow: 0 0 30px rgba(255, 236, 200, 0.6);
+  box-shadow: 0 0 calc(var(--led-glow-blur) * 2) color-mix(in srgb, #ffecc8 var(--led-glow-mix), transparent);
   animation: sf-blink 1s steps(1, end) infinite;
 }
 
@@ -2130,7 +2130,7 @@ input.sf-count:focus {
   height: 10px;
   border-radius: 5px;
   background: linear-gradient(90deg, #2dd4bf, #38bdf8, #a855f7);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #38bdf8 var(--led-glow-mix), transparent);
 }
 
 .sf-name-bar[data-zones="true"] {
@@ -2144,12 +2144,12 @@ input.sf-count:focus {
   flex: 1 1 0;
   border-radius: 5px;
   background: var(--c);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--c) var(--led-glow-mix), transparent);
 }
 
 .sf-name-bar[data-kind="light"] {
   background: #fff3dc;
-  box-shadow: 0 0 14px rgba(255, 236, 200, 0.5);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffecc8 var(--led-glow-mix), transparent);
 }
 
 .sf-name-body {
@@ -2251,7 +2251,7 @@ input.ui-input.sf-name-input {
 .sf-split-leds .sf-led {
   height: 26px;
   background: var(--c);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--c) var(--led-glow-mix), transparent);
 }
 
 .sf-ghost {
@@ -2425,7 +2425,7 @@ input.ui-input.sf-name-input {
   height: 14px;
   border-radius: 5px;
   background: #fff3dc;
-  box-shadow: 0 0 16px rgba(255, 236, 200, 0.5);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, #ffecc8 var(--led-glow-mix), transparent);
 }
 
 .sf-done-zones {
@@ -2457,7 +2457,7 @@ input.ui-input.sf-name-input {
 
 .sf-done-zone[data-whole="true"] .sf-done-leds span {
   background: var(--accent-bright);
-  box-shadow: 0 0 6px rgba(45, 212, 191, 0.5);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--accent-bright) var(--led-glow-mix), transparent);
 }
 
 .sf-done-zone[data-whole="true"] .sf-done-zone-label {
@@ -2470,7 +2470,7 @@ input.ui-input.sf-name-input {
   height: 14px;
   border-radius: 3px;
   background: var(--c);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--c) 50%, transparent);
+  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--c) var(--led-glow-mix), transparent);
 }
 
 .sf-done-zone-label {

@@ -24,6 +24,10 @@
 
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
 
+  /* Glow around drawn LEDs (setup guide, controller page): small and faint, so the colour itself reads */
+  --led-glow-blur: 4px;
+  --led-glow-mix: 30%;
+
   --z-banner: 900;
   --z-dialog: 1000;
   --z-toast: 1100;
