@@ -2,6 +2,7 @@
 // The switch changes only after the server confirms; a failed switch leaves the old mode selected.
 
 import { api } from '../core/api.js';
+import { confirmDialog } from '../core/dialog.js';
 import { navigate } from '../core/router.js';
 import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
@@ -10,11 +11,24 @@ export const MODE_LABELS = { matrix: 'Event Matrix (legacy)', flow: 'Flow Matrix
 
 let pending = null;
 
+// Choosing the legacy Event Matrix always asks first. Resolves true when the user still wants it.
+export function confirmLegacyMatrix() {
+  return confirmDialog({
+    title: 'The Event Matrix is no longer supported',
+    body: 'It is a legacy mode. Bugs and issues in it have low to no priority and won’t be resolved. The Flow Matrix is the supported engine.',
+    confirmLabel: 'Use the Event Matrix anyway',
+    cancelLabel: 'Stay on the Flow Matrix',
+    danger: true
+  });
+}
+
 // Resolves true when the engine now plays the mode. quiet skips the success toast (the Settings page reports its own).
-export async function setLightingMode(mode, { quiet = false } = {}) {
+// confirmed: the user already accepted the Event Matrix warning (the Settings page asks when it is picked).
+export async function setLightingMode(mode, { quiet = false, confirmed = false } = {}) {
   const target = mode === 'matrix' ? 'matrix' : 'flow';
   if (pending) return false;
   if (appStore.get().lightingMode === target) return true;
+  if (target === 'matrix' && !confirmed && !await confirmLegacyMatrix()) return false;
   pending = target;
   render();
   try {

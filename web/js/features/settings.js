@@ -1,7 +1,7 @@
 // AutoGlow 2 - Settings page: every field is a draft until the single Save button writes it.
 // Discard (or leaving the page and choosing Discard) puts everything back to what is saved.
 
-import { setLightingMode } from '../components/mode-switch.js';
+import { confirmLegacyMatrix, setLightingMode } from '../components/mode-switch.js';
 import { appStore } from '../core/store.js';
 import { router } from '../core/router.js';
 import { toast } from '../core/toast.js';
@@ -113,7 +113,7 @@ export async function save() {
       }
     }
     if (ok && modeChanged()) {
-      ok = await setLightingMode(draftMode, { quiet: true });
+      ok = await setLightingMode(draftMode, { quiet: true, confirmed: true });
       if (ok) draftMode = null;
     }
     if (ok && pinChanged()) {
@@ -162,8 +162,12 @@ export function initSettings() {
   pane.addEventListener('input', refresh);
   pane.addEventListener('change', refresh);
   document.querySelectorAll('#modeSwitch [data-mode]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      draftMode = btn.dataset.mode === savedMode() ? null : btn.dataset.mode;
+    btn.addEventListener('click', async () => {
+      const mode = btn.dataset.mode;
+      const current = draftMode ?? savedMode();
+      // Picking the legacy engine needs a yes to the "not supported" warning first
+      if (mode === 'matrix' && current !== 'matrix' && !await confirmLegacyMatrix()) return;
+      draftMode = mode === savedMode() ? null : mode;
       refresh();
     });
   });
