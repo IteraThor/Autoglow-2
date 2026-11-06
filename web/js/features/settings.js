@@ -25,7 +25,8 @@ function timersChanged() {
     draft.inactivity_timeout_minutes !== (saved.inactivity_timeout_minutes ?? 5) ||
     draft.idle_power_off_enabled !== (saved.idle_power_off_enabled ?? true) ||
     draft.idle_power_off_minutes !== (saved.idle_power_off_minutes ?? 30) ||
-    draft.disconnect_udp_on_match_end !== (saved.disconnect_udp_on_match_end ?? false)
+    draft.disconnect_udp_on_match_end !== (saved.disconnect_udp_on_match_end ?? false) ||
+    draft.idle_dimming_brightness !== (saved.idle_dimming_brightness ?? 50)
   );
 }
 

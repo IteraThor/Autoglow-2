@@ -82,6 +82,9 @@ function renderPowerTab() {
   if (standbyToggle) standbyToggle.checked = idlePowerOffEnabled;
   if (standbyMinInp) standbyMinInp.value = idlePowerOffMin;
   if (matchEndToggle) matchEndToggle.checked = disconnectUdpOnMatchEnd;
+  // Stored as 0-255, shown as a percentage
+  const dimPct = document.getElementById('idleDimmingPercentInput');
+  if (dimPct) dimPct.value = Math.round(((appState.idle_dimming_brightness ?? 50) / 255) * 100);
 
   handleInactivityToggleChange();
   handleStandbyToggleChange();
@@ -117,12 +120,18 @@ function renderPowerClock() {
   if (dimAt !== null) items.push(item('dim', offAt !== null ? `Dimmed · ${dimAt}–${offAt} min` : `Dimmed · from ${dimAt} min`));
   if (offAt !== null) items.push(item('off', `Off · after ${offAt} min`));
   clock.querySelector('.pw-clock-ticks').replaceChildren(...items);
-  // How dim the light strips go comes from the config (0-255)
-  const hint = document.getElementById('powerDimHint');
-  const bri = window.appState?.idle_dimming_brightness;
-  if (hint && typeof bri === 'number') hint.textContent = `Idle look; light strips at ${Math.round((bri / 255) * 100)}%.`;
 }
 window.renderPowerClock = renderPowerClock;
+
+// The percentage field as the 0-255 value the engine uses; an unchanged field keeps the exact saved value
+function dimmingFromPercent(raw) {
+  const saved = window.appState?.idle_dimming_brightness ?? 50;
+  const pct = parseInt(raw, 10);
+  if (Number.isNaN(pct)) return saved;
+  const clamped = Math.max(0, Math.min(100, pct));
+  if (clamped === Math.round((saved / 255) * 100)) return saved;
+  return Math.round((clamped / 100) * 255);
+}
 
 // The timer values as currently entered on the Settings page (validated, not yet saved)
 function readPowerDraft() {
@@ -136,7 +145,8 @@ function readPowerDraft() {
     inactivity_timeout_minutes: inactivityMin,
     idle_power_off_enabled: val('idlePowerOffEnabledToggle') ? val('idlePowerOffEnabledToggle').checked : true,
     idle_power_off_minutes: idlePowerOffMin,
-    disconnect_udp_on_match_end: val('disconnectUdpOnMatchEndToggle') ? val('disconnectUdpOnMatchEndToggle').checked : false
+    disconnect_udp_on_match_end: val('disconnectUdpOnMatchEndToggle') ? val('disconnectUdpOnMatchEndToggle').checked : false,
+    idle_dimming_brightness: dimmingFromPercent(val('idleDimmingPercentInput')?.value)
   };
 }
 window.readPowerDraft = readPowerDraft;

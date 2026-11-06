@@ -582,8 +582,7 @@
                   <span class="switch-slider"></span>
                 </label>
                 <div class="pw-rule-text power-setting-controls" id="inactivityControlsGroup">
-                  <span class="pw-rule-main"><span class="pw-key" data-phase="dim"></span>Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange(); renderPowerClock()" oninput="handleInactivityTimeoutChange(); renderPowerClock()"> min without a dart</span>
-                  <span class="pw-rule-hint" id="powerDimHint">Idle look; light strips dim.</span>
+                  <span class="pw-rule-main" title="Live effects stop and each controller shows its idle look"><span class="pw-key" data-phase="dim"></span>Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange(); renderPowerClock()" oninput="handleInactivityTimeoutChange(); renderPowerClock()"> min without a dart, light strips to <input type="number" class="ui-input ui-input-num" id="idleDimmingPercentInput" value="20" min="0" max="100" aria-label="Light strip brightness when dimmed, in percent" title="Light strip brightness while dimmed"> %</span>
                 </div>
               </div>
 
