@@ -77,9 +77,11 @@ body {
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
-  height: 100vh;
-  height: 100dvh;
-  max-height: 100dvh;
+  /* Interface size (Settings): zoom scales vh too, so divide it back out */
+  zoom: var(--ui-scale, 1);
+  height: calc(100vh / var(--ui-scale, 1));
+  height: calc(100dvh / var(--ui-scale, 1));
+  max-height: calc(100dvh / var(--ui-scale, 1));
   margin: 0;
   padding: 0;
   display: flex;

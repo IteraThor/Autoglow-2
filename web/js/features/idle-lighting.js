@@ -7,7 +7,6 @@ import { appStore } from '../core/store.js';
 
 const SOLID = { id: 0, name: 'Solid', colorSlots: [{ slot: 0, label: 'Color' }], speed: false, intensity: false };
 const SLOT_FIELDS = ['primary', 'secondary', 'tertiary'];
-const PWM_STEPS = [0, 25, 50, 100];
 
 let effectsCache = null;
 
@@ -190,17 +189,20 @@ export function createIdleEditor(ip, segments) {
     host.replaceChildren(body);
 
     if (seg.pwm) {
-      const bri = slider({ label: 'Brightness', min: 0, max: 100, value: seg.bri, unit: '%', onInput: v => { seg.bri = v; changed(); } });
-      const steps = h('div', { class: 'idle-steps' }, PWM_STEPS.map(step => h('button', {
-        type: 'button', class: 'ui-btn ui-btn-sm',
-        onclick: () => {
-          seg.bri = step;
-          bri.input.value = step;
-          bri.out.textContent = `${step}%`;
-          changed(true);
-        }
-      }, step ? `${step}%` : 'Off')));
-      body.append(bri.row, steps);
+      // A light strip only has a brightness, typed in as 0-100 %
+      const input = h('input', {
+        type: 'number', class: 'ui-input idle-pct-input', min: 0, max: 100, step: 1, value: seg.bri,
+        inputmode: 'numeric', 'aria-label': `${seg.name} brightness in percent`,
+        oninput: () => {
+          const v = Number(input.value);
+          if (input.value === '' || !Number.isFinite(v)) return;
+          seg.bri = Math.max(0, Math.min(100, Math.round(v)));
+          changed();
+        },
+        // Show what is actually used once the field is left (clamped, no decimals)
+        onchange: () => { input.value = seg.bri; }
+      });
+      body.append(h('label', { class: 'idle-pct' }, h('span', { class: 'idle-slider-label' }, 'Brightness'), input, h('span', { class: 'idle-pct-unit' }, '%')));
       return;
     }
 

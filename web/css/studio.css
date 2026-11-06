@@ -740,7 +740,7 @@
 #tab-studio-broadcast .studio-texts-panel {
   position: sticky;
   top: var(--space-4);
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh / var(--ui-scale, 1) - 150px);
 }
 
 #tab-studio-broadcast .studio-texts-panel > .panel-body {

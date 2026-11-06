@@ -231,10 +231,10 @@ function svg(tag, attrs = {}, ...children) {
   return el;
 }
 
-// "Bar · 2" -> "Bar": zones made by the guided setup are named "<strip name> · N"
+// "Bar - 2" -> "Bar": zones made by the guided setup are named "<strip name> - N" (older setups used "·")
 function stripName(segs, busIdx) {
   if (segs.length === 1) return segs[0].name;
-  const bases = new Set(segs.map(seg => seg.name.replace(/\s*·\s*\d+$/, '')));
+  const bases = new Set(segs.map(seg => seg.name.replace(/\s+[·-]\s+\d+$/, '')));
   return bases.size === 1 ? [...bases][0] : `RGB strip ${busIdx + 1}`;
 }
 
@@ -267,32 +267,73 @@ function stripCard(hw, busIdx, segs) {
   const order = COLOR_ORDERS.find(o => o.value === hw.order)?.label;
   // The full technical line stays one hover away
   const tech = [`Output ${busIdx + 1}`, outputTypeLabel(hw.type), `GPIO ${pinOf(hw)}`].join(' · ');
-  const wire = h('div', { class: 'wz-wire' }, h('span', { class: 'wz-pin' }, `GPIO ${pinOf(hw)}`));
+  // LED count and color order sit under the pin, so the strip card itself stays one line
+  const meta = pwm ? null : [`${hw.len} LEDs`, order].filter(Boolean).join(' · ');
+  const wire = h('div', { class: 'wz-wire' },
+    h('span', { class: 'wz-pin' }, `GPIO ${pinOf(hw)}`),
+    meta && h('span', { class: 'wz-wire-meta' }, meta));
   if (pwm) {
     const seg = segs[0];
-    // Its brightness between games is set right here (the idle editor fills the slot)
+    // Its brightness when no game is running is set right here, on the same line (the idle editor fills the slots)
     return h('li', { class: 'wz-row', dataset: { kind: 'pwm' } }, wire,
       h('div', { class: 'wz-strip', title: tech },
         h('div', { class: 'wz-strip-head' },
           seg ? segmentNameInput(seg) : h('strong', {}, `Output ${busIdx + 1}`),
-          h('span', { class: 'wz-meta' }, 'Brightness only, no game effects'),
-          seg && h('span', { class: 'wz-idle-switch', dataset: { seg: String(seg.id) } })),
-        h('div', { class: 'wz-white' }),
-        seg && h('div', { class: 'wz-idle', dataset: { seg: String(seg.id) } })));
+          h('div', { class: 'wz-white' }),
+          seg && gameBrightness(),
+          seg && h('div', { class: 'wz-idle', dataset: { seg: String(seg.id) } }),
+          seg && h('span', { class: 'wz-idle-switch', dataset: { seg: String(seg.id) } }))));
   }
   const whole = segs.length <= 1;
   const scale = Math.min(1, LED_CELLS_MAX / Math.max(1, hw.len));
+  const zones = segs.length
+    ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale)))
+    : h('p', { class: 'wz-none' }, 'No segment');
+  // A whole strip is one line: name, LEDs, flow. Zones need the room, so they go under the header.
   return h('li', { class: 'wz-row', dataset: { kind: 'rgb' } }, wire,
-    h('div', { class: 'wz-strip' },
-      h('div', { class: 'wz-strip-head', title: tech },
-        whole && segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
-        h('span', { class: 'wz-meta' }, [`${hw.len} LEDs`, order].filter(Boolean).join(' · ')),
-        whole
-          ? segs[0] && h('span', { class: 'wz-head-profile' }, segmentProfile(segs[0], false))
-          : h('span', { class: 'wz-badge is-zones' }, `${segs.length} zones`)),
-      segs.length
-        ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale)))
-        : h('p', { class: 'wz-none' }, 'No segment')));
+    whole
+      ? h('div', { class: 'wz-strip' },
+        h('div', { class: 'wz-strip-head', title: tech },
+          segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
+          zones,
+          segs[0] && h('span', { class: 'wz-head-profile' }, segmentProfile(segs[0], false))))
+      : h('div', { class: 'wz-strip' },
+        h('div', { class: 'wz-strip-head', title: tech },
+          h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
+          h('span', { class: 'wz-badge is-zones' }, `${segs.length} zones`)),
+        zones));
+}
+
+// How bright the light strips are during a game (AutoGlow's setting for this controller, saved when the field is left).
+// Without one the controller uses the global game brightness.
+function gameBrightness() {
+  const toPct = bri => Math.round((Math.max(0, Math.min(255, Number(bri))) / 255) * 100);
+  const current = () => toPct(page.dev.game_pwm_brightness ?? window.appState?.game_mode_spotlight_brightness ?? 255);
+  const input = h('input', {
+    type: 'number', class: 'ui-input idle-pct-input', min: 0, max: 100, step: 1, value: current(),
+    inputmode: 'numeric', 'aria-label': 'Light strip brightness during a game in percent',
+    onchange: async () => {
+      const v = Number(input.value);
+      if (input.value === '' || !Number.isFinite(v)) {
+        input.value = current();
+        return;
+      }
+      const pct = Math.max(0, Math.min(100, Math.round(v)));
+      input.value = pct;
+      if (pct === current()) return;
+      try {
+        const data = await api.post('/api/wled/game-brightness', { ip: page.ip, brightness: Math.round((pct / 100) * 255) });
+        page.dev.game_pwm_brightness = data.brightness;
+        toast.success(`Brightness during a game: ${pct}%`);
+      } catch (err) {
+        input.value = current();
+        toast.error(err);
+      }
+    }
+  });
+  return h('div', { class: 'wz-idle wz-game', title: 'Saved right away; shows straight away when a game is on.' },
+    h('span', { class: 'wz-idle-label' }, 'Brightness during a game'),
+    h('label', { class: 'idle-pct' }, input, h('span', { class: 'idle-pct-unit' }, '%')));
 }
 
 // Put each light strip's idle controls into its card in the wiring
@@ -304,7 +345,7 @@ function placeIdle() {
   });
   page.bodies.leds.querySelectorAll('.wz-idle[data-seg]').forEach(slot => {
     const el = page.idle.elementFor(slot.dataset.seg);
-    if (el) slot.replaceChildren(h('span', { class: 'wz-idle-label', title: 'Changes show right away; Save keeps them on the controller.' }, 'Between games'), el);
+    if (el) slot.replaceChildren(h('span', { class: 'wz-idle-label', title: 'Changes show right away; Save keeps them on the controller.' }, 'Brightness when no game is running'), el);
   });
 }
 
@@ -316,15 +357,15 @@ function renderLedSummary(body) {
         svg('svg', { width: 28, height: 28, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'aria-hidden': 'true' },
           svg('rect', { x: 5, y: 5, width: 14, height: 14, rx: 2 }), svg('rect', { x: 9, y: 9, width: 6, height: 6 }),
           svg('path', { d: 'M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3' })),
-        h('strong', {}, 'Controller'),
-        page.live?.info?.arch && h('span', { class: 'wz-arch' }, page.live.info.arch.toUpperCase())),
-      h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => stripCard(hw, busIdx, layout.segments.filter(seg => seg.busIdx === busIdx))))),
-    h('div', { class: 'led-summary-actions' },
-      h('button', {
-        type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: runGuidedSetup,
-        title: 'Answer a few questions and let AutoGlow configure the LEDs'
-      }, 'Run guided setup'),
-      h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…')));
+        // IP and WLED version (filled by renderHead); without the wiring they sit in the page head
+        page.meta),
+      h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => stripCard(hw, busIdx, layout.segments.filter(seg => seg.busIdx === busIdx))))));
+  page.ledsActions.replaceChildren(
+    h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…'),
+    h('button', {
+      type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: runGuidedSetup,
+      title: 'Answer a few questions and let AutoGlow configure the LEDs'
+    }, 'Run guided setup'));
   placeIdle();
 }
 
@@ -354,6 +395,10 @@ function segName(seg) {
 function renderLeds(body) {
   const { layout } = page;
   page.closeEditorBtn = null;
+  // The wiring shows the IP and version in its controller box; any other view puts them back in the page head
+  page.head.insertBefore(page.meta, page.headActions);
+  // The summary puts its buttons in the section header; the manual editor has its own
+  page.ledsActions.replaceChildren();
   if (!layout) {
     body.replaceChildren(offlineNotice('to edit its LEDs'));
     return;
@@ -520,7 +565,8 @@ function sync() {
   if (page.closeEditorBtn) page.closeEditorBtn.disabled = ledsDirty;
   page.sections.leds.toggleAttribute('data-dirty', ledsDirty);
   page.sections.idle.toggleAttribute('data-dirty', parts.includes('idle'));
-  page.head.toggleAttribute('data-dirty', parts.includes('general'));
+  // The name's dot covers the name and the wiring, which share the card
+  page.titleRow.toggleAttribute('data-dirty', parts.includes('general') || ledsDirty);
   page.saveBar.hidden = parts.length === 0;
   page.saveNote.textContent = `Unsaved changes: ${parts.map(p => PART_LABELS[p]).join(', ')}`;
   page.saveBtn.disabled = page.saving;
@@ -677,16 +723,23 @@ export async function openDetail(ip, { force = false } = {}) {
   page.meta = h('div', { class: 'detail-meta' });
   // The name is an input, so screen readers get the page heading from this
   page.title = h('h1', { class: 'visually-hidden' });
+  page.headActions = h('div', { class: 'detail-actions' }, page.enabledToggle);
   page.head = h('header', { class: 'detail-head' },
     page.title,
-    h('div', { class: 'detail-title' }, page.dot, page.nameInput, page.pill, h('span', { class: 'dirty-dot', title: 'Unsaved changes' })),
-    h('div', { class: 'detail-actions' }, page.enabledToggle),
-    page.meta);
+    h('a', { class: 'detail-back', href: '/setup/controllers', 'data-link': true }, '← Controllers'),
+    page.headActions);
 
   page.bodies.leds = h('div');
   page.sections.leds = section('leds', 'Wiring', null, page.bodies.leds);
+  // The wiring card is titled with the controller's name (dot, name, status); "Wiring" stays for screen readers
+  page.titleRow = h('div', { class: 'detail-title' }, page.dot, page.nameInput, page.pill, h('span', { class: 'dirty-dot', title: 'Unsaved changes' }));
+  page.ledsActions = h('div', { class: 'led-summary-actions' });
+  const ledsHead = page.sections.leds.querySelector('.detail-section-head');
+  ledsHead.querySelector('.card-title').classList.add('visually-hidden');
+  ledsHead.prepend(page.titleRow);
+  ledsHead.append(page.ledsActions);
   page.bodies.idle = h('div', { class: 'idle-lights' });
-  page.sections.idle = section('idle', 'Light strips between games', 'How bright the light strips are when no game is running. Changes show right away; Save keeps them on the controller. RGB strips show the idle effect of their profile.', page.bodies.idle);
+  page.sections.idle = section('idle', 'Light strips when no game is running', 'How bright the light strips are when no game is running. Changes show right away; Save keeps them on the controller. RGB strips show the idle effect of their profile.', page.bodies.idle);
   page.saveNote = h('span', { class: 'savebar-note' });
   page.discardBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: discard }, 'Discard');
   page.saveBtn = h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: save }, 'Save changes');
@@ -694,7 +747,6 @@ export async function openDetail(ip, { force = false } = {}) {
     page.saveNote, page.discardBtn, page.saveBtn);
 
   host.replaceChildren(
-    h('a', { class: 'detail-back', href: '/setup/controllers', 'data-link': true }, '← Controllers'),
     page.head,
     page.sections.leds,
     page.sections.idle,

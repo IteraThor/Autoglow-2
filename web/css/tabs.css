@@ -110,50 +110,6 @@
   display: none;
 }
 
-/* -----------------------------------------------------------------------------
- * Power & Timers / Preset 1 Configurator Tab
- * ----------------------------------------------------------------------------- */
-.power-setting-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 6px);
-  gap: 16px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.power-setting-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.power-setting-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.power-setting-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.power-setting-row.disabled .power-setting-info,
-.power-setting-row.disabled .power-setting-controls {
-  opacity: 0.35;
-  filter: grayscale(100%);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.power-setting-row.disabled .power-setting-controls {
-  pointer-events: none;
-}
-
 /* Device Selector Cards for Event Matrix and Power Landing */
 .card-device-select {
   cursor: pointer;

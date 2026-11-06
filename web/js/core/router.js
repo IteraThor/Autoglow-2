@@ -29,7 +29,7 @@ export const VIEWS = [
       { id: 'cameras', label: 'Cameras', pane: 'tab-studio-cameras' }
     ]
   },
-  { id: 'settings', label: 'Power', path: '/settings', pane: 'tab-settings' }
+  { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
 ];
 
 const ALIASES = {

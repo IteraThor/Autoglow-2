@@ -232,6 +232,40 @@ async def handle_rename_segment(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "name": name})
 
 
+async def handle_game_brightness(request: web.Request) -> web.Response:
+    """How bright one controller's light strips are during a game (0..255). Shows straight away when a game is on."""
+    config_path = request.app.get("config_path", "config.json")
+    data = await read_json(request)
+    ip = str(data.get("ip") or "").strip()
+    if not ip:
+        raise ValidationError("No IP specified", field="ip")
+    try:
+        bri = max(0, min(255, int(data.get("brightness"))))  # pyright: ignore[reportArgumentType]
+    except (TypeError, ValueError):
+        raise ValidationError("Brightness must be a number", field="brightness") from None
+
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    engine = request.app.get("engine")
+    found = False
+    for config in {id(c): c for c in (cfg, getattr(engine, "app_config", None)) if c}.values():
+        for dev in config.devices:
+            if dev.ip == ip:
+                dev.game_pwm_brightness = bri
+                found = True
+    if not found:
+        raise NotFound(f"No controller at {ip}", field="ip")
+    if not save_app_config(cfg, config_path):
+        raise PersistenceError("Could not save the brightness.")
+    request.app["current_app_config"] = cfg
+
+    drv = engine.drivers.get(ip) if engine else None
+    if drv:
+        drv.config.game_pwm_brightness = bri
+        if drv.protocol_mode == ProtocolMode.ACTIVE_UDP and not (engine.is_board_off or engine.is_board_dimmed):
+            await drv.set_board_light(bri)
+    return web.json_response({"status": "ok", "brightness": bri})
+
+
 async def handle_get_wled_preset(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
     ip = request.query.get("ip", "").strip()

@@ -514,7 +514,6 @@ input.ui-input:focus {
 }
 
 .detail-back {
-  align-self: flex-start;
   color: var(--text-secondary);
   font-size: var(--fs-sm);
   text-decoration: none;
@@ -524,13 +523,16 @@ input.ui-input:focus {
   color: var(--accent-primary);
 }
 
-/* Title row: dot, name (edited in place), status | on/off and actions; meta below */
+/* Page head: back link, on/off at the right. The name row (.detail-title) heads the wiring card, and the IP and WLED
+   version sit in its controller box; only without the wiring do they come back here (.detail-meta). */
 .detail-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1) var(--space-4);
   align-items: center;
 }
+
+.detail-head > .detail-actions { margin-left: auto; }
 
 .detail-title {
   display: flex;
@@ -566,11 +568,9 @@ input.detail-name:focus {
 }
 
 .detail-meta {
-  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-3);
-  padding-left: calc(8px + var(--space-2));
   color: var(--text-secondary);
   font-size: var(--fs-sm);
 }
@@ -610,8 +610,8 @@ input.detail-name:focus {
   background: var(--status-warning);
 }
 
-.detail-head[data-dirty] .detail-title > .dirty-dot,
-.detail-section[data-dirty] .dirty-dot {
+.detail-title[data-dirty] > .dirty-dot,
+.detail-section[data-dirty] .card-title .dirty-dot {
   display: inline-block;
 }
 
@@ -753,11 +753,22 @@ input.led-summary-seg-name:focus {
   font-size: var(--fs-sm);
 }
 
+/* Wiring: "Edit manually…" and "Run guided setup" at the right end of the section's title line */
+#ctl-sec-leds .detail-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
 .led-summary-actions {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
+
+.led-summary-actions:empty { display: none; }
 
 .led-summary-actions .ui-btn-link {
   align-self: center;
@@ -775,8 +786,7 @@ input.led-summary-seg-name:focus {
   --wz-z3: #22c55e;
   --wz-wire: var(--border-strong, #3a3d47);
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  margin-bottom: var(--space-4);
+  grid-template-columns: 136px minmax(0, 1fr);
 }
 
 .wz-board {
@@ -785,7 +795,7 @@ input.led-summary-seg-name:focus {
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  padding: var(--space-4) var(--space-2);
+  padding: var(--space-2);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -794,15 +804,23 @@ input.led-summary-seg-name:focus {
   text-align: center;
 }
 
-.wz-board strong {
+.wz-board .detail-meta {
+  flex-direction: column;
+  align-items: center;
+  font-size: var(--fs-xs);
+}
+
+.wz-board .detail-meta a.ctl-ip {
   color: var(--text-primary);
+  font-weight: 600;
   font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
 .wz-rows {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -810,19 +828,38 @@ input.led-summary-seg-name:focus {
 
 .wz-row {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
 }
 
-/* The wire from the controller with the pin it uses */
+/* The wire from the controller with the pin it uses, and the strip's LED count under the pin */
 .wz-wire {
+  position: relative;
   display: flex;
   align-items: center;
+  align-self: stretch;
+}
+
+.wz-wire::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
   height: 2px;
+  margin-top: -1px;
   background: var(--wz-wire);
 }
 
+.wz-wire-meta {
+  position: absolute;
+  top: calc(50% + 12px);
+  right: 10px;
+  color: var(--text-muted);
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+
 .wz-pin {
+  position: relative;
   margin: 0 10px 0 auto;
   padding: 1px 6px;
   border: 1px solid var(--wz-wire);
@@ -833,17 +870,16 @@ input.led-summary-seg-name:focus {
   white-space: nowrap;
 }
 
-.wz-row[data-kind="rgb"] .wz-wire,
 .wz-row[data-kind="rgb"] .wz-pin { border-color: rgba(var(--accent-rgb), 0.6); }
-.wz-row[data-kind="rgb"] .wz-wire { background: rgba(var(--accent-rgb), 0.6); }
+.wz-row[data-kind="rgb"] .wz-wire::before { background: rgba(var(--accent-rgb), 0.6); }
 .wz-row[data-kind="rgb"] .wz-pin { color: var(--accent-bright, var(--accent-primary)); }
 
 .wz-strip {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -862,14 +898,17 @@ input.led-summary-seg-name:focus {
 }
 
 .wz-strip-head input.led-summary-seg-name {
-  flex: 0 1 220px;
+  flex: 0 1 150px;
+  min-width: 100px;
   font-weight: 600;
   font-size: var(--fs-md);
 }
 
-.wz-meta {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
+/* A whole strip's LEDs, and a light strip's white bar, fill the header line between name and flow/switch */
+.wz-strip-head > .wz-zones,
+.wz-strip-head > .wz-white {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .wz-badge {
@@ -997,15 +1036,17 @@ input.led-summary-seg-name:focus {
   max-width: 180px;
 }
 
-/* A light strip's brightness between games, inside its card */
+/* A light strip's brightness when no game is running, on its header line before the on/off switch */
 .wz-idle {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2);
 }
 
 .wz-idle:empty { display: none; }
+
+/* Brightness during a game comes first, with room before the idle brightness */
+.wz-game { margin-right: var(--space-3); }
 
 .wz-idle-label {
   color: var(--text-muted);
@@ -1013,31 +1054,8 @@ input.led-summary-seg-name:focus {
   white-space: nowrap;
 }
 
-.wz-idle > :last-child {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-
-/* In the card the row label says "Between games", so the slider's own label goes; slider and presets share a line */
+/* The row label already says what it is, so the field's own label goes */
 .wz-idle .idle-slider-label { display: none; }
-
-.wz-idle .idle-seg-body {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  max-width: none;
-}
-
-.wz-idle .idle-slider {
-  flex: 1 1 240px;
-  max-width: 360px;
-  grid-template-columns: minmax(0, 1fr) 40px;
-}
-
-.wz-idle .idle-steps {
-  margin-left: 0;
-}
 
 /* A light strip: one warm white bar */
 .wz-white {
@@ -1056,15 +1074,13 @@ input.led-summary-seg-name:focus {
   .wz { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .wz-board { flex-direction: row; padding: var(--space-2); }
   .wz-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
-  .wz-wire { height: auto; background: none; }
+  .wz-wire { gap: var(--space-2); }
+  .wz-wire::before { display: none; }
+  .wz-wire-meta { position: static; }
   .wz-pin { margin: 0; }
   .wz-zones { flex-wrap: wrap; }
 }
 
-.wz-arch {
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-}
 
 .led-editor-note {
   display: flex;
@@ -1325,11 +1341,18 @@ input.led-summary-seg-name:focus {
   display: none;
 }
 
-.idle-steps {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.idle-pct {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  margin-left: calc(80px + var(--space-3));
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.idle-pct-input {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Searchable effect picker */
@@ -1434,10 +1457,6 @@ input.led-summary-seg-name:focus {
 
   .ctl-main {
     flex-basis: calc(100% - 40px);
-  }
-
-  .detail-head {
-    grid-template-columns: 1fr;
   }
 
   .detail-actions {
@@ -2536,7 +2555,7 @@ input.ui-input.sf-name-input {
 }
 
 /* -----------------------------------------------------------------------------
- * Power (web/js/power.js + features/settings.js): engine, after-game timeline, PIN
+ * Power (features/settings.js): engine, PIN
  * ----------------------------------------------------------------------------- */
 .pw-page {
   max-width: 820px;
@@ -2552,69 +2571,6 @@ input.ui-input.sf-name-input {
 
 .pw-mode {
   align-self: flex-start;
-}
-
-/* One rule per line: switch, sentence with the minutes in it, what it does underneath */
-.pw-rules {
-  display: flex;
-  flex-direction: column;
-}
-
-.pw-rules .pw-rule {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  justify-content: start;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  background: none;
-  border: 0;
-  border-top: 1px solid var(--border-subtle);
-  border-radius: 0;
-}
-
-.pw-rules .pw-rule:first-child { border-top: 0; padding-top: 0; }
-label.pw-rule { cursor: pointer; }
-
-.pw-rule .switch {
-  margin: 4px 0 0;
-}
-
-.pw-rule-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.pw-rule-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-primary);
-  font-size: var(--fs-md);
-}
-
-.pw-rule-main .ui-input-num {
-  width: 64px;
-  height: 30px;
-}
-
-.pw-rule-hint {
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  line-height: 1.45;
-}
-
-.pw-tests {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
 }
 
 .pw-pin-summary {

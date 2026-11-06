@@ -20,7 +20,6 @@ function activatePane(targetId) {
     if (window.renderSimulatorTab) renderSimulatorTab();
   }
   if (targetId === 'tab-settings') {
-    renderPowerTab();
     if (typeof refreshPinSettings === 'function') refreshPinSettings();
     // Anything left unsaved from an earlier visit is dropped
     if (window.settingsPage) window.settingsPage.reset();
@@ -53,7 +52,6 @@ async function loadConfig() {
       renderDevicesTab();
       renderAutodartsTab();
       renderEffectsTable();
-      renderPowerTab();
       updateLightingModeUI(appState.lighting_mode || 'matrix');
 
       // Background fetch Autodarts status to resolve account details for player slot prefilling

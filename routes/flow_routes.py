@@ -114,6 +114,7 @@ def _overview(request: web.Request) -> Dict[str, Any]:
             "dim_minutes": int(cfg.inactivity_timeout_minutes) if cfg else 5,
             "off_on": bool(cfg.idle_power_off_enabled) if cfg else True,
             "off_minutes": int(cfg.idle_power_off_minutes) if cfg else 30,
+            "dim_brightness": int(cfg.idle_dimming_brightness) if cfg else 50,
         },
         "match_running": bool(engine and _match_running(engine)),
         "live": engine.flow_runtime.snapshot() if engine else None,
@@ -427,12 +428,20 @@ async def handle_standby(request: web.Request) -> web.Response:
         except (TypeError, ValueError):
             raise ValidationError("Minutes must be a whole number.") from None
 
+    def brightness() -> int:
+        """Dimmed light strip brightness, 0-255."""
+        try:
+            return max(0, min(255, int(data.get("dim_brightness", base.idle_dimming_brightness))))
+        except (TypeError, ValueError):
+            raise ValidationError("Brightness must be a whole number.") from None
+
     values = {
         "inactivity_timeout_enabled": bool(data.get("dim_on", base.inactivity_timeout_enabled)),
         "inactivity_timeout_minutes": minutes("dim_minutes", base.inactivity_timeout_minutes),
         "idle_power_off_enabled": bool(data.get("off_on", base.idle_power_off_enabled)),
         "idle_power_off_minutes": minutes("off_minutes", base.idle_power_off_minutes),
         "disconnect_udp_on_match_end": bool(data.get("match_end_to_waiting", base.disconnect_udp_on_match_end)),
+        "idle_dimming_brightness": brightness(),
     }
     # Same rule as Settings > Power: switching off never comes before dimming
     values["idle_power_off_minutes"] = max(values["idle_power_off_minutes"], values["inactivity_timeout_minutes"])

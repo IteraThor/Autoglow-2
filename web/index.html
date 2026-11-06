@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2711%27 fill=%27none%27 stroke=%27%2314b8a6%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%2314b8a6%27/%3E%3C/svg%3E">
+  <!-- Interface size (Settings › Interface size), set before paint so the page never jumps -->
+  <script>try{var s=parseFloat(localStorage.getItem('autoglow.uiScale'));if(s>0)document.documentElement.style.setProperty('--ui-scale',s);}catch(e){}</script>
   <link rel="stylesheet" href="/css/theme.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/tokens.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/shell.css?v=2.2-p26">
@@ -44,15 +46,15 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span>Lighting</span>
         </a>
-        <a href="/settings" data-link data-view="settings" class="rail-item">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-          <span>Power</span>
-        </a>
         <span class="rail-divider" role="separator"></span>
         <span class="rail-group-label" aria-hidden="true">Broadcast</span>
         <a href="/studio" data-link data-view="studio" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 11 17 13 22 17 22 7"/></svg>
           <span>Studio</span>
+        </a>
+        <a href="/settings" data-link data-view="settings" class="rail-item rail-item-end">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
         </a>
       </nav>
 
@@ -548,53 +550,10 @@
           </div>
         </section>
 
-        <!-- TAB 5: SETTINGS (lighting engine, inactivity & standby timers, access PIN) -->
+        <!-- TAB 5: SETTINGS (lighting engine, access PIN; standby timers live in the Flow Matrix under Waiting) -->
         <section id="tab-settings" class="tab-pane pw-page">
           <div class="page-head">
-            <h1 class="page-title">Power</h1>
-          </div>
-
-          <!-- Inactivity & standby timers (all controllers): one clock from the last dart -->
-          <div class="card pw-card" id="powerGlobalTimersArea">
-            <div class="card-head"><h2 class="card-title">When nobody plays</h2></div>
-            <div class="pw-rules">
-              <div class="pw-rule power-setting-row" id="inactivityTimeoutRow">
-                <label class="switch" title="Dim the lights after a while without darts">
-                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange()">
-                  <span class="switch-slider"></span>
-                </label>
-                <div class="pw-rule-text power-setting-controls" id="inactivityControlsGroup">
-                  <span class="pw-rule-main" title="Live effects stop and each controller shows its idle look">Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange()" oninput="handleInactivityTimeoutChange()"> min without a dart, light strips to <input type="number" class="ui-input ui-input-num" id="idleDimmingPercentInput" value="20" min="0" max="100" aria-label="Light strip brightness when dimmed, in percent" title="Light strip brightness while dimmed"> %</span>
-                </div>
-              </div>
-
-              <div class="pw-rule power-setting-row" id="standbyTimeoutRow">
-                <label class="switch" title="Switch the lights off after a while without darts">
-                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange()">
-                  <span class="switch-slider"></span>
-                </label>
-                <div class="pw-rule-text power-setting-controls" id="standbyControlsGroup">
-                  <span class="pw-rule-main" title="All controllers off. Counted from the last dart, so never sooner than dimming.">Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange()" oninput="handleStandbyTimeoutChange()"> min without a dart</span>
-                </div>
-              </div>
-
-              <label class="pw-rule power-setting-row" id="matchEndDisconnectRow" title="Enable / Disable UDP disconnect on match ending or abortion">
-                <span class="switch">
-                  <input type="checkbox" id="disconnectUdpOnMatchEndToggle" onchange="handleMatchEndDisconnectToggleChange()">
-                  <span class="switch-slider"></span>
-                </span>
-                <span class="pw-rule-text power-setting-info">
-                  <span class="pw-rule-main" title="Right after the win effect, also when a match is aborted. Off: the winner’s colour stays until the lights dim.">Idle look right after a match</span>
-                </span>
-              </label>
-            </div>
-
-            <div class="pw-tests">
-              <span class="pw-rule-hint" title="These act on your real lights">Test:</span>
-              <button type="button" class="ui-btn ui-btn-sm" onclick="testInactivityDim()" title="Same as when the dim timer runs out">Dim now</button>
-              <button type="button" class="ui-btn ui-btn-sm" id="btnTestAutoOff" onclick="testPowerOff()" title="Same as when the switch-off timer runs out">Switch off now</button>
-              <button type="button" class="ui-btn ui-btn-sm" id="btnRevertPowerOff" onclick="testWakeBoard()" title="Turn the lights back on">Turn back on</button>
-            </div>
+            <h1 class="page-title">Settings</h1>
           </div>
 
           <!-- Security settings: one line while the PIN is off, the fields fold out -->
@@ -629,6 +588,27 @@
               <button type="button" class="mode-option" data-mode="flow" aria-pressed="false"><span>Flow Matrix</span></button>
               <button type="button" class="mode-option" data-mode="matrix" aria-pressed="false"><span>Event Matrix (legacy)</span></button>
             </div>
+          </div>
+
+          <!-- Interface size: applies at once, kept per browser (not part of Save) -->
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Interface size</h2></div>
+            <div class="mode-switch pw-mode" id="uiScaleSwitch" role="group" aria-label="Interface size">
+              <button type="button" class="mode-option" data-scale="1" aria-pressed="false"><span>100%</span></button>
+              <button type="button" class="mode-option" data-scale="1.15" aria-pressed="false"><span>115%</span></button>
+              <button type="button" class="mode-option" data-scale="1.3" aria-pressed="false"><span>130%</span></button>
+              <button type="button" class="mode-option" data-scale="1.5" aria-pressed="false"><span>150%</span></button>
+            </div>
+          </div>
+
+          <!-- Flow Matrix chart direction: applies at once, kept per browser (not part of Save) -->
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Flow Matrix chart</h2></div>
+            <div class="mode-switch pw-mode" id="flowViewSwitch" role="group" aria-label="Flow Matrix chart">
+              <button type="button" class="mode-option" data-view="vertical" aria-pressed="false"><span>↓ Vertical</span></button>
+              <button type="button" class="mode-option" data-view="horizontal" aria-pressed="false"><span>⟶ Horizontal</span></button>
+            </div>
+            <p class="form-hint">Narrow windows always show it vertical.</p>
           </div>
 
           <!-- One save for everything on this page -->
@@ -864,7 +844,6 @@
   <script defer src="/js/utils.js?v=2.2-p25"></script>
   <script defer src="/js/autodarts.js?v=2.2-p25"></script>
   <script defer src="/js/matrix.js?v=2.2-p25"></script>
-  <script defer src="/js/power.js?v=2.2-p25"></script>
   <script defer src="/js/simulator.js?v=2.2-p27"></script>
   <script defer src="/app.js?v=2.2-p25"></script>
 

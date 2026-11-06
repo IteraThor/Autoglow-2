@@ -102,7 +102,7 @@ export const outputLabel = (plan, o) => (o.name || '').trim() || plainLabel(plan
 // Segment names AutoGlow or WLED gave without asking the user; they don't count as a strip name
 const DEFAULT_NAME = /^(rgb( \d+)?( strips?)?|rgb strip( \d+)?|light strips?( \d+)?|segment( \d+)?|(rgb|light) strip \(gpio \d+\))$/i;
 export function customName(segName) {
-  const base = String(segName || '').replace(/( · \d+| zone \d+)$/i, '').trim();
+  const base = String(segName || '').replace(/( [·-] \d+| zone \d+)$/i, '').trim();
   return DEFAULT_NAME.test(base) ? '' : base.slice(0, NAME_MAX);
 }
 
@@ -140,7 +140,7 @@ export function layout(plan, { whole = false, offsets = false } = {}) {
     ranges.forEach((r, zone) => {
       const of = offsets ? (originalZone(o, r)?.of || 0) % (r.stop - r.start) : 0;
       entries.push({ o, zone, range: r, seg: {
-        n: ranges.length === 1 ? label : `${label} · ${zone + 1}`,
+        n: ranges.length === 1 ? label : `${label} - ${zone + 1}`,
         start: base + r.start, stop: base + r.stop, of, on: true, frz: false
       } });
     });

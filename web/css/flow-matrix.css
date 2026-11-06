@@ -22,6 +22,29 @@
   gap: var(--space-2) var(--space-4);
 }
 
+.fm-bar-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+/* Ends where the chart box ends (the far right when the chart is full width) */
+.fm-apply {
+  margin-left: auto;
+}
+
+/* Beside the edit panel: the bar takes the chart's column and the panel's 440px, like .fm-layout-vertical */
+@media (min-width: 1280px) {
+  .fm-profile-bar-vertical {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 440px;
+    gap: var(--space-4);
+  }
+}
+
 .fm-title {
   margin-right: var(--space-2);
 }
@@ -52,22 +75,6 @@
   margin-left: auto;
 }
 
-.fm-preview-wrap {
-  position: relative;
-}
-
-.fm-preview {
-  position: absolute;
-  right: 0;
-  top: calc(100% + var(--space-2));
-  z-index: 20;
-  width: min(360px, calc(100vw - 32px));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  box-shadow: var(--shadow-pop);
-}
-
 /* --- Status line --------------------------------------------------------- */
 .fm-status {
   display: flex;
@@ -76,11 +83,6 @@
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.fm-status-ok {
-  color: var(--status-success);
-  font-size: var(--fs-sm);
 }
 
 .fm-note {
@@ -329,11 +331,6 @@
   height: 32px;
 }
 
-.fm-hit-preview {
-  flex: 1;
-  min-width: 120px;
-}
-
 .fm-player {
   display: grid;
   grid-template-columns: 18px 56px minmax(0, 1fr) auto;
@@ -377,15 +374,19 @@ input.ui-input.fm-player-name {
   font-size: var(--fs-sm);
 }
 
-.fm-preset-list p {
-  margin: 0 0 var(--space-2);
+.fm-new-source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
   color: var(--text-secondary);
-  line-height: 1.45;
+  font-size: var(--fs-sm);
 }
 
-.fm-preset-line strong {
-  color: var(--text-primary);
+.fm-new-source .ui-select {
+  width: 100%;
 }
+
 
 @media (prefers-reduced-motion: reduce) {
   .fc-node.is-live {
@@ -409,7 +410,7 @@ input.ui-input.fm-player-name {
   .fm-layout-vertical .fm-inspector {
     position: sticky;
     top: var(--space-4);
-    max-height: calc(100vh - 2 * var(--space-4));
+    max-height: calc(100vh / var(--ui-scale, 1) - 2 * var(--space-4));
     overflow-y: auto;
   }
 }
@@ -451,19 +452,6 @@ input.ui-input.fm-player-name {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.fc-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-}
-
-.fc-legend {
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
 }
 
 .fc-scroller {
@@ -860,6 +848,19 @@ input.ui-input.fm-player-name {
   align-items: center;
   gap: var(--space-2);
   color: var(--text-muted);
+}
+
+.fm-dim-level {
+  margin-top: var(--space-2);
+}
+
+.fm-dim-level .fm-minutes-row {
+  flex: none;
+  white-space: nowrap;
+}
+
+.fm-dim-level .fm-minutes {
+  width: 64px;
 }
 
 .fm-minutes {

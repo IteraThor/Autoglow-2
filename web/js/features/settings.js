@@ -16,24 +16,10 @@ let saving = false;
 const savedMode = () => appStore.get().lightingMode;
 const pinValue = id => $(id)?.value ?? '';
 
-function timersChanged() {
-  if (!window.readPowerDraft || !window.appState) return false;
-  const draft = window.readPowerDraft();
-  const saved = window.appState;
-  return (
-    draft.inactivity_timeout_enabled !== (saved.inactivity_timeout_enabled ?? true) ||
-    draft.inactivity_timeout_minutes !== (saved.inactivity_timeout_minutes ?? 5) ||
-    draft.idle_power_off_enabled !== (saved.idle_power_off_enabled ?? true) ||
-    draft.idle_power_off_minutes !== (saved.idle_power_off_minutes ?? 30) ||
-    draft.disconnect_udp_on_match_end !== (saved.disconnect_udp_on_match_end ?? false) ||
-    draft.idle_dimming_brightness !== (saved.idle_dimming_brightness ?? 50)
-  );
-}
-
 const modeChanged = () => draftMode !== null && draftMode !== savedMode();
 const pinChanged = () => removePin || PIN_FIELDS.some(id => pinValue(id) !== '');
 
-export const isDirty = () => timersChanged() || modeChanged() || pinChanged();
+export const isDirty = () => modeChanged() || pinChanged();
 
 function renderMode() {
   const active = draftMode ?? savedMode();
@@ -67,7 +53,6 @@ export function reset() {
   draftMode = null;
   removePin = false;
   PIN_FIELDS.forEach(id => { if ($(id)) $(id).value = ''; });
-  if (typeof window.renderPowerTab === 'function') window.renderPowerTab();
   refresh();
 }
 
@@ -102,18 +87,7 @@ export async function save() {
   refresh();
   let ok = true;
   try {
-    if (timersChanged()) {
-      const previous = { ...window.appState };
-      const changes = { ...window.readPowerDraft(), auto_connect_udp_on_game_start: true };
-      Object.assign(window.appState, changes);
-      if (await window.saveAllConfig({ quiet: true, fields: Object.keys(changes) })) {
-        window.renderPowerTab();
-      } else {
-        window.appState = Object.assign(window.appState, previous);
-        ok = false;
-      }
-    }
-    if (ok && modeChanged()) {
+    if (modeChanged()) {
       ok = await setLightingMode(draftMode, { quiet: true, confirmed: true });
       if (ok) draftMode = null;
     }
@@ -150,6 +124,35 @@ async function confirmLeave() {
   return false;
 }
 
+// Interface size: a per-browser view preference, so it applies at once instead of waiting for Save
+const SCALE_KEY = 'autoglow.uiScale';
+
+function currentScale() {
+  try { return parseFloat(localStorage.getItem(SCALE_KEY)) || 1; } catch { return 1; }
+}
+
+function applyScale(scale) {
+  document.documentElement.style.setProperty('--ui-scale', String(scale));
+  try { localStorage.setItem(SCALE_KEY, String(scale)); } catch { /* private window: this visit only */ }
+  document.querySelectorAll('#uiScaleSwitch [data-scale]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(parseFloat(btn.dataset.scale) === scale));
+  });
+}
+
+// Flow Matrix chart direction: also per browser; the Flow Matrix reads it each time it draws
+const FLOW_VIEW_KEY = 'autoglow_flow_view';
+
+function applyFlowView(view) {
+  try { localStorage.setItem(FLOW_VIEW_KEY, view); } catch { /* private window: this visit only */ }
+  document.querySelectorAll('#flowViewSwitch [data-view]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
+  });
+}
+
+function currentFlowView() {
+  try { return localStorage.getItem(FLOW_VIEW_KEY) === 'horizontal' ? 'horizontal' : 'vertical'; } catch { return 'vertical'; }
+}
+
 export function initSettings() {
   window.settingsPage = { save, reset, isDirty };
   window.settingsDraftMode = () => draftMode;
@@ -176,6 +179,14 @@ export function initSettings() {
     removePin = !removePin;
     refresh();
   });
+  document.querySelectorAll('#uiScaleSwitch [data-scale]').forEach(btn => {
+    btn.addEventListener('click', () => applyScale(parseFloat(btn.dataset.scale)));
+  });
+  applyScale(currentScale());
+  document.querySelectorAll('#flowViewSwitch [data-view]').forEach(btn => {
+    btn.addEventListener('click', () => applyFlowView(btn.dataset.view));
+  });
+  applyFlowView(currentFlowView());
   $('btnSettingsSave').addEventListener('click', save);
   $('btnSettingsDiscard').addEventListener('click', reset);
 

@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict, Iterable, List, Optional
 
 from core.game_flow import GameFlowStorageManager
-from core.wled_driver import WLEDDriver
+from core.wled_driver import WLEDDriver, sanitize_wled_name
 
 logger = logging.getLogger("autoglow.flow_idle")
 
@@ -39,7 +39,7 @@ def idle_preset_segments(dev: Any, storage: GameFlowStorageManager, saved: List[
         start = int(_seg(seg, "start", 0) or 0)
         entry = dict(by_id.get(sid) or {"of": int(_seg(seg, "offset", 0) or 0)})
         entry.update({"id": sid, "start": start, "stop": start + max(1, int(_seg(seg, "length", 1) or 1)),
-                      "n": _seg(seg, "name", f"Segment {sid}"), "sel": True})
+                      "n": sanitize_wled_name(_seg(seg, "name", "") or f"Segment {sid}"), "sel": True})
         if _is_pwm_segment(seg):
             entry.setdefault("on", True)
             entry.setdefault("bri", 181)

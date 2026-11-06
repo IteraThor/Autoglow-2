@@ -419,6 +419,7 @@ class DeviceConfig:
     pwm_index: Optional[int] = 45
     pwm_seg_id: Optional[int] = 1
     default_pwm_brightness: int = 200
+    game_pwm_brightness: Optional[int] = None  # light strips during a game (0..255); None: the global game_mode_spotlight_brightness
     idle_dim_seconds: int = 300       # 5 minutes -> dim
     idle_dim_brightness: int = 40
     idle_off_seconds: int = 1800      # 30 minutes -> off
@@ -438,6 +439,7 @@ class DeviceConfig:
             "pwm_index": self.pwm_index,
             "pwm_seg_id": self.pwm_seg_id,
             "default_pwm_brightness": self.default_pwm_brightness,
+            "game_pwm_brightness": self.game_pwm_brightness,
             "idle_dim_seconds": self.idle_dim_seconds,
             "idle_dim_brightness": self.idle_dim_brightness,
             "idle_off_seconds": self.idle_off_seconds,
@@ -472,6 +474,9 @@ class DeviceConfig:
         raw_pwm_seg = data.get("pwm_seg_id")
         pwm_seg_id = _safe_int(raw_pwm_seg) if raw_pwm_seg is not None else None
 
+        raw_game = data.get("game_pwm_brightness")
+        game_pwm = max(0, min(255, _safe_int(raw_game, 255))) if raw_game is not None else None
+
         raw_rot = data.get("led_rotation")
         raw_offset = _safe_int(data.get("led0_offset"), 0)
         led_rotation = _safe_int(raw_rot, int(round((raw_offset / 45.0) * 360.0))) if raw_rot is not None else int(round((raw_offset / 45.0) * 360.0))
@@ -485,6 +490,7 @@ class DeviceConfig:
             pwm_index=pwm_index,
             pwm_seg_id=pwm_seg_id,
             default_pwm_brightness=_safe_int(data.get("default_pwm_brightness"), _safe_int(default_pwm, 200)),
+            game_pwm_brightness=game_pwm,
             idle_dim_seconds=_safe_int(data.get("idle_dim_seconds"), 300),
             idle_dim_brightness=_safe_int(data.get("idle_dim_brightness"), 40),
             idle_off_seconds=_safe_int(data.get("idle_off_seconds"), 1800),

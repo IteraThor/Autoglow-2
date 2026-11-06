@@ -3,10 +3,10 @@
 // everything needed to change it. A status line says what is off or missing. Edits are a draft until saved.
 
 import { api } from '../core/api.js';
-import { choiceDialog, confirmDialog, promptDialog } from '../core/dialog.js';
+import { confirmDialog, promptDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
-import { blendFlow, compositeHit, renderFlowFrame } from './flow-looks.js';
+import { blendFlow, renderFlowFrame } from './flow-looks.js';
 import { effectPicker as wledEffectPicker, loadEffects } from './idle-lighting.js';
 
 const STRIP_LEDS = 48;
@@ -56,7 +56,6 @@ const page = {
   selected: { kind: 'step', id: 'turn' },
   live: null,
   liveHit: null,
-  preview: { open: false, running: false, players: 2, bullOff: true, legs: 1 },
   loading: false
 };
 
@@ -168,16 +167,6 @@ function transitionFrame(id) {
   };
 }
 
-function hitFrame(id) {
-  return (t, n) => {
-    const hit = resolved(page.draft.hits[id]);
-    const base = renderFlowFrame(stepLook('turn'), t, n);
-    const cycle = (Number(hit.duration) || 1) + 0.8;
-    const u = t % cycle;
-    return compositeHit(base, hit, u, n);
-  };
-}
-
 function styleFrame(style, id) {
   return (t, n) => {
     const step = page.draft.steps[id];
@@ -268,34 +257,51 @@ function uniqueName(base) {
   for (let i = 2; ; i++) if (!names.has(`${base} ${i}`)) return `${base} ${i}`;
 }
 
-async function switchProfile(name) {
-  if (name === page.name) return;
+// The profile dropdown holds your profiles and the presets; picking a preset makes a new profile from it
+async function pickFromDropdown(value) {
+  const [kind, ref] = splitPick(value);
+  if (kind === 'preset') {
+    const preset = page.overview.presets.find(p => p.id === ref);
+    await createProfile({ title: `New profile from '${preset.name}'`, base: preset.name, source: { preset: ref } });
+    render();
+    return;
+  }
+  if (ref === page.name) return;
   if (!(await guardUnsaved())) { render(); return; }
-  await openProfile(name);
+  await openProfile(ref);
   render();
 }
 
+function splitPick(value) {
+  const i = value.indexOf(':');
+  return [value.slice(0, i), value.slice(i + 1)];
+}
+
+// A blank profile (default settings), or a copy of an existing one
 async function newProfile() {
-  if (!(await guardUnsaved())) return;
-  const choices = page.overview.presets.map(p => ({ value: p.id, label: p.name }));
-  choices.push({ value: '__copy', label: `Copy of '${page.name}'` });
-  const pick = await choiceDialog({
-    title: 'New flow profile',
-    body: h('div', { class: 'fm-preset-list' },
-      h('p', {}, 'Start from a preset (from calm to loud) and change anything afterwards.'),
-      ...page.overview.presets.map(p => h('p', { class: 'fm-preset-line' }, h('strong', {}, p.name), ` · ${p.summary}`))),
-    choices
+  const source = h('select', { class: 'ui-select', 'aria-label': 'Start from' },
+    h('option', { value: 'preset:classic' }, 'Default settings'),
+    ...page.overview.profiles.map(p => h('option', { value: `copy:${p.name}` }, `Copy of '${p.name}'`)));
+  await createProfile({
+    title: 'New flow profile', base: 'New profile',
+    body: h('label', { class: 'fm-new-source' }, 'Start from', source),
+    source: () => {
+      const [kind, ref] = splitPick(source.value);
+      return kind === 'copy' ? { copy_from: ref } : { preset: ref };
+    }
   });
-  if (!pick) return;
-  const base = pick === '__copy' ? `${page.name} copy` : page.overview.presets.find(p => p.id === pick).name;
+}
+
+async function createProfile({ title, base, body, source }) {
+  if (!(await guardUnsaved())) return;
   const name = await promptDialog({
-    title: 'Name the profile', value: uniqueName(base), confirmLabel: 'Create', maxLength: 40,
+    title, body, value: uniqueName(base), confirmLabel: 'Create', maxLength: 40,
     validate: v => (!v.trim() ? 'Give it a name.' : page.overview.profiles.some(p => p.name === v.trim()) ? 'That name is taken.' : null)
   });
   if (!name) return;
   try {
-    const body = pick === '__copy' ? { name: name.trim(), copy_from: page.name } : { name: name.trim(), preset: pick };
-    const data = await api.post('/api/flow/profile/create', body);
+    const from = typeof source === 'function' ? source() : source;
+    const data = await api.post('/api/flow/profile/create', { name: name.trim(), ...from });
     page.overview = { ...page.overview, ...data };
     await openProfile(data.flow.name);
     toast.success(`Created '${data.flow.name}'`);
@@ -383,26 +389,6 @@ async function tryOnLights(kind, id, extra = {}) {
   }
 }
 
-async function startPreview() {
-  const p = page.preview;
-  try {
-    const data = await api.post('/api/flow/preview', { flow: page.draft, players: p.players, bull_off: p.bullOff, legs: p.legs });
-    p.running = true;
-    p.open = false;
-    toast.info(`Preview running (about ${data.seconds} s)`);
-    render();
-  } catch (err) {
-    toast.error(err);
-  }
-}
-
-async function stopPreview() {
-  try { await api.post('/api/flow/preview/stop', {}); } catch (err) { toast.error(err); }
-  page.preview.running = false;
-  page.live = null;
-  render();
-}
-
 // --- status line -------------------------------------------------------------
 
 function statusNotes() {
@@ -440,8 +426,8 @@ function statusNotes() {
 
 // --- chart -------------------------------------------------------------------
 // The legacy flow layout: Waiting -> Bull-off -> Game starts -> [Player 1 <-> Pulling darts <-> Player 2] -> Match won /
-// Leg won, with curved returns and the standby timers under Waiting. Nodes sit on fixed coordinates (one table per
-// view) and every connector is an SVG curve computed from the same numbers, so wires always line up.
+// Leg won, with squared-off returns and the standby timers under Waiting. Nodes sit on fixed coordinates (one table per
+// view) and every connector is an orthogonal SVG path computed from the same numbers, so wires always line up.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const VIEW_KEY = 'autoglow_flow_view';
@@ -455,15 +441,10 @@ function isSelected(kind, id) {
   return page.selected?.kind === kind && (id === undefined || page.selected.id === id);
 }
 
+// Chosen in Settings (per browser); narrow windows always get the vertical chart
 function currentView() {
   if (window.matchMedia('(max-width: 1100px)').matches) return 'vertical';
-  return page.view === 'horizontal' ? 'horizontal' : 'vertical';
-}
-
-function setView(view) {
-  page.view = view;
-  try { localStorage.setItem(VIEW_KEY, view); } catch (err) { /* private mode: this visit only */ }
-  render();
+  try { return localStorage.getItem(VIEW_KEY) === 'horizontal' ? 'horizontal' : 'vertical'; } catch (err) { return 'vertical'; }
 }
 
 // Node boxes ({x, y, w, h}), the match frame, where the hit chips and players go, per view
@@ -492,11 +473,11 @@ const LAYOUTS = {
   vertical: (() => {
     const W = 196, H = 66, cx = 270;
     return {
-      width: 980, height: 1080,
+      width: 1030, height: 1080,
       nodes: {
         waiting: { x: cx, y: 30, w: W, h: H },
-        timeout: { x: cx + 290, y: 40, w: 160, h: 46 },
-        auto_off: { x: cx + 520, y: 40, w: 160, h: 46 },
+        timeout: { x: cx + 346, y: 40, w: 124, h: 46 },
+        auto_off: { x: cx + 620, y: 40, w: 124, h: 46 },
         bull_off: { x: cx, y: 165, w: W, h: H },
         game_start: { x: cx, y: 300, w: W, h: H },
         p1: { x: cx, y: 500, w: W, h: H },
@@ -519,14 +500,14 @@ const EDGES = {
     { from: ['waiting', 'r'], to: ['bull_off', 'l'], step: 'bull_off' },
     { from: ['bull_off', 'r'], to: ['game_start', 'l'], step: 'game_start' },
     { from: ['game_start', 'r'], to: ['p1', 'l'], step: 'turn' },
-    { from: ['p1', 'r', -16], to: ['takeout', 'l', -16], step: 'takeout', lane: 'up' },
-    { from: ['takeout', 'l', 16], to: ['p1', 'r', 16], step: 'turn', lane: 'down' },
-    { from: ['takeout', 'r', -16], to: ['p2', 'l', -16], step: 'turn', lane: 'up' },
-    { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout', lane: 'down' },
+    { from: ['p1', 'r', -16], to: ['takeout', 'l', -16], step: 'takeout' },
+    { from: ['takeout', 'l', 16], to: ['p1', 'r', 16], step: 'turn' },
+    { from: ['takeout', 'r', -16], to: ['p2', 'l', -16], step: 'turn' },
+    { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout' },
     { from: ['frame', 'r'], to: ['match_won', 'l'], step: 'match_won' },
     { from: ['frame', 'r'], to: ['leg_won', 'l'], step: 'leg_won' },
-    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', label: 'next leg', bend: 230 },
-    { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', bend: 120 },
+    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', label: 'next leg', out: 44 },
+    { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', out: 36 },
     { from: ['waiting', 'b'], to: ['timeout', 't'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
   ],
@@ -534,14 +515,14 @@ const EDGES = {
     { from: ['waiting', 'b'], to: ['bull_off', 't'], step: 'bull_off' },
     { from: ['bull_off', 'b'], to: ['game_start', 't'], step: 'game_start' },
     { from: ['game_start', 'b'], to: ['p1', 't'], step: 'turn', at: 0.22 },
-    { from: ['p1', 'b', -40], to: ['takeout', 't', -40], step: 'takeout', lane: 'left' },
-    { from: ['takeout', 't', 40], to: ['p1', 'b', 40], step: 'turn', lane: 'right' },
-    { from: ['takeout', 'b', -40], to: ['p2', 't', -40], step: 'turn', lane: 'left' },
-    { from: ['p2', 't', 40], to: ['takeout', 'b', 40], step: 'takeout', lane: 'right' },
+    { from: ['p1', 'b', -50], to: ['takeout', 't', -50], step: 'takeout' },
+    { from: ['takeout', 't', 50], to: ['p1', 'b', 50], step: 'turn' },
+    { from: ['takeout', 'b', -50], to: ['p2', 't', -50], step: 'turn' },
+    { from: ['p2', 't', 50], to: ['takeout', 'b', 50], step: 'takeout' },
     { from: ['frame', 'b'], to: ['match_won', 't'], step: 'match_won' },
     { from: ['frame', 'b'], to: ['leg_won', 't'], step: 'leg_won' },
-    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', label: 'next leg', bend: 330 },
-    { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', bend: 160 },
+    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', label: 'next leg', out: 60 },
+    { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70 },
     { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
     { from: ['timeout', 'r'], to: ['auto_off', 'l'], standby: 'off' }
   ]
@@ -556,16 +537,67 @@ function anchor(box, side, along = 0) {
   return [box.x + box.w / 2 + along, box.y + box.h];
 }
 
-function curve(a, sa, b, sb, bend) {
-  const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const k = bend || Math.max(24, Math.min(90, dist * 0.45));
-  const c1 = [a[0] + NORMAL[sa][0] * k, a[1] + NORMAL[sa][1] * k];
-  const c2 = [b[0] + NORMAL[sb][0] * k, b[1] + NORMAL[sb][1] * k];
-  const at = t => {
-    const u = 1 - t;
-    return [0, 1].map(i => u * u * u * a[i] + 3 * u * u * t * c1[i] + 3 * u * t * t * c2[i] + t * t * t * b[i]);
+// Orthogonal connector: straight runs joined by small rounded 90° corners. Same-side ends (r->r, l->l, ...) loop out
+// `out` px past the outer anchor; opposite sides make a Z through the midpoint; perpendicular sides make an L.
+const CORNER = 8;
+
+function route(a, sa, b, sb, out = 40) {
+  const vertA = NORMAL[sa][0] === 0;
+  const vertB = NORMAL[sb][0] === 0;
+  let pts;
+  if (sa === sb) {
+    if (vertA) {
+      const y = sa === 'b' ? Math.max(a[1], b[1]) + out : Math.min(a[1], b[1]) - out;
+      pts = [a, [a[0], y], [b[0], y], b];
+    } else {
+      const x = sa === 'r' ? Math.max(a[0], b[0]) + out : Math.min(a[0], b[0]) - out;
+      pts = [a, [x, a[1]], [x, b[1]], b];
+    }
+  } else if (vertA === vertB) {
+    if (vertA) {
+      const y = (a[1] + b[1]) / 2;
+      pts = [a, [a[0], y], [b[0], y], b];
+    } else {
+      const x = (a[0] + b[0]) / 2;
+      pts = [a, [x, a[1]], [x, b[1]], b];
+    }
+  } else {
+    pts = vertA ? [a, [a[0], b[1]], b] : [a, [b[0], a[1]], b];
+  }
+  // Drop zero-length runs and straight-through points
+  pts = pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
+  pts = pts.filter((p, i) => {
+    if (i === 0 || i === pts.length - 1) return true;
+    const [q, r] = [pts[i - 1], pts[i + 1]];
+    return !((q[0] === p[0] && p[0] === r[0]) || (q[1] === p[1] && p[1] === r[1]));
+  });
+
+  const len = (p, q) => Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]);
+  const toward = (p, q, dist) => {
+    const l = len(p, q) || 1;
+    return [p[0] + (q[0] - p[0]) * dist / l, p[1] + (q[1] - p[1]) * dist / l];
   };
-  return { d: `M${a[0]},${a[1]} C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${b[0]},${b[1]}`, at };
+  let d = `M${a[0]},${a[1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [p, c, n] = [pts[i - 1], pts[i], pts[i + 1]];
+    const r = Math.min(CORNER, len(p, c) / 2, len(c, n) / 2);
+    const s = toward(c, p, r);
+    const e = toward(c, n, r);
+    d += ` L${s[0]},${s[1]} Q${c[0]},${c[1]} ${e[0]},${e[1]}`;
+  }
+  d += ` L${b[0]},${b[1]}`;
+
+  const segs = pts.slice(1).map((q, i) => len(pts[i], q));
+  const total = segs.reduce((x, y) => x + y, 0);
+  const at = t => {
+    let left = total * t;
+    for (let i = 0; i < segs.length; i++) {
+      if (left <= segs[i]) return toward(pts[i], pts[i + 1], left);
+      left -= segs[i];
+    }
+    return b;
+  };
+  return { d, at };
 }
 
 function svgEl(tag, attrs) {
@@ -583,7 +615,7 @@ const NODE_STEP = { p1: 'turn', p2: 'turn' };
 function nodeLabel(id) {
   if (id === 'p1') return 'Player 1';
   if (id === 'p2') return 'Player 2';
-  return { waiting: 'Waiting', timeout: 'Dimmed', auto_off: 'Lights off' }[id] || stepMeta(id).label;
+  return { waiting: 'Waiting/Idle', timeout: 'Dimmed', auto_off: 'Lights off' }[id] || stepMeta(id).label;
 }
 
 function dotStyle(effect, player = 0) {
@@ -604,7 +636,7 @@ function chartNode(id, box) {
     el.classList.add('fc-node-waiting');
     if (isSelected('waiting')) el.classList.add('is-selected');
     el.onclick = () => select({ kind: 'waiting' });
-    el.append(h('span', { class: 'fc-title' }, h('span', { class: 'fc-dot fc-dot-idle' }), 'Waiting'),
+    el.append(h('span', { class: 'fc-title' }, h('span', { class: 'fc-dot fc-dot-idle' }), 'Waiting/Idle'),
       h('span', { class: 'fc-meta' }, idleSummary()));
     return el;
   }
@@ -646,7 +678,7 @@ function edgeLabel(edge) {
   if (edge.fixed) return page.overview.match_end_to_waiting ? 'back to waiting' : 'winner’s colour stays';
   if (edge.standby) {
     const s = page.overview.standby || {};
-    return edge.standby === 'dim' ? (s.dim_on ? `after ${s.dim_minutes} min` : 'off') : (s.off_on ? `after ${s.off_minutes} min` : 'off');
+    return edge.standby === 'dim' ? (s.dim_on ? `after ${s.dim_minutes} min inactivity` : 'off') : (s.off_on ? `after ${s.off_minutes} min inactivity` : 'off');
   }
   const tr = page.draft.steps[edge.step].transition;
   const text = tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} ${seconds(tr.duration)}`;
@@ -687,7 +719,7 @@ function chart() {
     const [toId, ts, ta = 0] = edge.to;
     const a = anchor(boxes[fromId], fs, fa);
     const b = anchor(boxes[toId], ts, ta);
-    const { d, at } = curve(a, fs, b, ts, edge.bend);
+    const { d, at } = route(a, fs, b, ts, edge.out);
     const mid = at(edge.at ?? 0.5);
     const nodeStep = n => NODE_STEP[n] || n;
     const ends = [nodeStep(fromId), nodeStep(toId)].filter(n => page.draft.steps[n]);
@@ -701,11 +733,7 @@ function chart() {
       class: `fc-pill${chosen ? ' is-selected' : ''}${skipped ? ' is-skipped' : ''}${edge.fixed || edge.standby ? ' is-quiet' : ''}`,
       title: edge.step ? `How ${stepMeta(edge.step).label} comes in (click to edit)` : ''
     }, skipped && edge.step ? 'skipped' : edgeLabel(edge));
-    let [px, py] = mid;
-    if (edge.lane === 'up') py -= 14;
-    if (edge.lane === 'down') py += 14;
-    if (edge.lane === 'left') px -= 46;
-    if (edge.lane === 'right') px += 46;
+    const [px, py] = mid;
     pill.style.left = `${px}px`;
     pill.style.top = `${py}px`;
     if (edge.step && !skipped) pill.onclick = () => select({ kind: 'transition', id: edge.step });
@@ -721,12 +749,7 @@ function chart() {
   const scroller = h('div', { class: 'fc-scroller' }, sizer);
   // Fit wide charts into the card; below 80 % the chart scrolls sideways instead of shrinking further
   requestAnimationFrame(() => fitChart(scroller, sizer, stage, L));
-  return h('div', { class: 'fc-wrap' },
-    h('div', { class: 'fc-toolbar' },
-      h('span', { class: 'fc-legend' }, 'Click a step to change its look, an arrow to change how it comes in.'),
-      h('div', { class: 'fc-view' },
-        segmented(['horizontal', 'vertical'], view, setView, { horizontal: '⟶ Horizontal', vertical: '↓ Vertical' }))),
-    scroller);
+  return h('div', { class: 'fc-wrap' }, scroller);
 }
 
 function fitChart(scroller, sizer, stage, L) {
@@ -912,7 +935,6 @@ function stepPanel(id) {
       h('div', {}, h('span', { class: 'fm-kicker' }, 'Step · look'), h('h2', { class: 'fm-panel-title' }, meta.label)),
       !meta.always_on && onOff(step.effect.enabled, v => setEffect(e => { e.enabled = v; }), `${meta.label} on or off`)),
     h('p', { class: 'fm-panel-help' }, STEP_HELP[id]),
-    h('div', { class: 'fm-hero' }, strip(id === 'turn' ? ((t, n) => renderFlowFrame(resolved(step.effect, true), t, n)) : stepFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero' })),
     !step.effect.enabled && h('p', { class: 'fm-off-note' }, `Off: ${OFF_TEXT[id]}.`),
     h('div', { class: step.effect.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(step.effect, {
@@ -964,11 +986,11 @@ async function saveStandby(patch) {
   try {
     const r = await api.post('/api/flow/standby', s);
     o.standby = { dim_on: r.inactivity_timeout_enabled, dim_minutes: r.inactivity_timeout_minutes,
-      off_on: r.idle_power_off_enabled, off_minutes: r.idle_power_off_minutes };
+      off_on: r.idle_power_off_enabled, off_minutes: r.idle_power_off_minutes, dim_brightness: r.idle_dimming_brightness };
     o.match_end_to_waiting = r.disconnect_udp_on_match_end;
     if (window.appState) {
       for (const k of ['inactivity_timeout_enabled', 'inactivity_timeout_minutes', 'idle_power_off_enabled',
-        'idle_power_off_minutes', 'disconnect_udp_on_match_end']) window.appState[k] = r[k];
+        'idle_power_off_minutes', 'disconnect_udp_on_match_end', 'idle_dimming_brightness']) window.appState[k] = r[k];
     }
     toast.success('Standby saved');
   } catch (err) { toast.error(err); }
@@ -982,14 +1004,40 @@ function minutesField(label, value, enabled, onset) {
   return h('label', { class: 'fm-minutes-row' }, input, h('span', {}, 'minutes'));
 }
 
+// Dimmed brightness is stored 0-255 and shown as a percentage; an unchanged percentage keeps the exact value
+function dimPercentField(s) {
+  const saved = s.dim_brightness ?? 50;
+  const shown = Math.round((saved / 255) * 100);
+  const input = h('input', { type: 'number', class: 'input-text fm-minutes', min: 0, max: 100, value: shown, disabled: !s.dim_on,
+    'aria-label': 'Light strip brightness when dimmed, in percent',
+    onchange: e => {
+      const pct = Math.max(0, Math.min(100, parseInt(e.target.value, 10)));
+      if (Number.isNaN(pct) || pct === shown) { e.target.value = shown; return; }
+      saveStandby({ dim_brightness: Math.round((pct / 100) * 255) });
+    } });
+  return h('div', { class: 'fm-standby-row fm-dim-level' },
+    h('label', { class: 'fm-minutes-row' }, h('span', {}, 'Light strips at'), input, h('span', {}, '%')));
+}
+
+// The same actions the timers run, on the real lights right now
+async function standbyTest(kind) {
+  const done = { dim: 'Lights dimmed', off: 'Lights switched off', wake: 'Lights back on' }[kind];
+  try {
+    const r = await api.post(`/api/power/test_${kind}`, {});
+    if (r?.status === 'warning') toast.warning(r.message || done);
+    else toast.success(done);
+  } catch (err) { toast.error(err); }
+}
+
 function standbyPanel() {
   const s = page.overview.standby || {};
   return [
     h('div', { class: 'fm-panel-head' }, h('div', {}, h('span', { class: 'fm-kicker' }, 'Standby'), h('h2', { class: 'fm-panel-title' }, 'When nobody plays'))),
-    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These are the same timers as in Settings › Power and apply to every profile. Changes save right away.'),
+    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These apply to every profile. Changes save right away.'),
     section('Dim', h('div', { class: 'fm-standby-row' },
       onOff(!!s.dim_on, v => saveStandby({ dim_on: v }), 'Dimming on or off'),
-      minutesField('Dim after minutes', s.dim_minutes, s.dim_on, v => saveStandby({ dim_minutes: v })))),
+      minutesField('Dim after minutes', s.dim_minutes, s.dim_on, v => saveStandby({ dim_minutes: v }))),
+      dimPercentField(s)),
     section('Lights off', h('div', { class: 'fm-standby-row' },
       onOff(!!s.off_on, v => saveStandby({ off_on: v }), 'Switching off on or off'),
       minutesField('Switch off after minutes', s.off_minutes, s.off_on, v => saveStandby({ off_minutes: v }))),
@@ -997,6 +1045,11 @@ function standbyPanel() {
     section('When a match ends', h('div', { class: 'fm-standby-row' },
       onOff(!!page.overview.match_end_to_waiting, v => saveStandby({ match_end_to_waiting: v }), 'Back to waiting when a match ends'),
       h('span', { class: 'fm-panel-help' }, 'Go straight back to Waiting'))),
+    section('Test on my lights',
+      h('div', { class: 'fm-panel-actions' },
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('dim'), title: 'Same as when the dim timer runs out' }, 'Dim now'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('off'), title: 'Same as when the switch-off timer runs out' }, 'Switch off now'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('wake') }, 'Turn back on')))
   ];
 }
 
@@ -1016,8 +1069,7 @@ function hitPanel(id) {
     h('div', { class: hit.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(hit, { setEffect, timed: true, playerChoice: true, playerWord: 'Player colour', isHit: true })),
       h('div', { class: 'fm-panel-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('hit', id) }, '▶ Try on my lights'),
-        h('div', { class: 'fm-hit-preview' }, strip(hitFrame(id)))))
+        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('hit', id) }, '▶ Try on my lights')))
   ];
 }
 
@@ -1064,7 +1116,7 @@ function wledEffects() {
 
 function waitingPanel() {
   const head = [
-    h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting')),
+    h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting/Idle')),
     h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every strip that plays this profile (Setup) gets it when you save.')
   ];
   page.draft.idle ||= structuredClone(IDLE_DEFAULT);
@@ -1133,7 +1185,51 @@ function profilePanel() {
   ];
 }
 
-// Which RGB strips play this profile. Read-only: strips get their profile in Setup, on the controller's page.
+// Pick a controller and one of its sections (or all of them) to play this profile
+async function applyToSection() {
+  const lights = page.overview.lights
+    .map(dev => ({ ...dev, segments: dev.segments.filter(seg => !seg.light_strip) }))
+    .filter(dev => dev.segments.length);
+  if (!lights.length) {
+    toast.warning('Add a controller in Setup first.');
+    return;
+  }
+  if (!(await guardUnsaved())) return;
+  const controller = h('select', { class: 'ui-select', 'aria-label': 'Controller' },
+    ...lights.map((dev, i) => h('option', { value: String(i) }, `${dev.name} (${dev.ip})`)));
+  const section = h('select', { class: 'ui-select', 'aria-label': 'Section' });
+  const fillSections = () => {
+    const dev = lights[Number(controller.value)];
+    section.replaceChildren(
+      ...dev.segments.map(seg => h('option', { value: String(seg.id) },
+        seg.profile && seg.profile !== page.name ? `${seg.name} (now: ${seg.profile})` : seg.profile === page.name ? `${seg.name} (already)` : seg.name)),
+      dev.segments.length > 1 && h('option', { value: 'all' }, 'All sections'));
+  };
+  controller.onchange = fillSections;
+  fillSections();
+  const ok = await confirmDialog({
+    title: `Apply '${page.name}' to a section`,
+    confirmLabel: 'Apply',
+    body: h('div', {},
+      h('label', { class: 'fm-new-source' }, 'Controller', controller),
+      h('label', { class: 'fm-new-source' }, 'Section', section))
+  });
+  if (!ok) return;
+  const dev = lights[Number(controller.value)];
+  const segs = section.value === 'all' ? dev.segments : dev.segments.filter(seg => String(seg.id) === section.value);
+  try {
+    let data = null;
+    for (const seg of segs) data = await api.post('/api/flow/assign', { ip: dev.ip, segment_id: seg.id, name: page.name });
+    page.overview = { ...page.overview, ...data };
+    idleWarning(data);
+    toast.success(segs.length > 1 ? `All sections of ${dev.name} play '${page.name}'` : `${dev.name} · ${segs[0].name} plays '${page.name}'`);
+    render();
+  } catch (err) {
+    toast.error(err);
+  }
+}
+
+// Which RGB strips play this profile. Change it with "Apply to section" or on the controller's page in Setup.
 function playsOnRows() {
   const segs = allSegments();
   if (!segs.length) return [h('p', { class: 'form-hint' }, 'Add a controller in Setup first.')];
@@ -1143,7 +1239,7 @@ function playsOnRows() {
       ? h('ul', { class: 'fm-plays-on' }, ...mine.map(seg => h('li', {},
         h('a', { href: `/setup/controllers/${encodeURIComponent(seg.ip)}`, 'data-link': true }, `${seg.controller} · ${seg.name}`))))
       : h('p', { class: 'form-hint' }, 'No strip plays this profile yet.'),
-    h('p', { class: 'form-hint' }, 'Choose which profile a strip plays in Setup, on its controller\'s page.')
+    h('p', { class: 'form-hint' }, 'Use "Apply to section" above the chart, or choose on the controller\'s page in Setup.')
   ];
 }
 
@@ -1167,48 +1263,32 @@ function inspector() {
 
 // --- page --------------------------------------------------------------------
 
-// Title, profile tools, status and preview share one row (they wrap on narrow screens)
+// Title, profile tools and status share one row (they wrap on narrow screens)
 function profileBar() {
   const o = page.overview;
-  return h('header', { class: 'fm-profile-bar' },
-    h('h1', { class: 'page-title fm-title' }, 'Flow Matrix'),
-    h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Profile'),
-      h('select', { class: 'ui-select', onchange: e => switchProfile(e.target.value) },
-        ...o.profiles.map(p => h('option', { value: p.name, selected: p.name === page.name }, p.name + (p.name === o.default ? ' (default)' : ''))))),
-    h('div', { class: 'fm-profile-actions' },
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: newProfile }, '+ New'),
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete')),
-    h('div', { class: 'fm-top-end' },
-      statusLine(),
-      h('div', { class: 'fm-preview-wrap' },
-      page.preview.running
-        ? h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: stopPreview }, '■ Stop preview')
-        : h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', disabled: o.match_running,
-          title: o.match_running ? 'Not while a match is running' : 'Play a made-up match on your lights',
-          onclick: () => { page.preview.open = !page.preview.open; render(); } }, '▶ Preview a match'),
-        page.preview.open && previewPanel())));
-}
-
-function previewPanel() {
-  const p = page.preview;
-  return h('div', { class: 'fm-preview card' },
-    h('p', { class: 'fm-panel-help' }, 'Plays a short made-up match on your lights with your current (unsaved) settings.'),
-    h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Players'),
-      segmented([1, 2, 3, 4, 5, 6], p.players, v => { p.players = v; render(); })),
-    h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Bull-off'),
-      segmented([true, false], p.bullOff, v => { p.bullOff = v; render(); }, { true: 'With', false: 'Without' })),
-    h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Legs'),
-      segmented([1, 2, 3], p.legs, v => { p.legs = v; render(); })),
-    h('div', { class: 'fm-panel-actions' },
-      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: startPreview }, 'Start'),
-      h('button', { type: 'button', class: 'ui-btn', onclick: () => { p.open = false; render(); } }, 'Cancel')));
+  // Same columns as the chart and edit panel below, so Apply to section ends where the chart box ends
+  return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
+    h('div', { class: 'fm-bar-main' },
+      h('h1', { class: 'page-title fm-title' }, 'Flow Matrix'),
+      h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Profile'),
+        h('select', { class: 'ui-select', onchange: e => pickFromDropdown(e.target.value) },
+          h('optgroup', { label: 'Your profiles' },
+            ...o.profiles.map(p => h('option', { value: `profile:${p.name}`, selected: p.name === page.name }, p.name + (p.name === o.default ? ' (default)' : '')))),
+          h('optgroup', { label: 'New from preset' },
+            ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name))))),
+      h('div', { class: 'fm-profile-actions' },
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: newProfile }, '+ New'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete')),
+      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary fm-apply', onclick: applyToSection, title: 'Choose a controller section that plays this profile' }, 'Apply to section')),
+    h('div', { class: 'fm-top-end' }, statusLine()));
 }
 
 function statusLine() {
   const notes = statusNotes();
-  if (!notes.length) return h('p', { class: 'fm-status fm-status-ok' }, '✓ Everything is set up.');
+  // Nothing to say when all is well
+  if (!notes.length) return null;
   return h('ul', { class: 'fm-status', 'aria-label': 'Status' }, ...notes.map(n => h('li', { class: `fm-note fm-note-${n.tone}` },
     n.select
       ? h('button', { type: 'button', class: 'fm-note-btn', onclick: () => select(n.select) }, n.text)
@@ -1247,12 +1327,7 @@ let hitTimer = null;
 
 function onTelemetry(msg) {
   if (msg.type !== 'game_flow_state' || !page.root) return;
-  if (msg.preview && msg.ended) {
-    page.preview.running = false;
-    page.live = null;
-  } else {
-    page.live = { step: msg.phase, player: msg.colour ?? msg.player };
-  }
+  page.live = msg.ended ? null : { step: msg.phase, player: msg.colour ?? msg.player };
   if (msg.hit) {
     page.liveHit = msg.hit;
     clearTimeout(hitTimer);
@@ -1273,14 +1348,10 @@ function updateLive() {
   });
   root.querySelectorAll('.fc-pdot').forEach((el, i) => el.classList.toggle('is-live', liveP === i));
   root.querySelectorAll('.fc-chip').forEach(el => el.classList.toggle('is-flash', page.liveHit === el.dataset.hit));
-  const stop = root.querySelector('.fm-preview-wrap');
-  if (stop && !page.preview.running && stop.textContent.includes('Stop')) render();
 }
 
 export function initFlowMatrix() {
   window.flowPage = { isDirty, save, discard };
-  // Vertical until someone picks a view; then the last one used
-  try { page.view = localStorage.getItem(VIEW_KEY) || 'vertical'; } catch (err) { page.view = 'vertical'; }
   window.addEventListener('resize', () => {
     const wanted = currentView();
     if (page.root?.isConnected && !page.root.querySelector(`.fc-${wanted}`)) render();

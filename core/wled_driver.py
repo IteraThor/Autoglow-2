@@ -161,7 +161,9 @@ def sanitize_wled_name(name: str) -> str:
     """Strip characters unsupported by WLED ESP32 firmware (quotes, apostrophes, etc.) and limit to 32 chars."""
     if not name:
         return ""
-    return re.sub(r"[^a-zA-Z0-9 _-]", "", str(name))[:32]
+    # "·" (the guided setup's old zone separator) becomes "-"; Python escapes non-ASCII to "\\u00b7", which WLED keeps as text
+    name = re.sub(r"[^a-zA-Z0-9 _-]", "", str(name).replace("\u00b7", "-"))
+    return re.sub(r"\s+", " ", name).strip()[:32]
 
 
 class WLEDDriver:
@@ -196,7 +198,10 @@ class WLEDDriver:
         1. Set PWM spotlight to configured brightness in memory for UDP stream.
         2. Set mode to ACTIVE_UDP.
         """
-        bri = spotlight_brightness if spotlight_brightness is not None else self.config.default_pwm_brightness
+        # This controller's own brightness during a game wins over the global one
+        bri = self.config.game_pwm_brightness
+        if bri is None:
+            bri = spotlight_brightness if spotlight_brightness is not None else self.config.default_pwm_brightness
         self._current_pwm_brightness = max(0, min(255, bri))
         self._protocol_mode = ProtocolMode.ACTIVE_UDP
         logger.info(f"Transitioned to ACTIVE_UDP mode (Spotlight brightness: {self._current_pwm_brightness})")
