@@ -5,6 +5,7 @@ for dual WS281x (RGB) + PWM White setups with zero protocol collisions.
 """
 
 import dataclasses
+import itertools
 import os
 import asyncio
 import socket
@@ -18,7 +19,8 @@ from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
 from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
 from core.animations import render_animation_frame, blend_frames
-from core.effects.flow import blend_flow
+from core.effects.flow import blend_flow, normalize_options, normalize_transition_style
+from core.effects.flow.renderers import FLOW_RENDERERS
 
 # WLED realtime UDP limits: one DRGB packet holds 490 LEDs, one DNRGB packet 489 (it spends 2 bytes on the start index)
 DRGB_MAX_LEDS = 490
@@ -36,6 +38,7 @@ def _clear_flow_state(ch: Dict[str, Any]) -> None:
     ch["overlay"] = None
     ch["locator"] = None
     ch["last_base"] = None
+    ch["flow_session"] = next(_flow_sessions)
 
 
 def _composite(base: Union[bytes, bytearray], layer: Union[bytes, bytearray], mask: Union[bytes, bytearray], scale: float) -> bytearray:
@@ -67,6 +70,35 @@ def _draw_locator(base: Union[bytes, bytearray], count: int, position: float, co
     return out
 
 logger = logging.getLogger("autoglow.wled_driver")
+
+# Optional Rust LED engine (rust_core/, built by setup.sh). Without it, or with a build that does not
+# match this code (API_VERSION), the LED loop runs in Python. AUTOGLOW_LED_ENGINE=python forces Python.
+_RUST_API_VERSION = 2
+_rust_core = None
+if os.environ.get("AUTOGLOW_LED_ENGINE", "").strip().lower() != "python":
+    try:
+        import autoglow_core as _rust_core_module
+        if getattr(_rust_core_module, "API_VERSION", None) == _RUST_API_VERSION:
+            _rust_core = _rust_core_module
+        else:
+            logger.warning("Rust LED engine %s does not match this AutoGlow (API %s, needs %s); using the Python engine. "
+                           "Run setup again to rebuild it.", getattr(_rust_core_module, "__version__", "?"),
+                           getattr(_rust_core_module, "API_VERSION", "?"), _RUST_API_VERSION)
+    except ImportError:
+        pass
+    except Exception:
+        logger.exception("Rust LED engine failed to load; using the Python engine")
+
+# Every flow-state reset starts a new session, so the Rust engine never hands back an older look picture
+_flow_sessions = itertools.count(1)
+
+# Flow options the Rust engine expects for every look (normalize_options fills in the look's own)
+_RUST_FLOW_DEFAULTS = {"pulses": 1, "comets": 1, "tail": "short", "sides": "both", "palette": "vivid", "amount": "some"}
+
+
+def led_engine_name() -> str:
+    """'rust' or 'python': which engine streams the LEDs."""
+    return "rust" if _rust_core is not None else "python"
 
 
 def is_host_online(ip: str, port: int = 80, timeout: float = 0.3) -> bool:
@@ -148,6 +180,7 @@ class WLEDDriver:
         self._sock: Optional[socket.socket] = None
         self._protocol_mode: ProtocolMode = ProtocolMode.IDLE_HTTP
         self._frame_tap_callback: Optional[Callable[[bytes], None]] = None
+        self._rust_engine = None  # autoglow_core.LedEngine, created on first use
 
     def set_frame_tap_callback(self, callback: Optional[Callable[[bytes], None]]) -> None:
         """Register a callback for in-memory tap of rendered DRGB frame buffers (used by simulator)."""
@@ -604,6 +637,8 @@ class WLEDDriver:
         return self._sock
 
     def close(self):
+        if self._rust_engine is not None:
+            self._rust_engine.stop()
         if self._sock:
             try:
                 self._sock.close()
@@ -718,6 +753,9 @@ class WLEDDriver:
             ch["transient_start_time"] = time.time()
             ch["transient_duration"] = max(0.2, effect.duration)
 
+        # Rust engine: the new effect reaches the LED thread now, not at the next feed tick
+        self._sync_rust_engine(start=True)
+
         # Ensure master broadcast loop is running
         if not self._master_broadcast_task or self._master_broadcast_task.done():
             self._master_broadcast_task = asyncio.create_task(self._run_master_broadcast_loop())
@@ -744,6 +782,7 @@ class WLEDDriver:
         return ch
 
     def _ensure_broadcast(self) -> None:
+        self._sync_rust_engine(start=True)
         if not self._master_broadcast_task or self._master_broadcast_task.done():
             self._master_broadcast_task = asyncio.create_task(self._run_master_broadcast_loop())
 
@@ -767,10 +806,12 @@ class WLEDDriver:
         if prev == effect:
             return True  # the same look again (e.g. a repeated event) keeps running, fade included
         now = time.time()
+        if self._rust_engine_enabled():
+            self._prune_finished_flow_parts(ch, now)  # the Rust thread does not clear them in this dict
         fade = None
         if duration > 0.0 and style != "instant":
             # Mid-transition (or with nothing to animate) the outgoing picture is frozen; otherwise it keeps moving
-            frozen = ch.get("last_base") if (ch.get("fade") or prev is None) else None
+            frozen = self._flow_last_base(segment_id, ch) if (ch.get("fade") or prev is None) else None
             fade = {
                 "start": now, "duration": float(duration), "style": style, "accent": accent,
                 "frame": frozen, "effect": None if frozen is not None else prev,
@@ -820,6 +861,7 @@ class WLEDDriver:
             if ch.get("flow"):
                 ch["baseline_effect"] = None
                 _clear_flow_state(ch)
+        self._sync_rust_engine()
 
     def _render_flow_channel(self, ch: Dict[str, Any], now: float, count: int) -> Optional[bytearray]:
         base_eff = ch.get("baseline_effect")
@@ -875,6 +917,7 @@ class WLEDDriver:
         if s_id in self._segment_channels:
             self._segment_channels[s_id]["baseline_effect"] = None
             self._segment_channels[s_id]["transient_effect"] = None
+            self._sync_rust_engine()
 
     @property
     def is_playing_effects(self) -> bool:
@@ -1149,12 +1192,107 @@ class WLEDDriver:
             packets.append(bytes([0x04, timeout, (start >> 8) & 0xFF, start & 0xFF]) + bytes(rgb_bytes[offset:offset + chunk]))
         return packets
 
+    def _compose_frame(self, t0: float, frame: int, total_led_count: int) -> Tuple[bytearray, bool]:
+        """
+        One frame of the broadcast loop: merges all active segment channels (Flow looks, transient effects
+        and baseline states) into one frame buffer. Returns the buffer and whether any channel is still
+        active. autoglow_core's compose() mirrors this step for step.
+        """
+        master_buffer = bytearray(total_led_count * 3)
+        any_active = False
+
+        # LED ranges an effect drew this frame; light strips outside them keep the spotlight brightness
+        rendered_ranges: List[Tuple[int, int]] = []
+
+        for s_id, ch in list(self._segment_channels.items()):
+            start_idx = ch.get("start_idx", 0)
+            stop_idx = min(ch.get("stop_idx", total_led_count), total_led_count)
+            seg_len = stop_idx - start_idx
+            if seg_len <= 0:
+                continue
+
+            if ch.get("flow"):
+                flow_frame = self._render_flow_channel(ch, t0, seg_len)
+                if flow_frame is None:
+                    continue
+                any_active = True
+                rendered_ranges.append((start_idx, stop_idx))
+                master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(flow_frame, self._get_segment_offset(s_id))
+                continue
+
+            # Determine which effect to render: transient overlay or permanent baseline
+            active_eff = None
+            eff_elapsed = 0.0
+            blend_with_baseline = False
+            blend_factor = 0.0
+
+            transient_eff = ch.get("transient_effect")
+            baseline_eff = ch.get("baseline_effect")
+
+            if transient_eff:
+                elapsed = t0 - ch.get("transient_start_time", 0.0)
+                dur = ch.get("transient_duration", 0.0)
+                if elapsed < dur:
+                    active_eff = transient_eff
+                    eff_elapsed = elapsed
+                    # Check smooth transition blend into baseline near end of transient effect
+                    t_dur = transient_eff.transition_duration
+                    if t_dur > 0.0 and baseline_eff and (dur - elapsed) <= t_dur:
+                        blend_with_baseline = True
+                        blend_factor = 1.0 - max(0.0, min(1.0, (dur - elapsed) / t_dur))
+                else:
+                    # Timed transient effect has expired -> revert to baseline!
+                    ch["transient_effect"] = None
+
+            # If no transient effect is active, check permanent baseline
+            if not active_eff and baseline_eff:
+                active_eff = baseline_eff
+                eff_elapsed = t0 - ch.get("baseline_start_time", t0)
+
+            if not active_eff or active_eff.animation == AnimationType.OFF:
+                continue
+
+            any_active = True
+            rendered_ranges.append((start_idx, stop_idx))
+
+            if blend_with_baseline and transient_eff and baseline_eff:
+                t_buf = self._render_frame(transient_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
+                base_elapsed = t0 - ch.get("baseline_start_time", t0)
+                b_buf = self._render_frame(baseline_eff, frame, base_elapsed, seg_len, s_id=s_id)
+                seg_rendered = blend_frames(t_buf, b_buf, blend_factor, transient_eff.transition)
+                master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
+            elif active_eff.animation == AnimationType.SOLID:
+                c = active_eff.color_primary
+                if (c.r, c.g, c.b) != (0, 0, 0):
+                    ch["last_active_color"] = c
+                for idx in range(start_idx, stop_idx):
+                    master_buffer[idx * 3 + 0] = c.r
+                    master_buffer[idx * 3 + 1] = c.g
+                    master_buffer[idx * 3 + 2] = c.b
+            else:
+                seg_rendered = self._render_frame(active_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
+                master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
+
+        # Light strips without an active matrix event keep the default spotlight brightness
+        pwm_val = self._current_pwm_brightness
+        for pwm_index in self._get_pwm_led_indices():
+            if pwm_index >= total_led_count or any(a <= pwm_index < b for a, b in rendered_ranges):
+                continue
+            master_buffer[pwm_index * 3 + 0] = pwm_val
+            master_buffer[pwm_index * 3 + 1] = pwm_val
+            master_buffer[pwm_index * 3 + 2] = pwm_val
+
+
+        return master_buffer, any_active
+
     async def _run_master_broadcast_loop(self):
         """
         Unified 50 FPS real-time broadcast loop.
-        Merges all active independent segment channels (transient effects and baseline states)
-        into a single coherent DRGB UDP frame buffer.
+        Runs on the Rust LED engine (its own thread) when autoglow_core is installed, else here.
         """
+        if self._rust_engine_enabled():
+            return await self._run_rust_broadcast_loop()
+
         sock = self._get_socket()
         fps = 50
         dt = 1.0 / fps
@@ -1168,90 +1306,7 @@ class WLEDDriver:
                 # Re-read each frame so device config edits apply without restarting the stream
                 ips_to_stream = [ip for ip in (self.target_ips if self.target_ips else [self.config.ip]) if ip]
                 port = self.config.udp_port
-                total_led_count = self._get_total_led_count()
-                master_buffer = bytearray(total_led_count * 3)
-                any_active = False
-
-                # LED ranges an effect drew this frame; light strips outside them keep the spotlight brightness
-                rendered_ranges: List[Tuple[int, int]] = []
-
-                for s_id, ch in list(self._segment_channels.items()):
-                    start_idx = ch.get("start_idx", 0)
-                    stop_idx = min(ch.get("stop_idx", total_led_count), total_led_count)
-                    seg_len = stop_idx - start_idx
-                    if seg_len <= 0:
-                        continue
-
-                    if ch.get("flow"):
-                        flow_frame = self._render_flow_channel(ch, t0, seg_len)
-                        if flow_frame is None:
-                            continue
-                        any_active = True
-                        rendered_ranges.append((start_idx, stop_idx))
-                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(flow_frame, self._get_segment_offset(s_id))
-                        continue
-
-                    # Determine which effect to render: transient overlay or permanent baseline
-                    active_eff = None
-                    eff_elapsed = 0.0
-                    blend_with_baseline = False
-                    blend_factor = 0.0
-
-                    transient_eff = ch.get("transient_effect")
-                    baseline_eff = ch.get("baseline_effect")
-
-                    if transient_eff:
-                        elapsed = t0 - ch.get("transient_start_time", 0.0)
-                        dur = ch.get("transient_duration", 0.0)
-                        if elapsed < dur:
-                            active_eff = transient_eff
-                            eff_elapsed = elapsed
-                            # Check smooth transition blend into baseline near end of transient effect
-                            t_dur = transient_eff.transition_duration
-                            if t_dur > 0.0 and baseline_eff and (dur - elapsed) <= t_dur:
-                                blend_with_baseline = True
-                                blend_factor = 1.0 - max(0.0, min(1.0, (dur - elapsed) / t_dur))
-                        else:
-                            # Timed transient effect has expired -> revert to baseline!
-                            ch["transient_effect"] = None
-
-                    # If no transient effect is active, check permanent baseline
-                    if not active_eff and baseline_eff:
-                        active_eff = baseline_eff
-                        eff_elapsed = t0 - ch.get("baseline_start_time", t0)
-
-                    if not active_eff or active_eff.animation == AnimationType.OFF:
-                        continue
-
-                    any_active = True
-                    rendered_ranges.append((start_idx, stop_idx))
-
-                    if blend_with_baseline and transient_eff and baseline_eff:
-                        t_buf = self._render_frame(transient_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
-                        base_elapsed = t0 - ch.get("baseline_start_time", t0)
-                        b_buf = self._render_frame(baseline_eff, frame, base_elapsed, seg_len, s_id=s_id)
-                        seg_rendered = blend_frames(t_buf, b_buf, blend_factor, transient_eff.transition)
-                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
-                    elif active_eff.animation == AnimationType.SOLID:
-                        c = active_eff.color_primary
-                        if (c.r, c.g, c.b) != (0, 0, 0):
-                            ch["last_active_color"] = c
-                        for idx in range(start_idx, stop_idx):
-                            master_buffer[idx * 3 + 0] = c.r
-                            master_buffer[idx * 3 + 1] = c.g
-                            master_buffer[idx * 3 + 2] = c.b
-                    else:
-                        seg_rendered = self._render_frame(active_eff, frame, eff_elapsed, seg_len, baseline_eff=baseline_eff, s_id=s_id)
-                        master_buffer[start_idx * 3 : stop_idx * 3] = self._apply_offset(seg_rendered, self._get_segment_offset(s_id))
-
-                # Light strips without an active matrix event keep the default spotlight brightness
-                pwm_val = self._current_pwm_brightness
-                for pwm_index in self._get_pwm_led_indices():
-                    if pwm_index >= total_led_count or any(a <= pwm_index < b for a, b in rendered_ranges):
-                        continue
-                    master_buffer[pwm_index * 3 + 0] = pwm_val
-                    master_buffer[pwm_index * 3 + 1] = pwm_val
-                    master_buffer[pwm_index * 3 + 2] = pwm_val
+                master_buffer, any_active = self._compose_frame(t0, frame, self._get_total_led_count())
 
                 packets = self._create_udp_packets(bytes(master_buffer), timeout_sec=2)
 
@@ -1289,6 +1344,171 @@ class WLEDDriver:
         except Exception:
             logger.exception("Error in master broadcast loop")
         finally:
+            self._master_broadcast_task = None
+
+    # -------------------------------------------------------------------------
+    # Rust LED engine (autoglow_core)
+    # -------------------------------------------------------------------------
+    def _rust_engine_enabled(self) -> bool:
+        return _rust_core is not None
+
+    def _get_rust_engine(self):
+        if self._rust_engine is None:
+            self._rust_engine = _rust_core.LedEngine()
+        return self._rust_engine
+
+    @staticmethod
+    def _rust_effect(effect: Optional[EffectConfig]) -> Optional[Dict[str, Any]]:
+        """An EffectConfig as the dict autoglow_core reads (Flow options normalized like render_flow_frame)."""
+        if effect is None:
+            return None
+        anim = effect.animation.value if hasattr(effect.animation, "value") else str(effect.animation)
+        c1, c2 = effect.color_primary, effect.color_secondary
+        options = None
+        if effect.options is not None:
+            opts = {**_RUST_FLOW_DEFAULTS, **normalize_options(anim if anim in FLOW_RENDERERS else "solid", effect.options)}
+            options = {"pulses": int(opts["pulses"]), "comets": int(opts["comets"]), "tail": str(opts["tail"]),
+                       "sides": str(opts["sides"]), "palette": str(opts["palette"]), "amount": str(opts["amount"])}
+        return {
+            "animation": anim,
+            "color_primary": (int(c1.r), int(c1.g), int(c1.b)),
+            "color_secondary": (int(c2.r), int(c2.g), int(c2.b)),
+            "dynamic_secondary": bool(effect.dynamic_secondary),
+            "duration": float(effect.duration or 0.0),
+            "speed": float(effect.speed),
+            "reverse": bool(effect.reverse),
+            "brightness": int(effect.brightness) if effect.brightness is not None else None,
+            "transition": str(effect.transition),
+            "transition_duration": float(effect.transition_duration),
+            "options": options,
+        }
+
+    @staticmethod
+    def _prune_finished_flow_parts(ch: Dict[str, Any], now: float) -> None:
+        """Drop a finished fade, hit and locator, as _render_flow_channel does when it draws past their end."""
+        fade = ch.get("fade")
+        if fade and (now - fade["start"]) / fade["duration"] >= 1.0:
+            ch["fade"] = None
+        ov = ch.get("overlay")
+        if ov and now - ov["start"] >= ov["duration"]:
+            ch["overlay"] = None
+        loc = ch.get("locator")
+        if loc and now - loc["start"] >= loc["duration"]:
+            ch["locator"] = None
+
+    def _flow_last_base(self, segment_id: Optional[int], ch: Dict[str, Any]) -> Optional[bytes]:
+        """The picture the segment's look showed last (the Rust thread keeps it while it runs)."""
+        if not self._rust_engine_enabled():
+            return ch.get("last_base")
+        s_id = int(segment_id) if segment_id is not None else 0
+        return self._get_rust_engine().last_base(s_id, int(ch.get("flow_session", 0)))
+
+    def _rust_scene(self) -> Dict[str, Any]:
+        """Everything the Rust loop renders from, read fresh like the Python loop does every frame."""
+        now = time.time()
+        channels = []
+        for s_id, ch in list(self._segment_channels.items()):
+            transient = ch.get("transient_effect")
+            # Finished parts are cleared here, as the Python loop does, so play_effect / flow_show see the rest
+            if transient and now - ch.get("transient_start_time", 0.0) >= ch.get("transient_duration", 0.0):
+                ch["transient_effect"] = transient = None
+            flow = bool(ch.get("flow"))
+            fade = overlay = locator = None
+            if flow:
+                self._prune_finished_flow_parts(ch, now)
+                f = ch.get("fade")
+                if f:
+                    acc = f.get("accent")
+                    frame = f.get("frame")
+                    fade = {"start": float(f["start"]), "duration": float(f["duration"]),
+                            "style": normalize_transition_style(f["style"]),
+                            "accent": tuple(int(v) for v in acc[:3]) if acc else None,
+                            "frame": bytes(frame) if frame is not None else None,
+                            "effect": self._rust_effect(f.get("effect")), "effect_start": float(f.get("effect_start", now))}
+                ov = ch.get("overlay")
+                if ov:
+                    overlay = {"start": float(ov["start"]), "duration": float(ov["duration"]),
+                               "strength": float(ov["strength"]), "layer": self._rust_effect(ov["layer"]),
+                               "mask": self._rust_effect(ov["mask"]),
+                               "brightness": int(ov["brightness"]) if ov.get("brightness") is not None else None}
+                loc = ch.get("locator")
+                if loc:
+                    c = loc["color"]
+                    locator = {"start": float(loc["start"]), "duration": float(loc["duration"]),
+                               "position": float(loc["position"]), "color": (int(c.r), int(c.g), int(c.b))}
+            last = ch.get("last_active_color")
+            channels.append({
+                "id": int(s_id),
+                "start": int(ch.get("start_idx", 0)),
+                "stop": int(ch.get("stop_idx", 0)),
+                "offset": int(self._get_segment_offset(s_id)),
+                "baseline": self._rust_effect(ch.get("baseline_effect")),
+                "baseline_start": float(ch.get("baseline_start_time", now)),
+                "transient": self._rust_effect(transient),
+                "transient_start": float(ch.get("transient_start_time", 0.0)),
+                "transient_duration": float(ch.get("transient_duration", 0.0)),
+                "last_color": (int(last.r), int(last.g), int(last.b)) if last else None,
+                "flow": flow,
+                "flow_session": int(ch.get("flow_session", 0)),
+                "fade": fade,
+                "overlay": overlay,
+                "locator": locator,
+            })
+        return {
+            "targets": [ip for ip in (self.target_ips if self.target_ips else [self.config.ip]) if ip],
+            "port": int(self.config.udp_port),
+            "total": int(self._get_total_led_count()),
+            "pwm_indices": [int(i) for i in self._get_pwm_led_indices()],
+            "pwm_value": int(max(0, min(255, self._current_pwm_brightness))),
+            "channels": channels,
+        }
+
+    def _sync_rust_engine(self, start: bool = False) -> None:
+        """Hand the current channels to the Rust thread right away (and start it when asked)."""
+        if not self._rust_engine_enabled():
+            return
+        try:
+            engine = self._get_rust_engine()
+            engine.update(self._rust_scene())
+            if start:
+                engine.ensure_running()
+        except Exception:
+            logger.exception("Rust LED engine update failed")
+
+    async def _run_rust_broadcast_loop(self):
+        """
+        The frames are rendered and sent by the Rust thread; this task only keeps it fed: it passes
+        config edits on, forwards frames to the simulator and logs send failures. When this event loop
+        is busy the LEDs keep their 50 FPS, only these updates come a little later.
+        """
+        engine = self._get_rust_engine()
+        try:
+            engine.update(self._rust_scene())
+            engine.ensure_running()
+            while True:
+                await asyncio.sleep(0.02)
+                engine.update(self._rust_scene())
+                frame = engine.take_frame()
+                if frame is not None and self._frame_tap_callback:
+                    try:
+                        self._frame_tap_callback(frame)
+                    except Exception:
+                        pass
+                for s_id, (r, g, b) in engine.take_last_colors().items():
+                    ch = self._segment_channels.get(s_id)
+                    if ch is not None:
+                        ch["last_active_color"] = RGBColor(r, g, b)
+                for msg in engine.take_errors():
+                    logger.warning(msg)
+                # The thread ends by itself once no channel is active, like the Python loop
+                if not engine.running:
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Error in Rust LED engine loop")
+        finally:
+            engine.stop()
             self._master_broadcast_task = None
 
     def send_raw_frame(self, rgb_bytes: bytes) -> None:

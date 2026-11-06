@@ -1,0 +1,20 @@
+[package]
+name = "autoglow_core"
+version = "0.1.0"
+edition = "2021"
+# Debian 12 / Raspberry Pi OS Bookworm ship rustc 1.63; Cargo.lock is resolved for it
+rust-version = "1.63"
+description = "AutoGlow 2 real-time LED engine: renders the effects and streams DRGB frames on its own thread"
+license = "MIT"
+publish = false
+
+[lib]
+name = "autoglow_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }
+
+[profile.release]
+lto = true
+codegen-units = 1

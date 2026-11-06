@@ -67,6 +67,16 @@ sudo -u "$ORIGINAL_USER" "$PROJECT_DIR/venv/bin/python3" -m pip install --upgrad
 echo "--> Installing Python packages..."
 sudo -u "$ORIGINAL_USER" "$PROJECT_DIR/venv/bin/python3" -m pip install -r "$PROJECT_DIR/requirements.txt"
 
+echo "--> Rust LED engine (optional: keeps the LED stream at a steady 50 FPS while AutoGlow is busy)..."
+if ! command -v cargo >/dev/null 2>&1; then
+    if [ -f /etc/debian_version ]; then
+        apt install -y cargo || echo "    Could not install cargo; AutoGlow will use its Python LED engine."
+    elif [ -f /etc/fedora-release ]; then
+        dnf install -y cargo rust || echo "    Could not install cargo; AutoGlow will use its Python LED engine."
+    fi
+fi
+(cd "$PROJECT_DIR" && sudo -u "$ORIGINAL_USER" "$PROJECT_DIR/venv/bin/python3" -m core.rust_core_setup) || true
+
 echo "--> Installing the AutoGlow Bridge Chrome extension (Chrome/Chromium policy)..."
 # The signing key is created once per installation; its ID ties the policy to the CRX AutoGlow serves
 EXT_ID=$(cd "$PROJECT_DIR" && sudo -u "$ORIGINAL_USER" "$PROJECT_DIR/venv/bin/python3" -m core.extension_packager id)

@@ -45,6 +45,13 @@ Your settings, flows and profiles are kept on every update.
   ```
 * **Updated with 2.1's "Upload update ZIP":** restart AutoGlow afterwards. On Linux run `sudo bash setup.sh`, on Windows restart `run_autoglow.bat`.
 
+## Rust LED engine (optional)
+On Linux, `setup.sh` also builds a small Rust engine that renders the effects and sends them to WLED on its own thread. The LEDs then keep a steady 50 FPS even while AutoGlow is busy, for example with the Studio cameras. The effects look exactly the same.
+
+* It needs Rust, which `setup.sh` installs (`cargo`). If the build fails, AutoGlow uses its Python LED engine and works as before.
+* **Windows:** install Rust from [rustup.rs](https://rustup.rs) before running `setup.bat` to get it, otherwise the Python engine is used.
+* The AutoGlow log shows which engine runs (`LED engine: Rust` or `LED engine: Python`). Set `AUTOGLOW_LED_ENGINE=python` to use the Python engine anyway.
+
 ## Settings
 * **Port:** `8080`, changeable with `AUTOGLOW_PORT`. The extension only connects to 8080.
 * **Config file:** `config.json`, or set `AUTOGLOW_CONFIG`. Logs go to `autoglow.log`.
