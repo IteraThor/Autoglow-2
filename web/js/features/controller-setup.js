@@ -30,8 +30,10 @@ const PINS_BY_ARCH = {
   'esp32-c3': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 21]
 };
 const NAME_IDEAS = { rgb: ['Left side', 'Right side', 'Top', 'Bottom'], light: ['Back light', 'Ceiling', 'Shelf'] };
-// The pictures for "which one does your strip show?": what LEDs 1-3 look like. The first one is what is sent.
-const COLOR_PICTURES = ['RGB', 'GRB', 'BRG', 'RBG', 'BGR', 'GBR'];
+// "What colour is your strip?": the whole strip shows one colour, so it works whichever way the strip is mounted.
+// Red first, then green; blue follows from the two answers.
+const COLOR_CHOICES = ['R', 'G', 'B'];
+const TEST_HEX = { R: 'FF0000', G: '00FF00' };
 const HEX = { R: '#ff3b3b', G: '#2bff6a', B: '#3b82ff' };
 const COLOR_WORDS = { R: 'red', G: 'green', B: 'blue' };
 
@@ -218,7 +220,7 @@ function newOutput(kind, pin, bus = null) {
     type: kind === 'rgb' ? (bus && !isPwmBus(bus) ? Number(bus.type) || WS281X : WS281X) : PWM_WHITE,
     // A new strip starts as GRB, the order most WS281x strips use
     order: bus && !isPwmBus(bus) ? Number(bus.order) || 0 : 0,
-    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', track: 0
+    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', colorStep: 'R', track: 0
   };
 }
 
@@ -367,12 +369,11 @@ export async function runControllerSetup(ip, live) {
 
     const allOff = (match, lit) => ({ on: true, bri: 110, transition: 0, seg: layout(plan, { whole: true }).map(e => (match(e) ? lit(e) : { ...e.seg, on: false })) });
 
-    // LEDs 1-3 red, green, blue and the last LED white, on this RGB strip only
+    // The whole strip in the test colour (red, then green; red again once set) and the last LED white, on this RGB strip only
     function showPattern(o) {
       const last = o.count - 1;
-      const i = [];
-      ['FF0000', '00FF00', '0000FF'].forEach((c, k) => { if (k < last) i.push(k, c); });
-      i.push(last, 'FFFFFF');
+      const color = TEST_HEX[o.colorStep] || TEST_HEX.R;
+      const i = last > 0 ? [0, last, color, last, 'FFFFFF'] : [0, color];
       return preview(allOff(e => e.o === o, e => ({ ...e.seg, fx: 0, col: [[0, 0, 0], [0, 0, 0]], i })));
     }
 
@@ -647,13 +648,8 @@ export async function runControllerSetup(ip, live) {
         const parts = buckets(o.track);
         slots.replaceChildren(...parts.map(({ from, to }) => {
           const has = led => led >= from && led < to;
-          let tone = from >= o.count ? 'ghost' : 'dim';
-          if (from < o.count) {
-            if (has(o.count - 1)) tone = 'end';
-            else if (has(0)) tone = 'r';
-            else if (has(1)) tone = 'g';
-            else if (has(2)) tone = 'b';
-          }
+          let tone = from >= o.count ? 'ghost' : o.colorStep === 'G' ? 'g' : 'r';
+          if (from < o.count && has(o.count - 1) && o.count > 1) tone = 'end';
           return h('span', { class: 'sf-led', dataset: { tone } });
         }));
         handle.style.left = `${((o.count - 0.5) / o.track) * 100}%`;
@@ -690,43 +686,56 @@ export async function runControllerSetup(ip, live) {
             h('span', { class: 'sf-spacer' }),
             h('span', { class: 'sf-hint-plain' }, h('span', { class: 'sf-white-led', 'aria-hidden': 'true' }), 'Drag the marker to your last LED')),
           track),
-        colorsView(o)
+        colorsView(o, drawTrack)
       ];
     }
 
-    function colorsView(o) {
-      const box = h('section', { class: 'sf-colors', 'aria-label': 'Colors', dataset: { state: o.colors } });
+    // Two questions while the whole strip is red, then green. Position never matters, so a strip mounted
+    // the other way round (counterclockwise) cannot swap red and blue.
+    function colorsView(o, redraw) {
+      const box = h('section', { class: 'sf-colors', 'aria-label': 'Colors' });
+      let note = '';
+      let seenRed = null;
+      const show = () => { redraw(); showPattern(o); paint(); };
+      const pick = seen => {
+        if (o.colorStep === 'R') {
+          seenRed = seen;
+          o.colorStep = 'G';
+          note = '';
+          show();
+          return;
+        }
+        // What the strip showed for red and green tells its real color order
+        const sentBefore = o.order;
+        const order = deriveColorOrder(o.order, seenRed, seen);
+        if (order === null) {
+          note = 'Both looked the same. Once more: what colour is it now?';
+          o.colorStep = 'R';
+          show();
+          return;
+        }
+        o.order = order;
+        o.colors = 'ok';
+        o.colorStep = 'done';
+        note = order === sentBefore ? '' : 'Colour order corrected.';
+        show();
+      };
       const paint = () => {
-        box.dataset.state = o.colors;
-        const sent = COLOR_ORDERS[o.order & 0x0f];
+        const done = o.colorStep === 'done';
+        box.dataset.state = done ? 'ok' : note ? 'fixed' : 'ask';
         box.replaceChildren(
           h('div', { class: 'sf-colors-text' },
-            h('h3', {}, o.colors === 'ok' ? 'Colors match' : 'Which one does your strip show?'),
-            h('span', { class: 'sf-colors-sub' }, o.colors === 'ok' ? 'LEDs 1–3: red, green, blue'
-              : o.colors === 'fixed' ? `Changed to ${sent}. Look again.` : 'Look at LEDs 1–3')),
-          h('div', { class: 'sf-tiles' }, ...COLOR_PICTURES.map((p, i) => h('button', {
-            class: 'sf-tile', type: 'button', dataset: { first: String(i === 0) },
-            'aria-pressed': String(o.colors === 'ok' && i === 0),
-            'aria-label': i === 0 ? 'My strip matches: red, green, blue' : `My strip shows ${p.split('').map(c => COLOR_WORDS[c]).join(', ')}`,
-            onclick: () => {
-              if (i === 0) {
-                o.colors = 'ok';
-                paint();
-                return;
-              }
-              // What the strip showed for red and green tells its real color order
-              const order = deriveColorOrder(o.order, p[0], p[1]);
-              if (order === null) return;
-              o.order = order;
-              o.colors = 'fixed';
-              paint();
-              showPattern(o);
-            }
-          }, ...p.split('').map(c => {
-            const dot = h('span', { class: 'sf-dot' });
-            dot.style.setProperty('--c', HEX[c]);
-            return dot;
-          })))));
+            h('h3', {}, done ? 'Colors set' : 'What colour is your strip?'),
+            h('span', { class: 'sf-colors-sub' }, done
+              ? `${note ? `${note} ` : ''}It should be red now.`
+              : note || (o.colorStep === 'R' ? '1 of 2 · any LED except the white one' : '2 of 2 · it changed colour'))),
+          done
+            ? h('button', { class: 'ui-btn', type: 'button', onclick: () => { o.colorStep = 'R'; o.colors = 'ask'; note = ''; show(); } }, 'Check again')
+            : h('div', { class: 'sf-tiles' }, ...COLOR_CHOICES.map(c => h('button', {
+              class: 'sf-tile sf-swatch', type: 'button', 'aria-label': `My strip is ${COLOR_WORDS[c]}`,
+              onclick: () => pick(c)
+            }, (() => { const dot = h('span', { class: 'sf-dot' }); dot.style.setProperty('--c', HEX[c]); return dot; })(),
+            h('span', { class: 'sf-swatch-label' }, COLOR_WORDS[c])))));
       };
       paint();
       return box;

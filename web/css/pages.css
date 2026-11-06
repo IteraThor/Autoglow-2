@@ -2037,25 +2037,26 @@ input.sf-count:focus {
   border-color: var(--accent-bright);
 }
 
-.sf-tile[data-first="true"] {
-  border-color: rgba(20, 184, 166, 0.5);
-  background: rgba(20, 184, 166, 0.06);
+/* "What colour is your strip?": one big swatch per colour, named under it */
+.sf-swatch {
+  height: auto;
+  min-width: 96px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 18px 10px;
 }
 
-.sf-tile[data-first="true"]::before {
-  content: 'MATCHES';
-  position: absolute;
-  top: -9px;
-  left: 10px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--accent-primary);
-  color: #042f2b;
-  font: 700 10px var(--font-ui);
+.sf-swatch .sf-dot {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
 }
 
-.sf-tile[aria-pressed="true"] {
-  border-color: var(--status-success);
+.sf-swatch-label {
+  color: var(--text-secondary);
+  font: 500 var(--fs-sm) var(--font-ui);
+  text-transform: capitalize;
 }
 
 .sf-dot {
