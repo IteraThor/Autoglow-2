@@ -567,59 +567,58 @@
             <p class="form-hint">Chooses what plays during a game. The Lighting page opens the matching workspace. Flow Matrix is the default. The Event Matrix is the old engine: it still works, but it is not supported and gets no fixes or new features.</p>
           </div>
 
-          <!-- Inactivity & standby timers (all controllers), drawn as what happens after a game -->
+          <!-- Inactivity & standby timers (all controllers): one clock from the last dart -->
           <div class="card pw-card" id="powerGlobalTimersArea">
-            <div class="card-head"><h2 class="card-title">After a game</h2></div>
-            <ol class="pw-timeline">
-              <li class="pw-stop">
-                <span class="pw-dot pw-dot-live" aria-hidden="true"></span>
-                <span class="pw-stop-title">Game running</span>
-                <span class="pw-stop-desc">Live effects, streamed to the controllers (UDP)</span>
-              </li>
+            <div class="card-head"><h2 class="card-title">When nobody plays</h2></div>
+            <p class="pw-lead">One clock, started by the last dart. Any dart or a new game brings the live effects back.</p>
 
-              <li class="pw-link power-setting-row" id="inactivityTimeoutRow">
-                <label class="switch" title="Enable / Disable Inactivity Timeout">
-                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange()">
+            <!-- What the lights do over time, drawn to scale (power.js fills it) -->
+            <div class="pw-clock" id="powerClock" aria-hidden="true">
+              <div class="pw-clock-bar"><span data-phase="live"></span><span data-phase="dim"></span><span data-phase="off"></span></div>
+              <div class="pw-clock-ticks"></div>
+            </div>
+
+            <div class="pw-rules">
+              <div class="pw-rule power-setting-row" id="inactivityTimeoutRow">
+                <label class="switch" title="Dim the lights after a while without darts">
+                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange(); renderPowerClock()">
                   <span class="switch-slider"></span>
                 </label>
-                <span class="power-setting-controls pw-link-controls" id="inactivityControlsGroup">
-                  after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Inactivity timeout in minutes" onchange="handleInactivityTimeoutChange()" oninput="handleInactivityTimeoutChange()"> min without throws
-                </span>
-              </li>
+                <div class="pw-rule-text power-setting-controls" id="inactivityControlsGroup">
+                  <span class="pw-rule-main"><span class="pw-key" data-phase="dim"></span>Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange(); renderPowerClock()" oninput="handleInactivityTimeoutChange(); renderPowerClock()"> min without a dart</span>
+                  <span class="pw-rule-hint" id="powerDimHint">Live effects stop. Each controller shows its idle look; light strips dim.</span>
+                </div>
+              </div>
 
-              <li class="pw-stop">
-                <span class="pw-dot pw-dot-idle" aria-hidden="true"></span>
-                <span class="pw-stop-title">Idle lighting</span>
-                <span class="pw-stop-desc">Releases the UDP stream; each controller goes back to its own idle lighting.</span>
-                <label class="pw-check power-setting-row" id="matchEndDisconnectRow" title="Enable / Disable UDP disconnect on match ending or abortion">
-                  <span class="switch">
-                    <input type="checkbox" id="disconnectUdpOnMatchEndToggle" onchange="handleMatchEndDisconnectToggleChange()">
-                    <span class="switch-slider"></span>
-                  </span>
-                  <span class="power-setting-info">Also right away when a match finishes or is aborted</span>
-                </label>
-              </li>
-
-              <li class="pw-link power-setting-row" id="standbyTimeoutRow">
-                <label class="switch" title="Enable / Disable Auto-Off Timeout">
-                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange()">
+              <div class="pw-rule power-setting-row" id="standbyTimeoutRow">
+                <label class="switch" title="Switch the lights off after a while without darts">
+                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange(); renderPowerClock()">
                   <span class="switch-slider"></span>
                 </label>
-                <span class="power-setting-controls pw-link-controls" id="standbyControlsGroup">
-                  after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Auto-off timeout in minutes" onchange="handleStandbyTimeoutChange()" oninput="handleStandbyTimeoutChange()"> min of inactivity
-                </span>
-              </li>
+                <div class="pw-rule-text power-setting-controls" id="standbyControlsGroup">
+                  <span class="pw-rule-main"><span class="pw-key" data-phase="off"></span>Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange(); renderPowerClock()" oninput="handleStandbyTimeoutChange(); renderPowerClock()"> min without a dart</span>
+                  <span class="pw-rule-hint">All controllers off. Also counted from the last dart, so never sooner than dimming.</span>
+                </div>
+              </div>
 
-              <li class="pw-stop">
-                <span class="pw-dot pw-dot-off" aria-hidden="true"></span>
-                <span class="pw-stop-title">Lights off</span>
-                <span class="pw-stop-desc">Turns the lights off completely.</span>
-                <span class="pw-stop-actions">
-                  <button type="button" class="ui-btn ui-btn-sm" id="btnTestAutoOff" onclick="testPowerOff()" title="Simulate auto-off (powers off lights)">Test: off now</button>
-                  <button type="button" class="ui-btn ui-btn-sm" id="btnRevertPowerOff" onclick="testWakeBoard()" title="Revert / Turn lights back on">Turn back on</button>
+              <label class="pw-rule power-setting-row" id="matchEndDisconnectRow" title="Enable / Disable UDP disconnect on match ending or abortion">
+                <span class="switch">
+                  <input type="checkbox" id="disconnectUdpOnMatchEndToggle" onchange="handleMatchEndDisconnectToggleChange()">
+                  <span class="switch-slider"></span>
                 </span>
-              </li>
-            </ol>
+                <span class="pw-rule-text power-setting-info">
+                  <span class="pw-rule-main">When a match ends, go straight to the idle look</span>
+                  <span class="pw-rule-hint">Right after the win effect, also when a match is aborted. Off: the winner’s colour stays until the lights dim.</span>
+                </span>
+              </label>
+            </div>
+
+            <div class="pw-tests">
+              <span class="pw-rule-hint">Try it on your lights:</span>
+              <button type="button" class="ui-btn ui-btn-sm" onclick="testInactivityDim()" title="Same as when the dim timer runs out">Dim now</button>
+              <button type="button" class="ui-btn ui-btn-sm" id="btnTestAutoOff" onclick="testPowerOff()" title="Same as when the switch-off timer runs out">Switch off now</button>
+              <button type="button" class="ui-btn ui-btn-sm" id="btnRevertPowerOff" onclick="testWakeBoard()" title="Turn the lights back on">Turn back on</button>
+            </div>
           </div>
 
           <!-- Security settings: one line while the PIN is off, the fields fold out -->

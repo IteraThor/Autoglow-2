@@ -2554,122 +2554,123 @@ input.ui-input.sf-name-input {
   align-self: flex-start;
 }
 
-.pw-timeline {
-  position: relative;
-  margin: 0;
-  padding: 0 0 0 34px;
-  list-style: none;
-}
-
-/* The line the stops sit on */
-.pw-timeline::before {
-  content: "";
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 9px;
-  border-left: 2px solid var(--border-subtle);
-}
-
-.pw-stop {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-1) 0;
-}
-
-.pw-dot {
-  position: absolute;
-  top: 6px;
-  left: -34px;
-  width: 20px;
-  height: 20px;
-  border: 3px solid var(--bg-panel);
-  border-radius: 50%;
-}
-
-/* The line stops at the last dot */
-.pw-stop:last-child::before {
-  content: "";
-  position: absolute;
-  top: 26px;
-  bottom: 0;
-  left: -27px;
-  width: 6px;
-  background: var(--bg-panel);
-}
-
-.pw-dot-live { background: var(--accent-primary); box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.6); }
-.pw-dot-idle { background: rgba(var(--accent-rgb), 0.35); }
-.pw-dot-off { background: var(--text-muted); }
-
-.pw-stop-title {
-  color: var(--text-primary);
-  font: 600 var(--fs-md) var(--font-ui);
-  line-height: 26px;
-}
-
-.pw-stop-desc {
+.pw-lead {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
   color: var(--text-secondary);
   font-size: var(--fs-sm);
-  line-height: 1.45;
 }
 
-/* The wait between two stops: switch + "after N min" */
-.pw-timeline .power-setting-row {
-  padding: 0;
-  background: none;
-  border: 0;
-  border-radius: 0;
-  justify-content: flex-start;
+/* The clock: a bar from the last dart, live -> dimmed -> off, to scale */
+.pw-clock {
+  --pw-live: var(--accent-primary);
+  --pw-dim: rgba(var(--accent-rgb), 0.3);
+  --pw-off: var(--bg-input);
+  margin-bottom: var(--space-5);
 }
 
-.pw-timeline .pw-link {
-  gap: var(--space-3);
-  margin: var(--space-3) 0;
-  padding: var(--space-2) var(--space-3);
-  width: fit-content;
-  background: var(--bg-card);
+.pw-clock-bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
 }
 
-.pw-link .switch {
-  margin: 0;
-  flex-shrink: 0;
+.pw-clock-bar span { flex: 0 0 0; min-width: 0; transition: flex-grow 0.2s ease; }
+.pw-clock-bar [data-phase="live"] { background: var(--pw-live); }
+.pw-clock-bar [data-phase="dim"] { background: var(--pw-dim); }
+.pw-clock-bar [data-phase="off"] { background: var(--pw-off); }
+
+.pw-clock-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin-top: var(--space-2);
 }
 
-.pw-link-controls {
+.pw-legend-item {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   color: var(--text-secondary);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
 }
 
-.pw-link-controls .ui-input-num {
+/* One rule per line: switch, sentence with the minutes in it, what it does underneath */
+.pw-rules {
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-rules .pw-rule {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  justify-content: start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.pw-rules .pw-rule:first-child { border-top: 0; padding-top: 0; }
+label.pw-rule { cursor: pointer; }
+
+.pw-rule .switch {
+  margin: 4px 0 0;
+}
+
+.pw-rule-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pw-rule-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+}
+
+.pw-rule-main .ui-input-num {
   width: 64px;
   height: 30px;
 }
 
-.pw-timeline .pw-check {
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  color: var(--text-secondary);
+.pw-rule-hint {
+  color: var(--text-muted);
   font-size: var(--fs-sm);
-  cursor: pointer;
+  line-height: 1.45;
 }
 
-.pw-check .switch {
-  margin: 0;
-  flex-shrink: 0;
+/* Colour key matching the bar */
+.pw-key {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--pw-dim);
+  border: 1px solid var(--border-subtle);
 }
 
-.pw-stop-actions {
+.pw-key[data-phase="live"] { background: var(--accent-primary); }
+.pw-key[data-phase="off"] { background: var(--bg-input); }
+#powerGlobalTimersArea { --pw-dim: rgba(var(--accent-rgb), 0.3); }
+
+.pw-tests {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .pw-pin-summary {
