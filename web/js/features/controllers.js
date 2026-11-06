@@ -94,8 +94,13 @@ export async function applySetup(ip, setup, successMessage) {
     await window.loadConfig();
     if (result.hardware_applied) toast.success(successMessage);
     else toast.warning('Saved in AutoGlow, but the controller did not take the new layout. Run the setup again once it is reachable.');
+    if (!result.hardware_applied) return;
+    // The profile picked for each zone in the guide; the segment ids are the new layout's
+    for (const choice of setup.profiles || []) {
+      await api.post('/api/flow/assign', { ip, segment_id: choice.segment_id, name: choice.name }).catch(() => {});
+    }
     // The setup saved a default idle look; the RGB strips wait with their profile's effect instead
-    if (result.hardware_applied) await api.post('/api/flow/idle/apply', { ip }).catch(() => {});
+    await api.post('/api/flow/idle/apply', { ip }).catch(() => {});
   } catch (err) {
     toast.error(err, { onRetry: () => applySetup(ip, setup, successMessage) });
   }
