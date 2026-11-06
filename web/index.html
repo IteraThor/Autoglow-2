@@ -365,7 +365,12 @@
                     <button type="button" class="btn-ide" data-cue="layout:board">Board</button>
                     <button type="button" class="btn-ide" data-cue="layout:player">Player</button>
                   </div>
-                  <p class="studio-note">The buttons play on every open output right away, also during a game; the game takes over again after a few seconds. Output for the TV or OBS (1920&times;1080): <code id="studioOutputUrl"></code>, double-click for fullscreen, <code>?chroma=green</code> for a green background.</p>
+                  <div class="studio-output-url">
+                    <span class="studio-cuebar-label">Output for the TV or OBS</span>
+                    <code id="studioOutputUrl"></code>
+                    <button type="button" class="btn-ide" id="studioCopyOutputUrl">Copy</button>
+                  </div>
+                  <p class="studio-note">The buttons play on every open output right away, also during a game; the game takes over again after a few seconds. The output is 1920&times;1080: double-click it for fullscreen, add <code>?chroma=green</code> for a green background.</p>
                 </div>
               </div>
 
@@ -410,14 +415,16 @@
                 <div class="panel-body">
                   <p class="studio-note"><strong>Click a field</strong> to see it in the preview (marked yellow). Empty uses the grey default. The box in front shows or hides the text; <strong>Show</strong> switches a whole part.</p>
                   <div class="studio-texts">
-                    <div class="studio-text-group">
-                      <div class="studio-subhead">Event</div>
-                      <div class="studio-text-where">Shown: Idle screen title, the bar under the scoreboard, the intro</div>
+                    <details class="studio-text-group" data-group="Event" open>
+                      <summary class="studio-text-head">
+                        <span class="studio-text-title"><span class="studio-subhead">Event</span><span class="studio-text-count">2 texts</span></span>
+                        <span class="studio-text-where">Shown: Idle screen title, the bar under the scoreboard, the intro</span>
+                      </summary>
                       <div class="studio-fields">
                         <div class="studio-text-row"><input type="checkbox" data-show-text="event_title" title="Show this text on the screens" aria-label="Show Event title"><label>Event title<input id="studioTitle" class="input-text" maxlength="80" placeholder="Friday Night Darts" data-preview="event_title"></label></div>
                         <div class="studio-text-row"><input type="checkbox" data-show-text="event_subtitle" title="Show this text on the screens" aria-label="Show Subtitle"><label><span>Subtitle <small>(e.g. Final, Round 3)</small></span><input id="studioSubtitle" class="input-text" maxlength="80" placeholder="Final" data-preview="event_subtitle"></label></div>
                       </div>
-                    </div>
+                    </details>
                     <div id="studioTexts" class="studio-texts"></div>
                   </div>
                 </div>

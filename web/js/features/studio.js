@@ -695,12 +695,15 @@ function renderTexts() {
   host.replaceChildren(...(settings.text_groups || []).map(group => {
     const t = group.toggle;
     const box = t ? h('input', { type: 'checkbox', 'data-setting': t.key, checked: settings[t.key] !== false }) : null;
-    const node = h('div', { class: 'studio-text-group' },
-      h('div', { class: 'studio-text-head' },
-        h('div', { class: 'studio-subhead' }, group.name),
-        box ? h('label', { class: `studio-check studio-text-toggle${t.show ? ' is-show' : ''}` }, box, t.label) : null
+    // Each group folds; its name, where it shows and its switch stay visible while folded
+    const node = h('details', { class: 'studio-text-group', 'data-group': group.name },
+      h('summary', { class: 'studio-text-head' },
+        h('span', { class: 'studio-text-title' },
+          h('span', { class: 'studio-subhead' }, group.name),
+          group.items.length ? h('span', { class: 'studio-text-count' }, `${group.items.length} ${group.items.length === 1 ? 'text' : 'texts'}`) : null),
+        box ? h('label', { class: `studio-check studio-text-toggle${t.show ? ' is-show' : ''}` }, box, t.label) : null,
+        group.where ? h('span', { class: 'studio-text-where' }, `Shown: ${group.where}`) : null
       ),
-      group.where ? h('div', { class: 'studio-text-where' }, `Shown: ${group.where}`) : null,
       group.items.length ? h('div', { class: 'studio-fields' }, group.items.map(item => textRow(item.key, item.label,
         h('input', { class: 'input-text', 'data-text': item.key, maxlength: 80, placeholder: defaults[item.key] || '', value: settings.texts?.[item.key] || '' })
       ))) : null
@@ -773,7 +776,25 @@ function readTexts() {
   return texts;
 }
 
+// Playing a scene opens the texts that scene shows (the others fold away)
+const SCENE_TEXTS = {
+  intro: 'Player intro', bulloff: 'Bull-off', live: 'Scoreboard', idle: 'Idle screen',
+  leg: 'Cards', match: 'Cards', 180: 'Big moments', bust: 'Big moments', stinger: 'Logo'
+};
+
+function openTextsFor(scene) {
+  const name = SCENE_TEXTS[scene];
+  if (!name) return;
+  let target = null;
+  document.querySelectorAll('.studio-texts-panel details.studio-text-group').forEach(group => {
+    group.open = group.dataset.group === name;
+    if (group.open) target = group;
+  });
+  target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 async function cue(scene) {
+  openTextsFor(scene);
   // The overlay switch is also a setting: keep the checkbox (and what Save sends) in step
   if (scene.startsWith('overlay:')) {
     settings.show_overlay = scene === 'overlay:show';
@@ -890,6 +911,10 @@ function wire() {
     SLOTS.forEach(sl => showPreview(sl.id));
   });
   $('studioOutputUrl').textContent = `${location.origin}/studio/live`;
+  $('studioCopyOutputUrl').addEventListener('click', () => {
+    const url = $('studioOutputUrl').textContent.trim();
+    navigator.clipboard?.writeText(url).then(() => toast.success('Output address copied.'), () => toast.info(url));
+  });
 }
 
 // paneId: the Studio sub-page being opened (broadcast, match, players or cameras)

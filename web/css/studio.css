@@ -717,6 +717,7 @@
 .studio-cuebar-label:not(:first-child) { margin-left: var(--space-3); }
 .studio-cuebar + .studio-note { margin-top: var(--space-2); }
 .studio-cuebar + .studio-cuebar { margin-top: 6px; }
+.studio-cuebar .btn-ide { padding-inline: 9px; }
 
 /* Overlay settings in two columns */
 .studio-overlay-form {
@@ -763,13 +764,72 @@
 
 .studio-text-group .studio-subhead { margin: 0; }
 
-.studio-text-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
+/* A folding text group: name, number of texts and its switch on top, where it shows below */
+.studio-text-group {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-3);
 }
+
+.studio-text-group:last-child { border-bottom: 0; }
+
+.studio-text-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--space-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.studio-text-head::-webkit-details-marker { display: none; }
+
+.studio-text-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.studio-text-title::before {
+  content: "▸";
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  transition: transform 0.15s ease;
+}
+
+.studio-text-group[open] .studio-text-title::before { transform: rotate(90deg); }
+
+.studio-text-count {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.studio-text-head .studio-text-where {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.studio-text-group[open] > .studio-fields { margin-top: var(--space-3); }
+
+/* Output address as a chip with Copy */
+.studio-output-url {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.studio-output-url code {
+  padding: 4px var(--space-2);
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+
+.studio-output-url + .studio-note { margin-top: var(--space-2); }
 
 .studio-text-toggle { flex-shrink: 0; cursor: pointer; }
 
