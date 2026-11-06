@@ -476,8 +476,7 @@ function cameraCard(slot) {
     h('div', { class: 'studio-cam-opts' }, rotation, h('label', { class: 'studio-check' }, mirror, 'Mirror image')),
     h('div', { class: 'studio-framing' }, zoom.row, panX.row, panY.row, reset),
     picture,
-    slot.straighten ? straightenControls(slot, cam) : null,
-    slot.straighten ? dartZoomControls(cam) : null
+    slot.straighten ? straightenControls(slot, cam) : null
   );
 }
 
@@ -485,7 +484,8 @@ function renderCameras() {
   const host = $('studioCameras');
   if (!host) return;
   SLOTS.forEach(s => stopPreview(s.id));
-  host.replaceChildren(...SLOTS.map(cameraCard));
+  // Dart zoom works on the board camera but gets its own row under both cameras
+  host.replaceChildren(...SLOTS.map(cameraCard), h('div', { class: 'studio-dart-zoom-card' }, dartZoomControls(settings.cameras.board)));
   SLOTS.forEach(s => showPreview(s.id));
 }
 
