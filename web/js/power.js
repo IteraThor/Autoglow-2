@@ -90,38 +90,7 @@ function renderPowerTab() {
   handleStandbyToggleChange();
   handleMatchEndDisconnectToggleChange();
   handleInactivityTimeoutChange();
-  renderPowerClock();
 }
-
-// The clock bar: live until dimming, dimmed until switch-off, then off; drawn to scale from the entered minutes
-function renderPowerClock() {
-  const clock = document.getElementById('powerClock');
-  if (!clock) return;
-  const d = readPowerDraft();
-  const dimAt = d.inactivity_timeout_enabled ? d.inactivity_timeout_minutes : null;
-  const offAt = d.idle_power_off_enabled ? d.idle_power_off_minutes : null;
-  // The bar ends a little after the last event so "off" has room; with no timer it shows 30 min of live lights
-  const end = Math.max(offAt ?? dimAt ?? 30, dimAt ?? 0) * 1.12;
-  const live = dimAt ?? offAt ?? end;
-  const dimEnd = offAt ?? end;
-  const parts = { live: live / end, dim: dimAt !== null ? (dimEnd - dimAt) / end : 0, off: offAt !== null ? (end - offAt) / end : 0 };
-  clock.querySelectorAll('.pw-clock-bar [data-phase]').forEach(el => { el.style.flexGrow = String(parts[el.dataset.phase]); });
-  // A legend under the bar (positioned labels collide when dimming comes after only a minute or two)
-  const item = (phase, label) => {
-    const el = document.createElement('span');
-    el.className = 'pw-legend-item';
-    const key = document.createElement('span');
-    key.className = 'pw-key';
-    key.dataset.phase = phase;
-    el.append(key, label);
-    return el;
-  };
-  const items = [item('live', dimAt !== null || offAt !== null ? `Live · 0–${live} min` : 'Live, no timer')];
-  if (dimAt !== null) items.push(item('dim', offAt !== null ? `Dimmed · ${dimAt}–${offAt} min` : `Dimmed · from ${dimAt} min`));
-  if (offAt !== null) items.push(item('off', `Off · after ${offAt} min`));
-  clock.querySelector('.pw-clock-ticks').replaceChildren(...items);
-}
-window.renderPowerClock = renderPowerClock;
 
 // The percentage field as the 0-255 value the engine uses; an unchanged field keeps the exact saved value
 function dimmingFromPercent(raw) {

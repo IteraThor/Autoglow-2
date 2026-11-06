@@ -2554,49 +2554,6 @@ input.ui-input.sf-name-input {
   align-self: flex-start;
 }
 
-.pw-lead {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--fs-sm);
-}
-
-/* The clock: a bar from the last dart, live -> dimmed -> off, to scale */
-.pw-clock {
-  --pw-live: var(--accent-primary);
-  --pw-dim: rgba(var(--accent-rgb), 0.3);
-  --pw-off: var(--bg-input);
-  margin-bottom: var(--space-5);
-}
-
-.pw-clock-bar {
-  display: flex;
-  height: 12px;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-}
-
-.pw-clock-bar span { flex: 0 0 0; min-width: 0; transition: flex-grow 0.2s ease; }
-.pw-clock-bar [data-phase="live"] { background: var(--pw-live); }
-.pw-clock-bar [data-phase="dim"] { background: var(--pw-dim); }
-.pw-clock-bar [data-phase="off"] { background: var(--pw-off); }
-
-.pw-clock-ticks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
-  margin-top: var(--space-2);
-}
-
-.pw-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-}
-
 /* One rule per line: switch, sentence with the minutes in it, what it does underneath */
 .pw-rules {
   display: flex;
@@ -2649,19 +2606,6 @@ label.pw-rule { cursor: pointer; }
   font-size: var(--fs-sm);
   line-height: 1.45;
 }
-
-/* Colour key matching the bar */
-.pw-key {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--pw-dim);
-  border: 1px solid var(--border-subtle);
-}
-
-.pw-key[data-phase="live"] { background: var(--accent-primary); }
-.pw-key[data-phase="off"] { background: var(--bg-input); }
-#powerGlobalTimersArea { --pw-dim: rgba(var(--accent-rgb), 0.3); }
 
 .pw-tests {
   display: flex;

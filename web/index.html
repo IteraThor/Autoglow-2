@@ -557,32 +557,24 @@
           <!-- Inactivity & standby timers (all controllers): one clock from the last dart -->
           <div class="card pw-card" id="powerGlobalTimersArea">
             <div class="card-head"><h2 class="card-title">When nobody plays</h2></div>
-            <p class="pw-lead">Counted from the last dart. A dart or a new game wakes the lights.</p>
-
-            <!-- What the lights do over time, drawn to scale (power.js fills it) -->
-            <div class="pw-clock" id="powerClock" aria-hidden="true">
-              <div class="pw-clock-bar"><span data-phase="live"></span><span data-phase="dim"></span><span data-phase="off"></span></div>
-              <div class="pw-clock-ticks"></div>
-            </div>
-
             <div class="pw-rules">
               <div class="pw-rule power-setting-row" id="inactivityTimeoutRow">
                 <label class="switch" title="Dim the lights after a while without darts">
-                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange(); renderPowerClock()">
+                  <input type="checkbox" id="inactivityTimeoutEnabledToggle" checked onchange="handleInactivityToggleChange()">
                   <span class="switch-slider"></span>
                 </label>
                 <div class="pw-rule-text power-setting-controls" id="inactivityControlsGroup">
-                  <span class="pw-rule-main" title="Live effects stop and each controller shows its idle look"><span class="pw-key" data-phase="dim"></span>Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange(); renderPowerClock()" oninput="handleInactivityTimeoutChange(); renderPowerClock()"> min without a dart, light strips to <input type="number" class="ui-input ui-input-num" id="idleDimmingPercentInput" value="20" min="0" max="100" aria-label="Light strip brightness when dimmed, in percent" title="Light strip brightness while dimmed"> %</span>
+                  <span class="pw-rule-main" title="Live effects stop and each controller shows its idle look">Dim after <input type="number" class="ui-input ui-input-num" id="inactivityTimeoutMinInput" value="5" min="1" max="240" aria-label="Dim after minutes without a dart" onchange="handleInactivityTimeoutChange()" oninput="handleInactivityTimeoutChange()"> min without a dart, light strips to <input type="number" class="ui-input ui-input-num" id="idleDimmingPercentInput" value="20" min="0" max="100" aria-label="Light strip brightness when dimmed, in percent" title="Light strip brightness while dimmed"> %</span>
                 </div>
               </div>
 
               <div class="pw-rule power-setting-row" id="standbyTimeoutRow">
                 <label class="switch" title="Switch the lights off after a while without darts">
-                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange(); renderPowerClock()">
+                  <input type="checkbox" id="idlePowerOffEnabledToggle" checked onchange="handleStandbyToggleChange()">
                   <span class="switch-slider"></span>
                 </label>
                 <div class="pw-rule-text power-setting-controls" id="standbyControlsGroup">
-                  <span class="pw-rule-main" title="All controllers off. Counted from the last dart, so never sooner than dimming."><span class="pw-key" data-phase="off"></span>Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange(); renderPowerClock()" oninput="handleStandbyTimeoutChange(); renderPowerClock()"> min without a dart</span>
+                  <span class="pw-rule-main" title="All controllers off. Counted from the last dart, so never sooner than dimming.">Switch off after <input type="number" class="ui-input ui-input-num" id="idlePowerOffMinInput" value="30" min="1" max="240" aria-label="Switch off after minutes without a dart" onchange="handleStandbyTimeoutChange()" oninput="handleStandbyTimeoutChange()"> min without a dart</span>
                 </div>
               </div>
 
