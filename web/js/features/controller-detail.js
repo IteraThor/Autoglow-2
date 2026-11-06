@@ -219,26 +219,84 @@ async function loadSegmentProfiles() {
   }
 }
 
-// Read-only view of the layout. The guided setup is the normal way to change it; the editor is for experts.
+// Read-only view of the layout, drawn as wiring: the controller, a wire per GPIO pin, and each strip with its zones
+// as blocks sized by their LED count. The guided setup is the normal way to change it; the editor is for experts.
+const LED_CELLS_MAX = 60; // LED cells drawn per strip; longer strips are drawn scaled down
+
+// h() makes HTML elements; the chip icon needs SVG ones
+function svg(tag, attrs = {}, ...children) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  el.append(...children);
+  return el;
+}
+
+// "Bar · 2" -> "Bar": zones made by the guided setup are named "<strip name> · N"
+function stripName(segs, busIdx) {
+  if (segs.length === 1) return segs[0].name;
+  const bases = new Set(segs.map(seg => seg.name.replace(/\s*·\s*\d+$/, '')));
+  return bases.size === 1 ? [...bases][0] : `RGB strip ${busIdx + 1}`;
+}
+
+function ledCells(count, scale) {
+  const n = Math.max(1, Math.round(count * scale));
+  return Array.from({ length: n }, () => h('span', { class: 'wz-led' }));
+}
+
+function zoneBlock(seg, index, whole, scale) {
+  const count = seg.stop - seg.start;
+  const block = h('div', { class: 'wz-zone', dataset: { tone: whole ? 'whole' : String(index % 4) } },
+    h('div', { class: 'wz-zone-head' },
+      h('span', { class: 'wz-zone-tag', title: whole ? 'Whole strip' : `Zone ${index + 1}` }, whole ? 'All' : String(index + 1)),
+      // A whole strip is renamed in the strip's header, so its name shows once
+      whole ? h('span', { class: 'wz-zone-label' }, `LEDs ${seg.start + 1}–${seg.stop}`) : segmentNameInput(seg),
+      segmentProfile(seg, false)),
+    h('div', { class: 'wz-leds', role: 'img', 'aria-label': `LEDs ${seg.start + 1} to ${seg.stop}` }, ledCells(count, scale)),
+    h('div', { class: 'wz-range' }, h('span', {}, String(seg.start + 1)), h('span', {}, `${count} LEDs`), h('span', {}, String(seg.stop))));
+  // Width follows the zone's LED count
+  block.style.flexGrow = String(count);
+  return block;
+}
+
+function stripCard(hw, busIdx, segs) {
+  const pwm = isPwmOutput(hw);
+  const order = COLOR_ORDERS.find(o => o.value === hw.order)?.label;
+  const wire = h('div', { class: 'wz-wire' }, h('span', { class: 'wz-pin' }, `GPIO ${pinOf(hw)}`));
+  if (pwm) {
+    const seg = segs[0];
+    return h('li', { class: 'wz-row', dataset: { kind: 'pwm' } }, wire,
+      h('div', { class: 'wz-strip' },
+        h('div', { class: 'wz-strip-head' },
+          seg ? segmentNameInput(seg) : h('strong', {}, `Output ${busIdx + 1}`),
+          h('span', { class: 'wz-meta' }, `Output ${busIdx + 1} · ${outputTypeLabel(hw.type)} · brightness only`),
+          h('span', { class: 'wz-badge' }, segmentProfile(seg || {}, true))),
+        h('div', { class: 'wz-white' })));
+  }
+  const whole = segs.length <= 1;
+  const scale = Math.min(1, LED_CELLS_MAX / Math.max(1, hw.len));
+  return h('li', { class: 'wz-row', dataset: { kind: 'rgb' } }, wire,
+    h('div', { class: 'wz-strip' },
+      h('div', { class: 'wz-strip-head' },
+        whole && segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
+        h('span', { class: 'wz-meta' }, [`Output ${busIdx + 1}`, outputTypeLabel(hw.type), `${hw.len} LEDs`, order].filter(Boolean).join(' · ')),
+        h('span', { class: `wz-badge${whole ? '' : ' is-zones'}` }, whole ? 'Whole strip' : `${segs.length} zones`)),
+      segs.length
+        ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale)))
+        : h('p', { class: 'wz-none' }, 'No segment')));
+}
+
 function renderLedSummary(body) {
   const { layout } = page;
-  const order = hw => COLOR_ORDERS.find(o => o.value === hw.order)?.label;
   body.replaceChildren(
-    h('ul', { class: 'led-summary' }, layout.outputs.map((hw, busIdx) => {
-      const pwm = isPwmOutput(hw);
-      const segs = layout.segments.filter(s => s.busIdx === busIdx);
-      // One box per output: its GPIO pin up top, the segments it drives inside
-      return h('li', { class: 'led-summary-output', dataset: { kind: pwm ? 'pwm' : 'rgb' } },
-        h('div', { class: 'led-summary-head' },
-          h('span', { class: 'led-summary-gpio' }, `GPIO ${pinOf(hw)}`),
-          h('strong', {}, `Output ${busIdx + 1}`),
-          h('span', {}, [outputTypeLabel(hw.type), !pwm && `${hw.len} LEDs`, !pwm && order(hw)].filter(Boolean).join(' · '))),
-        h('ul', { class: 'led-summary-segs' }, ...(segs.length ? segs.map(seg => h('li', {},
-          segmentNameInput(seg),
-          h('span', { class: 'led-summary-seg-range' }, pwm ? 'brightness only' : `LEDs ${seg.start + 1}–${seg.stop}`),
-          segmentProfile(seg, pwm)))
-          : [h('li', { class: 'led-summary-seg-none' }, 'No segment')])));
-    })),
+    h('div', { class: 'wz' },
+      h('div', { class: 'wz-board' },
+        svg('svg', { width: 28, height: 28, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'aria-hidden': 'true' },
+          svg('rect', { x: 5, y: 5, width: 14, height: 14, rx: 2 }), svg('rect', { x: 9, y: 9, width: 6, height: 6 }),
+          svg('path', { d: 'M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3' })),
+        h('strong', {}, 'Controller'),
+        page.live?.info?.arch && h('span', { class: 'wz-arch' }, page.live.info.arch.toUpperCase()),
+        page.live?.version && h('span', {}, `WLED ${page.live.version}`)),
+      h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => stripCard(hw, busIdx, layout.segments.filter(seg => seg.busIdx === busIdx))))),
     h('div', { class: 'led-summary-actions' },
       h('button', {
         type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: runGuidedSetup,
@@ -402,6 +460,8 @@ function renderIdle(body) {
     return;
   }
   if (!page.layout) {
+    // Offline: the Wiring card already says so, so this card waits out of sight
+    page.sections.idle.hidden = page.online === false;
     body.replaceChildren(h('p', { class: 'detail-empty' }, page.online === false ? 'Needs the controller online.' : 'Loading…'));
     return;
   }
