@@ -1166,9 +1166,11 @@ function inspector() {
 
 // --- page --------------------------------------------------------------------
 
+// Title, profile tools, status and preview share one row (they wrap on narrow screens)
 function profileBar() {
   const o = page.overview;
-  return h('div', { class: 'fm-profile-bar' },
+  return h('header', { class: 'fm-profile-bar' },
+    h('h1', { class: 'page-title fm-title' }, 'Flow Matrix'),
     h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Profile'),
       h('select', { class: 'ui-select', onchange: e => switchProfile(e.target.value) },
         ...o.profiles.map(p => h('option', { value: p.name, selected: p.name === page.name }, p.name + (p.name === o.default ? ' (default)' : ''))))),
@@ -1177,13 +1179,15 @@ function profileBar() {
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete')),
-    h('div', { class: 'fm-preview-wrap' },
+    h('div', { class: 'fm-top-end' },
+      statusLine(),
+      h('div', { class: 'fm-preview-wrap' },
       page.preview.running
         ? h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: stopPreview }, '■ Stop preview')
         : h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', disabled: o.match_running,
           title: o.match_running ? 'Not while a match is running' : 'Play a made-up match on your lights',
           onclick: () => { page.preview.open = !page.preview.open; render(); } }, '▶ Preview a match'),
-      page.preview.open && previewPanel()));
+        page.preview.open && previewPanel())));
 }
 
 function previewPanel() {
@@ -1226,11 +1230,7 @@ function render() {
   }
   const scroll = document.getElementById('fmInspector')?.scrollTop || 0;
   root.replaceChildren(
-    h('header', { class: 'page-head' },
-      h('div', {},
-        h('h1', { class: 'page-title' }, 'Flow Matrix'))),
     profileBar(),
-    statusLine(),
     h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
     h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
       h('span', { class: 'savebar-note' }, 'Unsaved changes'),

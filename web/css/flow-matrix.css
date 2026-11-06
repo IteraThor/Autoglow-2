@@ -18,28 +18,42 @@
 .fm-profile-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-2) var(--space-4);
+}
+
+.fm-title {
+  margin-right: var(--space-2);
 }
 
 .fm-profile-pick {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 220px;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 260px;
+}
+
+.fm-profile-pick .ui-select {
+  flex: 1;
 }
 
 .fm-profile-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  padding-bottom: 3px;
+}
+
+.fm-top-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-4);
+  margin-left: auto;
 }
 
 .fm-preview-wrap {
   position: relative;
-  margin-left: auto;
-  padding-bottom: 3px;
 }
 
 .fm-preview {
