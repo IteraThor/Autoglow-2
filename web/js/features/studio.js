@@ -511,7 +511,7 @@ function renderPlayers() {
   const host = $('studioPlayers');
   if (!host) return;
   if (!settings.players.length) {
-    host.replaceChildren(h('div', { class: 'studio-empty' }, 'No players yet. Add the players with their pictures; the Studio shows them when their Autodarts name matches.'));
+    host.replaceChildren(h('div', { class: 'studio-empty' }, 'No players yet. Use + Add player to add them with their pictures; the Studio shows them when their Autodarts name matches.'));
     return;
   }
   host.replaceChildren(...settings.players.map(p => h('div', { class: 'studio-player' },
@@ -542,7 +542,22 @@ function resetForm() {
   $('studioPlayerFile').value = '';
   $('studioPlayerPic').replaceChildren(h('span', {}, 'PNG'));
   $('studioPlayerSave').textContent = 'Add player';
-  $('studioPlayerCancel').hidden = true;
+  $('studioPlayerForm').hidden = true;
+  $('studioPlayerAdd').hidden = false;
+}
+
+// The form opens only to add or edit a player, so the list of players comes first
+function openForm(title) {
+  $('studioPlayerFormTitle').textContent = title;
+  $('studioPlayerForm').hidden = false;
+  $('studioPlayerAdd').hidden = true;
+  $('studioPlayerForm').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  $('studioPlayerName').focus({ preventScroll: true });
+}
+
+function addPlayer() {
+  resetForm();
+  openForm('New player');
 }
 
 function editPlayer(p) {
@@ -556,8 +571,7 @@ function editPlayer(p) {
   $('studioPlayerMockupFile').value = '';
   $('studioPlayerMockup').replaceChildren(p.mockup ? h('img', { src: imageUrl(p.mockup), alt: '' }) : h('span', {}, 'Photo'));
   $('studioPlayerSave').textContent = 'Save player';
-  $('studioPlayerCancel').hidden = false;
-  $('studioPlayerName').focus();
+  openForm(`Edit ${p.name}`);
 }
 
 async function savePlayer() {
@@ -848,6 +862,7 @@ function wire() {
   });
   $('studioPlayerSave').addEventListener('click', savePlayer);
   $('studioPlayerCancel').addEventListener('click', resetForm);
+  $('studioPlayerAdd').addEventListener('click', addPlayer);
   document.querySelectorAll('.studio-save').forEach(btn => btn.addEventListener('click', saveSettings));
   // Text fields and the event title/subtitle: focusing one shows where it appears in the preview
   const textsPanel = document.querySelector('.studio-texts-panel');

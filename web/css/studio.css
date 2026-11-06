@@ -182,13 +182,31 @@
 }
 
 /* --- Players --------------------------------------------------------------- */
+.studio-players-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.studio-players-head .btn-ide[hidden] { display: none; }
+
 .studio-player-form {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
   gap: var(--space-4);
-  padding-bottom: var(--space-4);
-  margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--border-divider);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-divider);
+}
+
+.studio-player-form[hidden] { display: none; }
+
+.studio-form-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
 }
 
 .studio-pic { cursor: pointer; }

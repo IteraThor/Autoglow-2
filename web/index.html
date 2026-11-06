@@ -458,9 +458,14 @@
 
         <section id="tab-studio-players" class="tab-pane studio-page">
             <div class="ide-panel">
-              <div class="panel-header"><span class="panel-title"><span>Players</span></span></div>
+              <div class="panel-header studio-players-head">
+                <span class="panel-title"><span>Players</span></span>
+                <button type="button" class="btn-ide btn-ide-primary" id="studioPlayerAdd">+ Add player</button>
+              </div>
               <div class="panel-body">
-                <div class="studio-player-form">
+                <div id="studioPlayers" class="studio-players"></div>
+                <div class="studio-player-form" id="studioPlayerForm" hidden>
+                  <div class="studio-subhead studio-form-title" id="studioPlayerFormTitle">New player</div>
                   <div class="studio-pics">
                     <label class="studio-pic" title="Choose picture">
                       <span id="studioPlayerPic" class="studio-pic-preview"><span>PNG</span></span>
@@ -496,11 +501,10 @@
                     </div>
                     <div class="studio-actions">
                       <button type="button" class="btn-ide btn-ide-primary" id="studioPlayerSave">Add player</button>
-                      <button type="button" class="btn-ide" id="studioPlayerCancel" hidden>Cancel</button>
+                      <button type="button" class="btn-ide" id="studioPlayerCancel">Cancel</button>
                     </div>
                   </div>
                 </div>
-                <div id="studioPlayers" class="studio-players"></div>
               </div>
             </div>
         </section>
