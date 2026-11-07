@@ -738,26 +738,6 @@ input.led-summary-seg-name:focus {
   background: var(--bg-elevated, var(--bg-input));
 }
 
-.led-summary-seg-profile {
-  color: var(--accent-primary);
-  text-align: right;
-}
-
-/* Link to the segment's lights on the Lighting page: right-aligned like the plain label */
-.led-summary-seg-profile-link {
-  justify-self: end;
-  max-width: 180px;
-  overflow: hidden;
-  font-size: var(--fs-sm);
-  text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.led-summary-seg-profile-link:hover {
-  text-decoration: underline;
-}
-
 /* Wiring: "Edit manually…" and "Run guided setup" at the right end of the section's title line */
 #ctl-sec-leds .detail-section-head {
   display: flex;
@@ -973,11 +953,6 @@ input.led-summary-seg-name:focus {
   font-size: var(--fs-sm);
 }
 
-.wz-zone-head .led-summary-seg-profile-link {
-  flex: 0 1 auto;
-  max-width: 150px;
-}
-
 .wz-zone-tag {
   flex: none;
   display: inline-grid;
@@ -1015,14 +990,9 @@ input.led-summary-seg-name:focus {
   font: 10px var(--font-mono);
 }
 
-/* Profile of a whole strip, and a light strip's on/off, at the end of the strip's header */
-.wz-head-profile,
+/* A light strip's on/off at the end of the strip's header */
 .wz-idle-switch {
   margin-left: auto;
-}
-
-.wz-head-profile .led-summary-seg-profile-link {
-  max-width: 180px;
 }
 
 /* A light strip's brightness when no game is running, on its header line before the on/off switch */
@@ -2631,6 +2601,3 @@ input.ui-input.sf-name-input {
   color: var(--text-secondary);
 }
 
-.led-summary-seg-profile.is-none {
-  color: var(--text-muted);
-}

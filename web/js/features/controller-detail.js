@@ -1,13 +1,12 @@
 // AutoGlow 2 - Setup › Controllers › <controller>
 // One page per controller: name and on/off in the header, then the wiring.
-// Then the wiring, where each RGB strip links to its lights on the Lighting page, and the light strips' idle brightness.
+// Then the wiring, and the light strips' idle brightness. What each RGB strip plays is chosen on the Lighting page.
 // Everything is a draft until the save bar's Save; leaving with unsaved changes asks first.
 
 import { api } from '../core/api.js';
 import { confirmDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { router } from '../core/router.js';
-import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
 import { runControllerSetup } from './controller-setup.js';
 import { createIdleEditor } from './idle-lighting.js';
@@ -172,39 +171,6 @@ async function renameSegment(seg, input) {
   }
 }
 
-// What a segment plays during a game (Flow Matrix profile; light strips play none).
-// RGB strips link to the Lighting page with that segment selected, where its lights are chosen and edited.
-function segmentProfile(seg, pwm) {
-  const text = (label, muted) => h('span', { class: `led-summary-seg-profile${muted ? ' is-none' : ''}` }, label);
-  if (pwm) return text('No game effects', true);
-  if (appStore.get().lightingMode === 'matrix') return text('Event Matrix (legacy)', true);
-  const profiles = page.segProfiles;
-  if (!profiles) return text('…', true);
-  const entry = profiles.segments[String(seg.id)];
-  // A segment that is only in the draft has no saved profile yet
-  if (!entry) return text(profiles.default ?? '—', true);
-  const ip = page.ip;
-  return h('a', {
-    class: 'led-summary-seg-profile led-summary-seg-profile-link', href: '/lighting/flow', 'data-link': true,
-    title: 'What this segment plays during a game, and its look between games. Change it on the Lighting page.',
-    onclick: () => window.selectLightingSegment?.(ip, entry.id)
-  }, `${entry.profile ?? profiles.default} →`);
-}
-
-async function loadSegmentProfiles() {
-  try {
-    const data = await api.get('/api/flow/overview');
-    const dev = data.lights.find(d => d.ip === page.ip);
-    return {
-      default: data.default,
-      // Keyed like the layout's segment ids; id stays null for a controller without segments
-      segments: Object.fromEntries((dev?.segments || []).map(seg => [String(seg.id ?? 0), { id: seg.id, profile: seg.profile }]))
-    };
-  } catch (err) {
-    return { default: null, segments: {} };
-  }
-}
-
 // Read-only view of the layout, drawn as wiring: the controller, a wire per GPIO pin, and each strip with its zones
 // as blocks sized by their LED count. The guided setup is the normal way to change it; the editor is for experts.
 const LED_CELLS_MAX = 60; // LED cells drawn per strip; longer strips are drawn scaled down
@@ -239,8 +205,7 @@ function zoneBlock(seg, index, whole, scale, tone) {
     : h('div', { class: 'wz-zone', dataset: { tone: String(tone % 8) } },
       h('div', { class: 'wz-zone-head' },
         h('span', { class: 'wz-zone-tag', title: `Zone ${index + 1}` }, String(index + 1)),
-        segmentNameInput(seg),
-        segmentProfile(seg, false)),
+        segmentNameInput(seg)),
       leds,
       h('div', { class: 'wz-range', title: `${count} LEDs` }, `${seg.start + 1}–${seg.stop}`));
   // Width follows the zone's LED count
@@ -281,8 +246,7 @@ function stripCard(hw, busIdx, segs, firstTone) {
       ? h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
           segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
-          zones,
-          segs[0] && h('span', { class: 'wz-head-profile' }, segmentProfile(segs[0], false))))
+          zones))
       : h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
           h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
@@ -764,12 +728,8 @@ export async function openDetail(ip, { force = false } = {}) {
   sync();
 
   const opened = page;
-  const [live, segProfiles] = await Promise.all([
-    dev.enabled === false ? null : window.pingDeviceCached(ip, true).catch(() => null),
-    loadSegmentProfiles()
-  ]);
+  const live = dev.enabled === false ? null : await window.pingDeviceCached(ip, true).catch(() => null);
   if (page !== opened) return;
-  page.segProfiles = segProfiles;
   if (dev.enabled !== false) {
     page.live = live;
     page.online = live?.status === 'ok' && live.online === true;

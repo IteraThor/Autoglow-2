@@ -1416,8 +1416,6 @@ function updateLive() {
 
 export function initFlowMatrix() {
   window.flowPage = { isDirty, save, discard };
-  // Setup's "Lights" links open this page with their segment selected
-  window.selectLightingSegment = (ip, id) => rememberSeg(segKey({ ip, id }));
   window.addEventListener('resize', () => {
     const wanted = currentView();
     if (page.root?.isConnected && !page.root.querySelector(`.fc-${wanted}`)) render();
