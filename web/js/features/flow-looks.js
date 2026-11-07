@@ -291,22 +291,3 @@ export function blendFlow(a, b, factor, style = 'crossfade', accent = null, reve
   }
   return out;
 }
-
-// Lay a hit over a look the way the driver does (colour layer + white-on-black mask)
-export function compositeHit(base, hitEffect, elapsed, count, strength = 1) {
-  const dur = Math.max(0.2, Number(hitEffect.duration) || 1);
-  if (elapsed >= dur) return base;
-  const layer = renderFlowFrame({ ...hitEffect, color_secondary: hitEffect.color_primary, brightness: null }, elapsed, count);
-  const mask = renderFlowFrame({ ...hitEffect, color_primary: [255, 255, 255], color_secondary: [0, 0, 0], brightness: null }, elapsed, count);
-  const back = Math.min(0.3, dur * 0.4);
-  let scale = strength * Math.min(1, (dur - elapsed) / back);
-  if (hitEffect.brightness !== undefined && hitEffect.brightness !== null && hitEffect.brightness < 100) scale *= hitEffect.brightness / 100;
-  const out = Uint8ClampedArray.from(base);
-  for (let i = 0; i < out.length; i += 3) {
-    const m = Math.max(mask[i], mask[i + 1], mask[i + 2]);
-    if (!m) continue;
-    const a = (m / 255) * scale;
-    for (let c = i; c < i + 3; c++) out[c] = round(base[c] + (layer[c] - base[c]) * a);
-  }
-  return out;
-}

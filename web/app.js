@@ -27,11 +27,6 @@ function activatePane(targetId) {
 }
 window.activatePane = activatePane;
 
-// Older code opens a pane by id; route it through the router so the URL and navigation follow
-function switchToTab(targetId) {
-  window.router.showPane(targetId);
-}
-
 
 // --- REST API Config ---
 async function loadConfig() {

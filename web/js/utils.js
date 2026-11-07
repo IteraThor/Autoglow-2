@@ -1,5 +1,7 @@
 // AutoGlow 2 - Shared Frontend Utilities
 
+// HTML escaping for the classic (non-module) scripts. The ES modules use esc() from core/dom.js, which
+// does the same except that falsy values such as 0 come out as text ('0') rather than as ''.
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -98,21 +100,4 @@ if (typeof window !== "undefined") {
   window.rgbToHex = rgbToHex;
   window.showToast = showToast;
   window.pingDeviceCached = pingDeviceCached;
-}
-
-
-// Reload the page once a restarting backend is reachable again (after updates / backup restores)
-async function waitForServerAndReload(initialDelayMs = 1500, timeoutMs = 60000) {
-  await new Promise(r => setTimeout(r, initialDelayMs));
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch('/api/auth/status', { cache: 'no-store' });
-      if (res.ok) break;
-    } catch (e) {
-      // Server still restarting
-    }
-    await new Promise(r => setTimeout(r, 1000));
-  }
-  window.location.reload();
 }

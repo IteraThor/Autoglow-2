@@ -3,7 +3,27 @@ AutoGlow 2 - Frame Transitions & Blending Subsystem
 Pure mathematical buffer interpolation for seamless state-aware transitions.
 """
 
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
+
+
+def _crossfade(out: bytearray, buf_a: bytearray, buf_b: bytearray, factor: float) -> None:
+    """Smooth RGB interpolation from buf_a to buf_b (a buffer shorter than out counts as black)."""
+    inv = 1.0 - factor
+    len_a = len(buf_a)
+    len_b = len(buf_b)
+    for i in range(len(out)):
+        va = buf_a[i] if i < len_a else 0
+        vb = buf_b[i] if i < len_b else 0
+        out[i] = int(va * inv + vb * factor)
+
+
+def _pick_leds(out: bytearray, buf_a: bytearray, buf_b: bytearray, num_leds: int, from_b: Callable[[int], bool]) -> None:
+    """Copy each LED from buf_b where from_b(led) is true, else from buf_a (black past a buffer's end)."""
+    for i in range(num_leds):
+        src = buf_b if from_b(i) else buf_a
+        src_len = len(src)
+        for idx in range(i * 3, i * 3 + 3):
+            out[idx] = src[idx] if idx < src_len else 0
 
 
 def blend_frames(
@@ -24,9 +44,7 @@ def blend_frames(
       - 'instant': hard cut thresholded at 0.5
     """
     factor = max(0.0, min(1.0, float(factor)))
-    len_a = len(buf_a)
-    len_b = len(buf_b)
-    target_len = max(len_a, len_b)
+    target_len = max(len(buf_a), len(buf_b))
     if target_len == 0:
         return bytearray(0)
 
@@ -41,66 +59,36 @@ def blend_frames(
 
     elif transition_type == "wipe":
         cutoff_led = int(num_leds * factor)
-        for i in range(num_leds):
-            src = buf_b if i < cutoff_led else buf_a
-            src_len = len(src)
-            for ch in range(3):
-                idx = i * 3 + ch
-                out[idx] = src[idx] if idx < src_len else 0
+        _pick_leds(out, buf_a, buf_b, num_leds, lambda i: i < cutoff_led)
 
     elif transition_type == "curtain":
         half = max(1, num_leds // 2)
         cutoff = int(half * factor)
-        for i in range(num_leds):
-            edge_dist = i if i < half else (num_leds - 1 - i)
-            src = buf_b if edge_dist < cutoff else buf_a
-            src_len = len(src)
-            for ch in range(3):
-                idx = i * 3 + ch
-                out[idx] = src[idx] if idx < src_len else 0
+        # Distance from the nearer strip end
+        _pick_leds(out, buf_a, buf_b, num_leds, lambda i: (i if i < half else (num_leds - 1 - i)) < cutoff)
 
     elif transition_type == "flash":
-        is_flash_on = (int(factor * 12.0) % 2 == 1)
-        if is_flash_on:
+        if int(factor * 12.0) % 2 == 1:
             flash_col = accent_rgb or (255, 255, 255)
-            for i in range(num_leds):
-                for ch in range(3):
-                    out[i * 3 + ch] = flash_col[ch]
+            for idx in range(num_leds * 3):
+                out[idx] = flash_col[idx % 3]
         else:
-            inv = 1.0 - factor
-            for i in range(target_len):
-                va = buf_a[i] if i < len_a else 0
-                vb = buf_b[i] if i < len_b else 0
-                out[i] = int(va * inv + vb * factor)
+            _crossfade(out, buf_a, buf_b, factor)
 
     elif transition_type == "pulse":
-        dip = abs(factor - 0.5) * 2.0
-        if factor < 0.5:
-            for i in range(num_leds):
-                for ch in range(3):
-                    idx = i * 3 + ch
-                    va = buf_a[idx] if idx < len_a else 0
-                    if accent_rgb:
-                        out[idx] = int(va * dip + accent_rgb[ch] * (1.0 - dip))
-                    else:
-                        out[idx] = int(va * dip)
-        else:
-            rise = (factor - 0.5) * 2.0
-            for i in range(num_leds):
-                for ch in range(3):
-                    idx = i * 3 + ch
-                    vb = buf_b[idx] if idx < len_b else 0
-                    if accent_rgb:
-                        out[idx] = int(vb * rise + accent_rgb[ch] * (1.0 - rise))
-                    else:
-                        out[idx] = int(vb * rise)
+        # Down from buf_a to the dip (accent or black) in the first half, up into buf_b in the second
+        level = abs(factor - 0.5) * 2.0
+        src = buf_a if factor < 0.5 else buf_b
+        src_len = len(src)
+        for idx in range(num_leds * 3):
+            v = src[idx] if idx < src_len else 0
+            if accent_rgb:
+                out[idx] = int(v * level + accent_rgb[idx % 3] * (1.0 - level))
+            else:
+                out[idx] = int(v * level)
 
     else:
         # Default: Smooth crossfade
-        inv = 1.0 - factor
-        for i in range(target_len):
-            va = buf_a[i] if i < len_a else 0
-            vb = buf_b[i] if i < len_b else 0
-            out[i] = int(va * inv + vb * factor)
+        _crossfade(out, buf_a, buf_b, factor)
 
     return out

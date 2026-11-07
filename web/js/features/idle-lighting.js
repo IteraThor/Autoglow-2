@@ -32,7 +32,7 @@ const toRgb = hex => {
 const percent = bri => Math.round((Math.max(0, Math.min(255, Number(bri))) / 255) * 100);
 
 // Searchable effect picker: a button that opens a filtered list
-export function effectPicker(effects, current, onPick) {
+export function wledEffectPicker(effects, current, onPick) {
   const label = h('span', { class: 'fx-picker-value' }, effects.find(e => e.id === current)?.name || `Effect ${current}`);
   const trigger = h('button', { type: 'button', class: 'fx-picker-trigger', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, label);
   const search = h('input', { type: 'search', class: 'ui-input fx-picker-search', placeholder: `Search ${effects.length} effects`, 'aria-label': 'Search effects' });
@@ -233,7 +233,7 @@ export function createIdleEditor(ip, segments) {
     body.append(
       h('div', { class: 'idle-effect-row' },
         h('span', { class: 'idle-slider-label' }, 'Effect'),
-        effectPicker(effects, seg.fx, effect => {
+        wledEffectPicker(effects, seg.fx, effect => {
           seg.fx = effect.id;
           drawEffectControls();
           changed(true);

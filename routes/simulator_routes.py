@@ -17,10 +17,6 @@ active_simulator_ws_clients: Set[web.WebSocketResponse] = set()
 _simulator_stream_dest: str = "both"  # "simulator", "hardware", "both"
 
 
-def get_stream_dest() -> str:
-    return _simulator_stream_dest
-
-
 def set_stream_dest(dest: str) -> None:
     global _simulator_stream_dest
     if dest in ("simulator", "hardware", "both"):

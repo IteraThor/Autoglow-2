@@ -571,9 +571,6 @@ class GameFlowStorageManager:
         data["profiles"][name] = flow.to_dict()
         return self._write_raw(data)
 
-    def save(self, flow: GameFlow) -> bool:
-        return self.save_profile(flow)
-
     def delete_profile(self, name: str) -> bool:
         data = self._edit()
         if name not in data["profiles"] or len(data["profiles"]) <= 1:

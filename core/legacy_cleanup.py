@@ -31,6 +31,8 @@ REMOVED_FILES = (
     "web/flow_design_examples.html",
     "web/flow_outcome_examples.html",
     "web/flow_takeout_examples.html",
+    # Re-export facade; the driver imports core.effects directly
+    "core/animations.py",
     # Tests for removed features
     "tests/test_board_offline_standby.py",
 )

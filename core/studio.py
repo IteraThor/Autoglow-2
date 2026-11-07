@@ -698,13 +698,6 @@ def _rounds(chalkboard: Any) -> List[float]:
     return points
 
 
-def _guide_labels(guide: Any) -> List[str]:
-    if not isinstance(guide, list) or not guide:
-        return []
-    labels = [g.get("name") if isinstance(g, dict) else str(g) for g in guide]
-    return [str(label) for label in labels if label][:3]
-
-
 def _checkout(state: Dict[str, Any], active: int = 0) -> List[str]:
     """Checkout suggestion Autodarts shows for the player at the board, if any."""
     candidates = [state.get("checkoutGuide")]

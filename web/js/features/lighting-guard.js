@@ -9,11 +9,12 @@ const PAGES = [
 ];
 
 // page: { isDirty, save() -> bool|Promise<bool>, discard() }
-// Also used by the controller page (web/js/features/controller-detail.js)
-export async function confirmLeave({ what, save, discard }) {
+// Also used by the controller page (web/js/features/controller-detail.js) and the Settings page, which
+// passes its own body text
+export async function confirmLeave({ what, body, save, discard }) {
   const choice = await window.choiceDialog({
     title: 'Unsaved changes',
-    body: `You changed the ${what} but did not save. Save now, or discard to go back to the saved version.`,
+    body: body ?? `You changed the ${what} but did not save. Save now, or discard to go back to the saved version.`,
     choices: [
       { value: 'stay', label: 'Keep editing' },
       { value: 'discard', label: 'Discard', danger: true },

@@ -24,6 +24,17 @@ async def handle_get_config(request: web.Request) -> web.Response:
     return web.json_response(data)
 
 
+# Autodarts account details in "extra" that keep their saved value when a save leaves them blank
+KEPT_AUTODARTS_EXTRAS = (
+    "autodarts_token_expires_at",
+    "autodarts_client_id",
+    "autodarts_email",
+    "autodarts_name",
+    "autodarts_username",
+    "autodarts_board_id",
+)
+
+
 async def handle_post_config(request: web.Request) -> web.Response:
     engine = request.app.get("engine")
     config_path = request.app.get("config_path", "config.json")
@@ -31,56 +42,18 @@ async def handle_post_config(request: web.Request) -> web.Response:
     existing_cfg = request.app.get("current_app_config") or load_app_config(config_path)
     # A page sends only the settings it edits; everything else stays as the server has it now. Other pages
     # and tabs save profiles, timers or strip directions on their own, and a whole stale copy would undo them.
-    merged = {**existing_cfg.to_dict(), **data} if isinstance(data, dict) else data
+    merged = {**existing_cfg.to_dict(), **data}
     try:
         cfg = AppConfig.from_dict(merged)
     except Exception:
         logger.warning("Rejected unparseable configuration", exc_info=True)
         raise ValidationError("Configuration is not valid") from None
 
-    # Merge & preserve sensitive credentials and tokens if omitted or blank in incoming payload
     # The PIN is only changed through /api/auth/pin, never through a config save
     cfg.extra.pop(PIN_HASH_KEY, None)
-    if existing_cfg:
-        restore_redacted_secrets(cfg, existing_cfg)
-        # Profile choices are made on the Hub / Lighting pages; a settings save that omits them keeps them
-        if "device_profiles" not in data:
-            cfg.device_profiles = {ip: n for ip, n in existing_cfg.device_profiles.items() if cfg.get_profile(n)}
-        if "segment_profiles" not in data:
-            cfg.segment_profiles = {
-                ip: {sid: n for sid, n in segs.items() if cfg.get_profile(n)}
-                for ip, segs in existing_cfg.segment_profiles.items()
-            }
-        if not cfg.autodarts_user and existing_cfg.autodarts_user:
-            cfg.autodarts_user = existing_cfg.autodarts_user
-        if not cfg.autodarts_board_id and existing_cfg.autodarts_board_id:
-            cfg.autodarts_board_id = existing_cfg.autodarts_board_id
-
-        for tk in [
-            "autodarts_token_expires_at",
-            "autodarts_client_id",
-            "autodarts_email",
-            "autodarts_name",
-            "autodarts_username",
-            "autodarts_board_id",
-        ]:
-            if existing_cfg.extra.get(tk) and not cfg.extra.get(tk):
-                cfg.extra[tk] = existing_cfg.extra[tk]
-
+    _keep_unsent_settings(cfg, existing_cfg, data)
     if engine and engine.autodarts:
-        ad = engine.autodarts
-        if ad.access_token and not cfg.extra.get("autodarts_access_token"):
-            cfg.extra["autodarts_access_token"] = ad.access_token
-        if ad.refresh_token and not cfg.extra.get("autodarts_refresh_token"):
-            cfg.extra["autodarts_refresh_token"] = ad.refresh_token
-        if ad.token_expires_at and not cfg.extra.get("autodarts_token_expires_at"):
-            cfg.extra["autodarts_token_expires_at"] = ad.token_expires_at
-        if ad.email and not cfg.autodarts_user:
-            cfg.autodarts_user = ad.email
-        if ad.password and not cfg.autodarts_password:
-            cfg.autodarts_password = ad.password
-        if ad.board_id and not cfg.autodarts_board_id:
-            cfg.autodarts_board_id = ad.board_id
+        _keep_client_credentials(cfg, engine.autodarts)
 
     # Save to disk
     if not save_app_config(cfg, config_path):
@@ -90,17 +63,58 @@ async def handle_post_config(request: web.Request) -> web.Response:
 
     # Update in-memory engine if running
     if engine:
-        primary = cfg.primary_device or DeviceConfig(ip="")
-        engine.device_config = primary
-        engine.profile = cfg.profile
-        engine.app_config = cfg
-        engine.sync_drivers(cfg)
-        sim = request.app.get("simulator")
-        if sim:
-            sim.ws_led_count = primary.rgb_count or 45
-            sim.pwm_index = primary.pwm_index
+        _apply_to_engine(request.app, engine, cfg)
 
     return web.json_response({"status": "ok"})
+
+
+def _keep_unsent_settings(cfg: AppConfig, existing_cfg: AppConfig, data: dict) -> None:
+    """Secrets, account details and profile choices the save omits or sends blank keep their saved values."""
+    restore_redacted_secrets(cfg, existing_cfg)
+    # Profile choices are made on the Hub / Lighting pages; a settings save that omits them keeps them
+    if "device_profiles" not in data:
+        cfg.device_profiles = {ip: n for ip, n in existing_cfg.device_profiles.items() if cfg.get_profile(n)}
+    if "segment_profiles" not in data:
+        cfg.segment_profiles = {
+            ip: {sid: n for sid, n in segs.items() if cfg.get_profile(n)}
+            for ip, segs in existing_cfg.segment_profiles.items()
+        }
+    if not cfg.autodarts_user and existing_cfg.autodarts_user:
+        cfg.autodarts_user = existing_cfg.autodarts_user
+    if not cfg.autodarts_board_id and existing_cfg.autodarts_board_id:
+        cfg.autodarts_board_id = existing_cfg.autodarts_board_id
+    for key in KEPT_AUTODARTS_EXTRAS:
+        if existing_cfg.extra.get(key) and not cfg.extra.get(key):
+            cfg.extra[key] = existing_cfg.extra[key]
+
+
+def _keep_client_credentials(cfg: AppConfig, ad) -> None:
+    """Tokens and account details the running Autodarts client holds fill in what the config lacks."""
+    if ad.access_token and not cfg.extra.get("autodarts_access_token"):
+        cfg.extra["autodarts_access_token"] = ad.access_token
+    if ad.refresh_token and not cfg.extra.get("autodarts_refresh_token"):
+        cfg.extra["autodarts_refresh_token"] = ad.refresh_token
+    if ad.token_expires_at and not cfg.extra.get("autodarts_token_expires_at"):
+        cfg.extra["autodarts_token_expires_at"] = ad.token_expires_at
+    if ad.email and not cfg.autodarts_user:
+        cfg.autodarts_user = ad.email
+    if ad.password and not cfg.autodarts_password:
+        cfg.autodarts_password = ad.password
+    if ad.board_id and not cfg.autodarts_board_id:
+        cfg.autodarts_board_id = ad.board_id
+
+
+def _apply_to_engine(app: web.Application, engine, cfg: AppConfig) -> None:
+    """The running engine (and the LED simulator) work with the saved configuration from now on."""
+    primary = cfg.primary_device or DeviceConfig(ip="")
+    engine.device_config = primary
+    engine.profile = cfg.profile
+    engine.app_config = cfg
+    engine.sync_drivers(cfg)
+    sim = app.get("simulator")
+    if sim:
+        sim.ws_led_count = primary.rgb_count or 45
+        sim.pwm_index = primary.pwm_index
 
 
 async def handle_reset_config(request: web.Request) -> web.Response:

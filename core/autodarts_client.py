@@ -30,6 +30,59 @@ BULL_OFF_GAME_KEYS = frozenset({
 })
 RECONNECT_MAX_DELAY = 60.0
 
+# Event words Autodarts sends when a match ends: a finished match has a winner, the others abort it
+MATCH_FINISHED_WORDS = frozenset({"finish", "finished", "end", "ended"})
+MATCH_ABORTED_WORDS = frozenset({"abort", "aborted", "delete", "deleted", "stop", "cancel", "cancelled", "canceled"})
+MATCH_END_WORDS = MATCH_FINISHED_WORDS | MATCH_ABORTED_WORDS
+BUST_EVENTS = frozenset({"bust", "busted", "miss", "outside"})
+LEG_WON_EVENTS = frozenset({"leg-won", "leg_won", "leg", "checkout"})
+MATCH_WON_EVENTS = frozenset({"match-won", "match_won", "game-won", "game_won", "winner"})
+BOARD_IDLE_STATUSES = ("stopped", "idle")
+# Fields a player entry may carry its name in, in order of preference
+PLAYER_NAME_KEYS = ("name", "username", "userName", "nickname", "alias", "displayName")
+
+# How a throw names its ring: segment name prefix (T20, D16, S5), or the "bed" field
+_RING_PREFIXES = {3: "T", 2: "D", 1: "S"}
+_RING_MULTIPLIERS = {prefix: mult for mult, prefix in _RING_PREFIXES.items()}
+_BED_MULTIPLIERS = {"triple": 3, "double": 2, "single": 1, "outside": 0, "miss": 0, "off": 0}
+_BULL_NAMES = frozenset({"BULL", "DBULL", "DOUBLE BULL", "DOUBLE_BULL", "BULLSEYE", "50"})
+_OUTER_BULL_NAMES = frozenset({"25", "SBULL", "SINGLE BULL", "SINGLE_BULL", "OUTER BULL"})
+_MISS_NAMES = frozenset({"MISS", "OUTSIDE", "OFF", "0", "NONE"})
+
+
+def _event_name(payload: dict) -> str:
+    """The lower-case name of a board or match event."""
+    return str(payload.get("event") or payload.get("name") or payload.get("type") or "").lower()
+
+
+def _takeout_step(ev_name: str) -> Optional[str]:
+    """
+    The step of the takeout cycle a board or match event name reports: "takeout_start", "takeout_finish",
+    "takeout", "calibrating" or "throw"; None for any other event. The first step that matches wins.
+    """
+    if ("takeout" in ev_name or "motion" in ev_name) and "start" in ev_name:
+        return "takeout_start"
+    if any(word in ev_name for word in ("takeout finish", "takeout_finish", "darts-pulled", "darts_pulled", "motion finish")):
+        return "takeout_finish"
+    if "takeout" in ev_name or "take out" in ev_name:
+        return "takeout"
+    if "calibrat" in ev_name:
+        return "calibrating"
+    if "throw" in ev_name:
+        return "throw"
+    return None
+
+
+def _named_winner(payload: dict) -> Any:
+    """The winner a match event names, or None when it names none (Autodarts sends -1 for nobody)."""
+    winner = payload.get("winner") or payload.get("player")
+    return winner if winner is not None and str(winner) != "-1" else None
+
+
+def _first_number(*values: Any, default: int) -> int:
+    """The first of the values that is a number, as an int; default when none is."""
+    return next((int(v) for v in values if isinstance(v, (int, float))), default)
+
 
 class AutodartsClient:
     """
@@ -105,7 +158,6 @@ class AutodartsClient:
         self._boards_cache: List[Dict[str, Any]] = []
         self.user_name: str = ""
         self.username: str = ""
-        self.user_id: Optional[str] = None
         self._last_flow_state: Optional[str] = None
 
     # -------------------------------------------------------------------------
@@ -143,7 +195,6 @@ class AutodartsClient:
                 async with session.get(f"{AUTODARTS_AUTH_URL}/userinfo", headers=headers, timeout=aiohttp.ClientTimeout(total=4)) as resp:
                     if resp.status == 200:
                         u_info = await resp.json()
-                        self.user_id = u_info.get("sub")
                         self.username = u_info.get("preferred_username") or u_info.get("username") or u_info.get("nickname") or u_info.get("name") or (self.email.split("@")[0] if self.email else "")
                         self.user_name = self.username
                         return u_info
@@ -160,51 +211,6 @@ class AutodartsClient:
         if boards:
             self._boards_cache = boards
         return boards
-
-    def is_board_online(self, board_id: str) -> bool:
-        """
-        Check if a specific Autodarts board is online and reachable.
-        Returns True if connected/online, False if strictly offline/disconnected.
-        """
-        if not board_id or not board_id.strip():
-            return True
-
-        target_id = board_id.strip().lower()
-
-        # 1. Check live WebSocket state if known
-        for b_id, state in self.board_states.items():
-            if b_id.lower() == target_id:
-                if isinstance(state, dict):
-                    conn = state.get("connected")
-                    status = str(state.get("status", "")).strip().lower()
-                    if conn is False or status == "offline":
-                        return False
-                    if conn is True or status in ["throw", "takeout", "takeout in progress", "idle", "ready", "calibrating", "starting"]:
-                        return True
-
-        # 2. Check cached/fetched boards catalog
-        for b in self._boards_cache:
-            if str(b.get("id", "")).lower() == target_id:
-                if "online" in b:
-                    return bool(b["online"])
-                b_state = b.get("state")
-                if isinstance(b_state, dict):
-                    conn = b_state.get("connected")
-                    status = str(b_state.get("status", "")).strip().lower()
-                    if conn is False or status == "offline":
-                        return False
-                    if conn is True:
-                        return True
-
-        return True
-
-    def any_board_online(self) -> bool:
-        """True unless boards are known and every one of them is offline."""
-        ids = {str(i) for i in self.board_states} | {str(b.get("id", "")) for b in self._boards_cache}
-        ids.discard("")
-        if not ids:
-            return True
-        return any(self.is_board_online(i) for i in ids)
 
     async def fetch_match_details(self, match_id: str) -> Dict[str, Any]:
         """Fetch real-time match details including player names from Autodarts API."""
@@ -446,6 +452,35 @@ class AutodartsClient:
         await ws.send(json.dumps({"type": "subscribe", "channel": "autodarts.matches", "topic": f"{match_id}.state"}))
         await ws.send(json.dumps({"type": "subscribe", "channel": "autodarts.matches", "topic": f"{match_id}.events"}))
 
+    def _current_player(self) -> Optional[str]:
+        """Name of the player at the board, if the match players are known."""
+        return self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
+
+    async def _emit_player_event(self, event_type: DartEventType, player_name: Optional[str], board_id: Optional[str]) -> None:
+        """An event for the player at the board (takeout, throw ...)."""
+        await self._emit_event(DartEvent(event_type=event_type, player_name=player_name,
+                                         player_index=self.active_player_idx, board_id=board_id))
+
+    async def _adopt_match(self, ws, match_id: str, reason: str) -> None:
+        """Make match_id the running match: fresh per-match state, and its topics subscribed."""
+        self._active_match_id = match_id
+        self._reset_match_state()
+        logger.info(reason)
+        await self._subscribe_match(ws, match_id)
+
+    async def _start_match(self, ws, match_id: str, board_id: str, reason: str) -> None:
+        """A board reports a new match: adopt it, read its players and emit GAME_START."""
+        await self._adopt_match(ws, match_id, reason)
+        await self._fetch_and_parse_match(match_id)
+        await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=board_id))
+
+    async def _end_match(self, board_id: Optional[str], flow_state: Optional[str] = None) -> None:
+        """The match is over without a result (aborted, deleted, board idle ...): back to idle."""
+        self._active_match_id = None
+        self._reset_match_state()
+        self._last_flow_state = flow_state
+        await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=board_id))
+
     async def _handle_raw_message(self, ws, data: dict):
         channel = data.get("channel")
         topic = data.get("topic", "")
@@ -457,236 +492,220 @@ class AutodartsClient:
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Autodarts WS RAW: channel='{channel}', topic='{topic}', payload={json.dumps(payload)}")
 
-        # 1. Match Start / Stop Detection from board.matches
-        if channel == "autodarts.boards" and topic.endswith(".matches"):
-            b_id = topic.split(".")[0]
-            event = str(payload.get("event") or payload.get("type") or "").lower()
-            match_id = payload.get("id") or payload.get("matchId")
-            if event in ["start", "created"] or (event not in ["stop", "finish", "finished", "abort", "aborted", "delete", "deleted", "end", "ended", "cancel", "cancelled", "canceled"] and match_id):
-                if match_id and match_id != self._active_match_id:
-                    self._active_match_id = match_id
-                    self._reset_match_state()
-                    logger.info(f"Match started on board {b_id}: {match_id}")
-                    await self._subscribe_match(ws, match_id)
-                    await self._fetch_and_parse_match(match_id)
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=b_id))
-            elif event in ["stop", "finish", "finished", "abort", "aborted", "delete", "deleted", "end", "ended", "cancel", "cancelled", "canceled"]:
-                logger.info(f"Match ended/stopped on board {b_id}: {event}")
-                if event in ["finish", "finished", "end", "ended"] and not self._last_match_finished:
+        if channel == "autodarts.boards":
+            if topic.endswith(".matches"):
+                await self._on_board_matches(ws, topic.split(".")[0], payload)
+            elif topic.endswith(".state"):
+                await self._on_board_state(ws, topic.split(".")[0], payload)
+            elif topic.endswith(".events"):
+                await self._on_board_event(topic.split(".")[0], payload)
+        elif channel == "autodarts.matches":
+            await self._on_match_message(ws, topic, payload)
+
+    async def _on_board_matches(self, ws, b_id: str, payload: dict) -> None:
+        """board.matches: a match starts or ends on the board."""
+        event = str(payload.get("event") or payload.get("type") or "").lower()
+        match_id = payload.get("id") or payload.get("matchId")
+        if event in MATCH_END_WORDS:
+            logger.info(f"Match ended/stopped on board {b_id}: {event}")
+            if event in MATCH_ABORTED_WORDS:
+                await self._end_match(b_id)
+            elif not self._last_match_finished:
+                self._last_match_finished = True
+                self._in_leg_break = True
+                await self._emit_match_won(winner=payload.get("winner") or payload.get("player"))
+        elif match_id and match_id != self._active_match_id:
+            await self._start_match(ws, match_id, b_id, f"Match started on board {b_id}: {match_id}")
+
+    async def _on_board_state(self, ws, b_id: str, payload: dict) -> None:
+        """board.state: the board's status (throw, takeout, idle ...) and the match it plays, if any."""
+        self.board_states[b_id] = payload
+        match_id = payload.get("matchId")
+        status = payload.get("status", "")
+        status_lower = str(status).lower()
+        is_idle = status_lower in BOARD_IDLE_STATUSES
+
+        if match_id and match_id != self._active_match_id:
+            if not is_idle:
+                await self._start_match(ws, match_id, b_id, f"Active match detected via board.state on {b_id}: {match_id}")
+        elif is_idle and self._active_match_id:
+            logger.info(f"Board {b_id} state reported idle/stopped -> clearing match {self._active_match_id} and emitting GAME_IDLE")
+            await self._end_match(b_id, flow_state="idle")
+
+        p_name = self._current_player()
+        is_takeout = "takeout" in status_lower or "take out" in status_lower
+        if "calibrat" in status_lower:
+            logger.info(f"Board calibration status detected: {status}")
+            await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=b_id))
+        elif is_takeout and "progress" in status_lower:
+            if not self._in_leg_break and self._last_flow_state != "takeout_in_progress":
+                self._last_flow_state = "takeout_in_progress"
+                logger.info(f"Board flow state -> TAKEOUT IN PROGRESS (Status: {status})")
+                await self._emit_player_event(DartEventType.TAKEOUT_IN_PROGRESS, p_name, b_id)
+        elif is_takeout:
+            # A Leg or Match Won celebration is not interrupted by the takeout
+            if not self._in_leg_break and self._last_flow_state != "takeout":
+                self._last_flow_state = "takeout"
+                logger.info(f"Board flow state -> TAKEOUT (Waiting for player to takeout, Status: {status})")
+                await self._emit_player_event(DartEventType.TAKEOUT, p_name, b_id)
+        elif "throw" in status_lower or "ready" in status_lower or "play" in status_lower:
+            if self._active_match_id and not self._in_leg_break and self._last_flow_state != "throw":
+                self._last_flow_state = "throw"
+                logger.info(f"Board flow state -> THROW (Waiting for player to throw, Status: {status})")
+                await self._emit_player_event(DartEventType.THROW, p_name, b_id)
+
+    async def _on_board_event(self, b_id: str, payload: dict) -> None:
+        """board.events: motion, takeout and throws the board cameras see."""
+        ev_name = _event_name(payload)
+        logger.info(f"Board event received on {b_id}: {ev_name}")
+        p_name = self._current_player()
+        if "manual reset" in ev_name or "manual_reset" in ev_name:
+            if not self._in_leg_break:
+                await self._emit_player_event(DartEventType.MANUAL_RESET, p_name, b_id)
+                # Inside a match the board is clear after a manual reset, so the player can throw
+                if self._active_match_id:
+                    self._last_flow_state = "throw"
+                    logger.info("Board flow state -> THROW after manual reset")
+                    await self._emit_player_event(DartEventType.THROW, p_name, b_id)
+            return
+
+        step = _takeout_step(ev_name)
+        if step == "calibrating":
+            await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=b_id))
+            return
+        if step is None or self._in_leg_break:
+            return
+        if step == "takeout_start":
+            self._last_flow_state = "takeout_in_progress"
+            logger.info(f"Board flow state -> TAKEOUT IN PROGRESS (Event: {ev_name})")
+            await self._emit_player_event(DartEventType.TAKEOUT_IN_PROGRESS, p_name, b_id)
+        elif step == "takeout_finish":
+            self._last_flow_state = "takeout_finished"
+            logger.info(f"Board flow state -> TAKEOUT FINISHED (Event: {ev_name})")
+        elif step == "takeout":
+            if self._last_flow_state != "takeout":
+                self._last_flow_state = "takeout"
+                logger.info(f"Board flow state -> TAKEOUT (Event: {ev_name})")
+                await self._emit_player_event(DartEventType.TAKEOUT, p_name, b_id)
+        else:  # throw
+            self._last_flow_state = "throw"
+            logger.info(f"Board flow state -> THROW (Event: {ev_name})")
+            await self._emit_player_event(DartEventType.THROW, p_name, b_id)
+
+    async def _on_match_message(self, ws, topic: str, payload: dict) -> None:
+        """autodarts.matches: the state and events of the running match."""
+        match_id_from_topic = topic.split(".")[0] if "." in topic else None
+        if not match_id_from_topic and not self._active_match_id and topic in (".game-events", ".corrections"):
+            # A new match announces itself with id-less topics before any throw
+            now = time.time()
+            if now - self._start_announced_at > 3.0:
+                self._start_announced_at = now
+                logger.info("Match start signalled by id-less match topic")
+                b_id = next(iter(self.board_states), None)
+                await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=b_id))
+                # Players are unknown until the first dart, so show player 1's color while waiting
+                await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_index=0, board_id=b_id))
+            return
+        if match_id_from_topic in self._ended_match_ids:
+            logger.debug(f"Ignoring message for ended match {match_id_from_topic}")
+            return
+        if not self._active_match_id and match_id_from_topic:
+            # Bridge mode never sees the board's match-start message, so the first match topic starts the match
+            await self._adopt_match(ws, match_id_from_topic, f"Match started (first message on match topic): {match_id_from_topic}")
+            if time.time() - self._start_announced_at > 120.0:
+                await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=next(iter(self.board_states), None)))
+
+        # Ignore state/events from a stale or different match
+        if self._active_match_id and match_id_from_topic and match_id_from_topic != self._active_match_id:
+            logger.debug(f"Ignoring message for inactive match {match_id_from_topic} (active: {self._active_match_id})")
+            return
+
+        if topic.endswith(".state"):
+            await self._parse_match_state(payload)
+        elif topic.endswith(".events"):
+            await self._on_match_event(payload)
+
+    async def _on_match_event(self, payload: dict) -> None:
+        """A match event: a takeout or throw step, 180, bust, or a leg or match result."""
+        ev_name = _event_name(payload)
+        p_name = self._current_player()
+        step = _takeout_step(ev_name)
+        if step == "calibrating":
+            logger.info(f"Match event '{ev_name}' received -> emitting CALIBRATING")
+            await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=self.board_id))
+        elif step is not None:
+            # Takeout and throw steps wait while a leg or match win is celebrated
+            if self._in_leg_break:
+                return
+            if step == "takeout_start":
+                self._last_flow_state = "takeout_in_progress"
+                logger.info(f"Match event '{ev_name}' received -> emitting TAKEOUT_IN_PROGRESS")
+                await self._emit_player_event(DartEventType.TAKEOUT_IN_PROGRESS, p_name, self.board_id)
+            elif step == "takeout_finish":
+                self._last_flow_state = "takeout_finished"
+                logger.info(f"Match event '{ev_name}' received -> TAKEOUT FINISHED")
+            elif step == "takeout":
+                if self._last_flow_state != "takeout":
+                    self._last_flow_state = "takeout"
+                    logger.info(f"Match event '{ev_name}' received -> emitting TAKEOUT")
+                    await self._emit_player_event(DartEventType.TAKEOUT, p_name, self.board_id)
+            else:  # throw; unlike a board event, a match event leaves the flow state as it is
+                logger.info(f"Match event '{ev_name}' received -> emitting THROW")
+                await self._emit_player_event(DartEventType.THROW, p_name, self.board_id)
+        elif ev_name == "180" and not self._last_180_fired:
+            self._last_180_fired = True
+            await self._emit_event(DartEvent(event_type=DartEventType.SCORE_180, score=180, board_id=self.board_id))
+        elif ev_name in BUST_EVENTS and not self._last_bust_fired:
+            self._last_bust_fired = True
+            logger.info(f"Match event '{ev_name}' received -> emitting BUST")
+            await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=0, multiplier=0, segment_name="Miss", board_id=self.board_id))
+        elif ev_name in LEG_WON_EVENTS:
+            if not self._last_match_finished:
+                logger.info(f"Match event '{ev_name}' received -> emitting LEG_WON")
+                p_num = payload.get("player")
+                leg_winner = self.current_players[p_num] if isinstance(p_num, int) and 0 <= p_num < len(self.current_players) else None
+                await self._emit_leg_won(player_name=leg_winner, player_idx=p_num)
+        elif ev_name in MATCH_WON_EVENTS:
+            logger.info(f"Match event '{ev_name}' received -> emitting MATCH_WON")
+            winner = _named_winner(payload)
+            if winner is not None:
+                await self._emit_match_won(winner=winner)
+        elif ev_name in MATCH_END_WORDS:
+            logger.info(f"Match event '{ev_name}' received")
+            if ev_name in MATCH_ABORTED_WORDS:
+                await self._end_match(self.board_id)
+            elif not self._last_match_finished:
+                winner = _named_winner(payload)
+                if winner is not None:
                     self._last_match_finished = True
                     self._in_leg_break = True
-                    winner = payload.get("winner") or payload.get("player")
                     await self._emit_match_won(winner=winner)
-                if event in ["abort", "aborted", "delete", "deleted", "stop", "cancel", "cancelled", "canceled"]:
-                    self._active_match_id = None
-                    self._reset_match_state()
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=b_id))
-
-        # 2. Board State (Takeout / Idle / Throw / Match Presence)
-        if channel == "autodarts.boards" and topic.endswith(".state"):
-            b_id = topic.split(".")[0]
-            self.board_states[b_id] = payload
-            match_id = payload.get("matchId")
-            status = payload.get("status", "")
-            status_lower = str(status).lower()
-
-            if match_id and match_id != self._active_match_id:
-                if status_lower not in ["stopped", "idle"]:
-                    self._active_match_id = match_id
-                    self._reset_match_state()
-                    logger.info(f"Active match detected via board.state on {b_id}: {match_id}")
-                    await self._subscribe_match(ws, match_id)
-                    await self._fetch_and_parse_match(match_id)
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=b_id))
-            elif status_lower in ["stopped", "idle"]:
-                if self._active_match_id:
-                    logger.info(f"Board {b_id} state reported idle/stopped -> clearing match {self._active_match_id} and emitting GAME_IDLE")
-                    self._active_match_id = None
-                    self._reset_match_state()
-                    self._in_leg_break = False
-                    self._last_flow_state = "idle"
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=b_id))
-
-            p_name = self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
-            if "calibrat" in status_lower:
-                logger.info(f"Board calibration status detected: {status}")
-                await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=b_id))
-            elif "progress" in status_lower and ("takeout" in status_lower or "take out" in status_lower):
-                if not self._in_leg_break and self._last_flow_state != "takeout_in_progress":
-                    self._last_flow_state = "takeout_in_progress"
-                    logger.info(f"Board flow state -> TAKEOUT IN PROGRESS (Status: {status})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT_IN_PROGRESS, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-            elif "takeout" in status_lower or "take out" in status_lower:
-                # If we are celebrating a Leg or Match Won, don't interrupt with Takeout
-                if not self._in_leg_break and self._last_flow_state != "takeout":
-                    self._last_flow_state = "takeout"
-                    logger.info(f"Board flow state -> TAKEOUT (Waiting for player to takeout, Status: {status})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-            elif status in ["Throw in progress", "Throw", "Ready for throw", "Playing", "Ready"] or "throw" in status_lower or "ready" in status_lower or "play" in status_lower:
-                if self._active_match_id and not self._in_leg_break and self._last_flow_state != "throw":
-                    self._last_flow_state = "throw"
-                    logger.info(f"Board flow state -> THROW (Waiting for player to throw, Status: {status})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-
-        # 3. Board Events (motion / takeout / throws from board cameras)
-        if channel == "autodarts.boards" and topic.endswith(".events"):
-            b_id = topic.split(".")[0]
-            ev_name = str(payload.get("event") or payload.get("name") or payload.get("type") or "").lower()
-            logger.info(f"Board event received on {b_id}: {ev_name}")
-            p_name = self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
-            if "manual reset" in ev_name or "manual_reset" in ev_name:
-                if not self._in_leg_break:
-                    await self._emit_event(DartEvent(event_type=DartEventType.MANUAL_RESET, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-                    # After manual reset, if inside an active game, board is clear -> ready for player to throw!
-                    if self._active_match_id:
-                        self._last_flow_state = "throw"
-                        logger.info("Board flow state -> THROW after manual reset")
-                        await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-            elif "takeout start" in ev_name or "takeout_start" in ev_name or (("takeout" in ev_name or "motion" in ev_name) and "start" in ev_name):
-                if not self._in_leg_break:
-                    self._last_flow_state = "takeout_in_progress"
-                    logger.info(f"Board flow state -> TAKEOUT IN PROGRESS (Event: {ev_name})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT_IN_PROGRESS, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-            elif "takeout finish" in ev_name or "takeout_finish" in ev_name or "darts-pulled" in ev_name or "darts_pulled" in ev_name or "motion finish" in ev_name:
-                if not self._in_leg_break:
-                    self._last_flow_state = "takeout_finished"
-                    logger.info(f"Board flow state -> TAKEOUT FINISHED (Event: {ev_name})")
-            elif "takeout" in ev_name or "take out" in ev_name:
-                if not self._in_leg_break and self._last_flow_state != "takeout":
-                    self._last_flow_state = "takeout"
-                    logger.info(f"Board flow state -> TAKEOUT (Event: {ev_name})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-            elif "calibrat" in ev_name:
-                await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=b_id))
-            elif "throw" in ev_name:
-                if not self._in_leg_break:
-                    self._last_flow_state = "throw"
-                    logger.info(f"Board flow state -> THROW (Event: {ev_name})")
-                    await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_name=p_name, player_index=self.active_player_idx, board_id=b_id))
-
-        # 4. Match State & Events
-        if channel == "autodarts.matches":
-            match_id_from_topic = topic.split(".")[0] if "." in topic else None
-            if not match_id_from_topic and not self._active_match_id and topic in (".game-events", ".corrections"):
-                # A new match announces itself with id-less topics before any throw
-                now = time.time()
-                if now - self._start_announced_at > 3.0:
-                    self._start_announced_at = now
-                    logger.info("Match start signalled by id-less match topic")
-                    b_id = next(iter(self.board_states), None)
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=b_id))
-                    # Players are unknown until the first dart, so show player 1's color while waiting
-                    await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_index=0, board_id=b_id))
-                return
-            if match_id_from_topic in self._ended_match_ids:
-                logger.debug(f"Ignoring message for ended match {match_id_from_topic}")
-                return
-            if not self._active_match_id and match_id_from_topic:
-                # Bridge mode never sees the board's match-start message, so the first match topic starts the match
-                self._active_match_id = match_id_from_topic
-                self._reset_match_state()
-                logger.info(f"Match started (first message on match topic): {match_id_from_topic}")
-                await self._subscribe_match(ws, match_id_from_topic)
-                if time.time() - self._start_announced_at > 120.0:
-                    await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=next(iter(self.board_states), None)))
-
-            # Ignore state/events from a stale or different match
-            if self._active_match_id and match_id_from_topic and match_id_from_topic != self._active_match_id:
-                logger.debug(f"Ignoring message for inactive match {match_id_from_topic} (active: {self._active_match_id})")
-                return
-
-            if topic.endswith(".state"):
-                await self._parse_match_state(payload)
-            elif topic.endswith(".events"):
-                ev_name = str(payload.get("event") or payload.get("name") or payload.get("type") or "").lower()
-                p_name = self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
-                if "takeout start" in ev_name or "takeout_start" in ev_name or (("takeout" in ev_name or "motion" in ev_name) and "start" in ev_name):
-                    if not self._in_leg_break:
-                        self._last_flow_state = "takeout_in_progress"
-                        logger.info(f"Match event '{ev_name}' received -> emitting TAKEOUT_IN_PROGRESS")
-                        await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT_IN_PROGRESS, player_name=p_name, player_index=self.active_player_idx, board_id=self.board_id))
-                elif "takeout finish" in ev_name or "takeout_finish" in ev_name or "darts-pulled" in ev_name or "darts_pulled" in ev_name or "motion finish" in ev_name:
-                    if not self._in_leg_break:
-                        self._last_flow_state = "takeout_finished"
-                        logger.info(f"Match event '{ev_name}' received -> TAKEOUT FINISHED")
-                elif "takeout" in ev_name or "take out" in ev_name:
-                    if not self._in_leg_break and self._last_flow_state != "takeout":
-                        self._last_flow_state = "takeout"
-                        logger.info(f"Match event '{ev_name}' received -> emitting TAKEOUT")
-                        await self._emit_event(DartEvent(event_type=DartEventType.TAKEOUT, player_name=p_name, player_index=self.active_player_idx, board_id=self.board_id))
-                elif "calibrat" in ev_name:
-                    logger.info(f"Match event '{ev_name}' received -> emitting CALIBRATING")
-                    await self._emit_event(DartEvent(event_type=DartEventType.CALIBRATING, board_id=self.board_id))
-                elif "throw" in ev_name:
-                    if not self._in_leg_break:
-                        logger.info(f"Match event '{ev_name}' received -> emitting THROW")
-                        await self._emit_event(DartEvent(event_type=DartEventType.THROW, player_name=p_name, player_index=self.active_player_idx, board_id=self.board_id))
-                elif ev_name == "180" and not self._last_180_fired:
-                    self._last_180_fired = True
-                    await self._emit_event(DartEvent(event_type=DartEventType.SCORE_180, score=180, board_id=self.board_id))
-                elif ev_name in ["bust", "busted", "miss", "outside"] and not self._last_bust_fired:
-                    self._last_bust_fired = True
-                    logger.info(f"Match event '{ev_name}' received -> emitting BUST")
-                    await self._emit_event(DartEvent(event_type=DartEventType.BUST, score=0, multiplier=0, segment_name="Miss", board_id=self.board_id))
-                elif ev_name in ["leg-won", "leg_won", "leg", "checkout"]:
-                    if not self._last_match_finished:
-                        logger.info(f"Match event '{ev_name}' received -> emitting LEG_WON")
-                        p_num = payload.get("player")
-                        p_name = self.current_players[p_num] if isinstance(p_num, int) and 0 <= p_num < len(self.current_players) else None
-                        await self._emit_leg_won(player_name=p_name, player_idx=p_num)
-                elif ev_name in ["match-won", "match_won", "game-won", "game_won", "winner"]:
-                    logger.info(f"Match event '{ev_name}' received -> emitting MATCH_WON")
-                    winner = payload.get("winner") or payload.get("player")
-                    if winner is not None and str(winner) != "-1":
-                        await self._emit_match_won(winner=winner)
-                elif ev_name in ["finish", "finished", "abort", "aborted", "end", "ended", "cancel", "cancelled", "canceled", "delete", "deleted", "stop"]:
-                    logger.info(f"Match event '{ev_name}' received")
-                    if ev_name in ["finish", "finished", "end", "ended"] and not self._last_match_finished:
-                        winner = payload.get("winner") or payload.get("player")
-                        if winner is not None and str(winner) != "-1":
-                            self._last_match_finished = True
-                            self._in_leg_break = True
-                            await self._emit_match_won(winner=winner)
-                    if ev_name in ["abort", "aborted", "delete", "deleted", "stop", "cancel", "cancelled", "canceled"]:
-                        self._active_match_id = None
-                        self._reset_match_state()
-                        await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=self.board_id))
 
     def _extract_and_set_players(self, state_or_players: Any):
         if not state_or_players:
             return
-        
+
         extracted: List[str] = []
-        
+
         def add_name(val):
             if isinstance(val, str):
                 s = val.strip()
                 if s and s not in extracted:
                     extracted.append(s)
             elif isinstance(val, dict):
-                n = (
-                    val.get("name") or 
-                    val.get("username") or 
-                    val.get("userName") or 
-                    val.get("nickname") or 
-                    val.get("alias") or 
-                    val.get("displayName")
-                )
-                if n and isinstance(n, str) and n.strip():
-                    if n.strip() not in extracted:
-                        extracted.append(n.strip())
+                name = next((v for v in map(val.get, PLAYER_NAME_KEYS) if v), None)
+                if isinstance(name, str) and name.strip():
+                    if name.strip() not in extracted:
+                        extracted.append(name.strip())
                     return
-                user_obj = val.get("user")
-                if isinstance(user_obj, dict):
-                    un = user_obj.get("name") or user_obj.get("username")
-                    if un and isinstance(un, str) and un.strip() and un.strip() not in extracted:
-                        extracted.append(un.strip())
-                        return
-                elif isinstance(user_obj, str) and user_obj.strip() and user_obj.strip() not in extracted:
-                    extracted.append(user_obj.strip())
+                # Else the user's name; a name already known falls through to the nested player lists
+                user = val.get("user")
+                user_name = (user.get("name") or user.get("username")) if isinstance(user, dict) else user
+                if isinstance(user_name, str) and user_name.strip() and user_name.strip() not in extracted:
+                    extracted.append(user_name.strip())
                     return
 
-                for sub_key in ["players", "members", "participants"]:
+                for sub_key in ("players", "members", "participants"):
                     sub_list = val.get(sub_key)
                     if isinstance(sub_list, list):
                         for sub in sub_list:
@@ -697,19 +716,18 @@ class AutodartsClient:
             if isinstance(p_idx, int):
                 self.active_player_idx = p_idx
 
-            for key in ["players", "participants", "playerNames", "users", "teams", "roster"]:
+            for key in ("players", "participants", "playerNames", "users", "teams", "roster"):
                 item_list = state_or_players.get(key)
                 if isinstance(item_list, list):
                     for item in item_list:
                         add_name(item)
-            
+
             turns = state_or_players.get("turns")
             if isinstance(turns, list):
-                for t in turns:
-                    if isinstance(t, dict):
-                        add_name(t.get("player"))
-                        add_name(t.get("playerName"))
-                        add_name(t.get("user"))
+                for turn in turns:
+                    if isinstance(turn, dict):
+                        for key in ("player", "playerName", "user"):
+                            add_name(turn.get(key))
         elif isinstance(state_or_players, list):
             for item in state_or_players:
                 add_name(item)
@@ -791,13 +809,8 @@ class AutodartsClient:
     @staticmethod
     def _read_throw(last_throw: dict) -> Tuple[int, int, str]:
         """(score, multiplier, label) of a throw, from whichever of the segment, score and bed fields the state has."""
-        # Extract segment info
         seg = last_throw.get("segment")
-        seg_name = ""
-        seg_number = None
-        seg_mult = None
-        seg_bed = ""
-
+        seg_name, seg_number, seg_mult, seg_bed = "", None, None, ""
         if isinstance(seg, dict):
             seg_name = str(seg.get("name") or "").strip()
             seg_number = seg.get("number")
@@ -808,61 +821,22 @@ class AutodartsClient:
         elif isinstance(seg, (int, float)):
             seg_number = int(seg)
 
-        # Extract raw throw score and multiplier
-        raw_score = last_throw.get("score")
-        raw_points = last_throw.get("points")
-        raw_mult = last_throw.get("multiplier")
+        # Score number (1..20, 25, 50, 0) and multiplier (0..3): the first of the fields that is a number
+        score = _first_number(seg_number, last_throw.get("score"), last_throw.get("points"), default=0)
+        mult = _first_number(seg_mult, last_throw.get("multiplier"), default=_BED_MULTIPLIERS.get(seg_bed, 1))
 
-        # Compute score number (1..20, 25, 50, 0)
-        score = 0
-        if seg_number is not None and isinstance(seg_number, (int, float)):
-            score = int(seg_number)
-        elif raw_score is not None and isinstance(raw_score, (int, float)):
-            score = int(raw_score)
-        elif raw_points is not None and isinstance(raw_points, (int, float)):
-            score = int(raw_points)
-
-        # Compute multiplier (0, 1, 2, 3)
-        mult = 1
-        if seg_mult is not None and isinstance(seg_mult, (int, float)):
-            mult = int(seg_mult)
-        elif raw_mult is not None and isinstance(raw_mult, (int, float)):
-            mult = int(raw_mult)
-        elif seg_bed == "triple":
-            mult = 3
-        elif seg_bed == "double":
-            mult = 2
-        elif seg_bed == "single":
-            mult = 1
-        elif seg_bed in ["outside", "miss", "off"]:
-            mult = 0
-
-        # Parse segment name string if available (e.g. "T20", "D16", "S5", "Bull", "25", "Outside", "Miss")
+        # A segment name ("T20", "D16", "S5", "Bull", "25", "Outside", "Miss" ...) has the last word
         u_name = seg_name.upper()
-        if u_name.startswith("T") and len(u_name) > 1 and u_name[1:].isdigit():
-            mult = 3
-            score = int(u_name[1:])
-        elif u_name.startswith("D") and len(u_name) > 1 and u_name[1:].isdigit():
-            mult = 2
-            score = int(u_name[1:])
-        elif u_name.startswith("S") and len(u_name) > 1 and u_name[1:].isdigit():
-            mult = 1
-            score = int(u_name[1:])
-        elif u_name in ["BULL", "DBULL", "DOUBLE BULL", "DOUBLE_BULL", "BULLSEYE", "50"]:
-            mult = 2
-            score = 25
-            seg_name = "Bull"
-        elif u_name in ["25", "SBULL", "SINGLE BULL", "SINGLE_BULL", "OUTER BULL"]:
-            mult = 1
-            score = 25
-            seg_name = "25"
-        elif u_name in ["MISS", "OUTSIDE", "OFF", "0", "NONE"]:
-            mult = 0
-            score = 0
-            if not seg_name:
-                seg_name = "Miss"
+        ring = _RING_MULTIPLIERS.get(u_name[:1])
+        if ring and u_name[1:].isdigit():
+            mult, score = ring, int(u_name[1:])
+        elif u_name in _BULL_NAMES:
+            mult, score, seg_name = 2, 25, "Bull"
+        elif u_name in _OUTER_BULL_NAMES:
+            mult, score, seg_name = 1, 25, "25"
+        elif u_name in _MISS_NAMES:
+            mult, score = 0, 0
 
-        # Normalize seg_label notation
         if seg_name:
             seg_label = seg_name
         elif score == 0 or mult == 0:
@@ -871,14 +845,9 @@ class AutodartsClient:
             seg_label = "Bull"
         elif score == 25 and mult == 1:
             seg_label = "25"
-        elif mult == 3:
-            seg_label = f"T{score}"
-        elif mult == 2:
-            seg_label = f"D{score}"
-        elif mult == 1:
-            seg_label = f"S{score}"
         else:
-            seg_label = str(score)
+            prefix = _RING_PREFIXES.get(mult)
+            seg_label = f"{prefix}{score}" if prefix else str(score)
         return score, mult, seg_label
 
     async def _emit_throw_events(self, last_turn: dict, last_throw: dict, throws: list, throw_id: str,
@@ -1018,14 +987,9 @@ class AutodartsClient:
         self.remember_match_state(state)
         # Check if match was aborted / cancelled / deleted / stopped
         status_val = str(state.get("status", "")).lower()
-        is_match_aborted = self._is_aborted(state, status_val)
-        if is_match_aborted:
+        if self._is_aborted(state, status_val):
             logger.info(f"Match {self._active_match_id} state reported aborted/cancelled (status: {status_val}) -> emitting GAME_IDLE")
-            self._active_match_id = None
-            self._reset_match_state()
-            self._in_leg_break = False
-            self._last_flow_state = "idle"
-            await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=self.board_id))
+            await self._end_match(self.board_id, flow_state="idle")
             return
 
         # Extract player names (including local players and guests)
@@ -1043,117 +1007,108 @@ class AutodartsClient:
             await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=self.board_id))
 
         turns = state.get("turns", [])
-
-        # Check Turns & Throws
         if not isinstance(turns, list):
             turns = []
-
-        # Determine composite turn key (handles empty turns at match/leg start as well as turn transitions)
-        if turns:
-            last_turn = turns[-1]
-            raw_turn_id = str(last_turn.get("id") or f"turn_{len(turns)}")
-            turn_key = f"{raw_turn_id}_p{self.active_player_idx}"
-        else:
-            turn_key = f"turn_0_p{self.active_player_idx}"
-
-        # Detect Turn Change transition (including initial player at fresh match/leg start)
-        if not self._last_match_finished and turn_key != self._last_turn_id:
-            # Reset per-turn flags for the fresh turn
-            self._last_180_fired = False
-            self._last_bust_fired = False
-
-            # When a new turn begins, clear any active leg break celebration
-            self._in_leg_break = False
-
-            player_name = self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
-
-            logger.info(f"Active player turn transition detected (turn_key='{turn_key}', player_idx={self.active_player_idx}, name='{player_name}') -> dispatching THROW")
-            # Immediately dispatch THROW for the active player's turn color baseline
-            await self._emit_event(DartEvent(
-                event_type=DartEventType.THROW,
-                player_name=player_name,
-                player_index=self.active_player_idx,
-                board_id=self.board_id
-            ))
-
-            self._last_turn_id = turn_key
-
-        if turns:
-            last_turn = turns[-1]
-            turn_id = str(last_turn.get("id", f"turn_{len(turns)}"))
-            throws = last_turn.get("throws", [])
-            if throws:
-                last_throw = throws[-1]
-                throw_id = str(last_throw.get("id", f"{turn_id}_{len(throws)}"))
-                if throw_id != self._last_throw_id:
-                    self._last_throw_id = throw_id
-                    self._in_leg_break = False
-                    score, mult, seg_label = self._read_throw(last_throw)
-
-                    await self._emit_throw_events(last_turn, last_throw, throws, throw_id, score, mult, seg_label)
+        await self._check_turn_change(turns)
+        await self._check_new_throw(turns)
 
         if is_bull_off:
             # After the deciding dart's own hit effect, which arrives in the same message
             await self._check_bull_off_winner(state)
             return
 
+        await self._check_match_result(state, status_val)
+        await self._check_turn_over(turns)
+
+    async def _check_turn_change(self, turns: list) -> None:
+        """A new turn (also the first one at a match or leg start): THROW in the active player's color."""
+        # Composite turn key, so empty turns at a match or leg start count as well as turn transitions
+        if turns:
+            raw_turn_id = str(turns[-1].get("id") or f"turn_{len(turns)}")
+            turn_key = f"{raw_turn_id}_p{self.active_player_idx}"
+        else:
+            turn_key = f"turn_0_p{self.active_player_idx}"
+        if self._last_match_finished or turn_key == self._last_turn_id:
+            return
+
+        # A fresh turn: reset the per-turn flags and end any leg break celebration
+        self._last_180_fired = False
+        self._last_bust_fired = False
+        self._in_leg_break = False
+        player_name = self._current_player()
+        logger.info(f"Active player turn transition detected (turn_key='{turn_key}', player_idx={self.active_player_idx}, name='{player_name}') -> dispatching THROW")
+        # The active player's turn color is the baseline for the turn
+        await self._emit_player_event(DartEventType.THROW, player_name, self.board_id)
+        self._last_turn_id = turn_key
+
+    async def _check_new_throw(self, turns: list) -> None:
+        """The hit events for a dart that was not seen before."""
+        if not turns:
+            return
+        last_turn = turns[-1]
+        turn_id = str(last_turn.get("id", f"turn_{len(turns)}"))
+        throws = last_turn.get("throws", [])
+        if not throws:
+            return
+        last_throw = throws[-1]
+        throw_id = str(last_throw.get("id", f"{turn_id}_{len(throws)}"))
+        if throw_id == self._last_throw_id:
+            return
+        self._last_throw_id = throw_id
+        self._in_leg_break = False
+        score, mult, seg_label = self._read_throw(last_throw)
+        await self._emit_throw_events(last_turn, last_throw, throws, throw_id, score, mult, seg_label)
+
+    async def _check_match_result(self, state: dict, status_val: str) -> None:
+        """MATCH_WON once the match is decided; LEG_WON when a leg before the last one is won."""
         total_legs, has_leg_info, player_leg_counts = self._count_legs(state)
         legs_to_win = self._legs_to_win(state)
 
-        # Check if any player reached legs_to_win (must have won at least 1 leg)
+        # A player who reached legs_to_win (and won at least one leg) has won the match
         winning_player_idx = None
-        if legs_to_win and player_leg_counts:
-            for idx, p_l in enumerate(player_leg_counts):
-                if p_l > 0 and p_l >= legs_to_win:
-                    winning_player_idx = idx
-                    break
+        if legs_to_win:
+            winning_player_idx = next((i for i, legs in enumerate(player_leg_counts) if legs > 0 and legs >= legs_to_win), None)
 
         raw_winner, has_explicit_winner = self._explicit_winner(state)
-
+        match = state.get("match")
         is_match_finished = (
             state.get("finished") is True
             or state.get("isFinished") is True
-            or str(state.get("status", "")).lower() in ["finished", "ended", "completed", "won"]
-            or (isinstance(state.get("match"), dict) and state.get("match", {}).get("finished") is True)
+            or status_val in ("finished", "ended", "completed", "won")
+            or (isinstance(match, dict) and match.get("finished") is True)
             or (has_explicit_winner and state.get("finished") is not False)
-            or (winning_player_idx is not None)
+            or winning_player_idx is not None
         )
 
         if is_match_finished and not self._last_match_finished:
             self._last_match_finished = True
             self._in_leg_break = True
             self._last_total_legs_won = total_legs
-            if raw_winner is None and winning_player_idx is not None:
-                raw_winner = winning_player_idx
-            await self._emit_match_won(winner=raw_winner)
-
-        # Detect Leg Win Transition ONLY for non-final intermediate legs
+            await self._emit_match_won(winner=raw_winner if raw_winner is not None else winning_player_idx)
+        # Leg wins count only for the legs before the deciding one
         elif has_leg_info and not self._last_match_finished:
-            if self._last_total_legs_won is not None and total_legs > self._last_total_legs_won:
+            if self._last_total_legs_won is None:
+                self._last_total_legs_won = total_legs
+            elif total_legs > self._last_total_legs_won:
                 self._last_total_legs_won = total_legs
                 leg_winner = state.get("gameWinner")
                 if isinstance(leg_winner, int) and 0 <= leg_winner < len(self.current_players):
                     await self._emit_leg_won(player_name=self.current_players[leg_winner], player_idx=leg_winner)
                 else:
                     await self._emit_leg_won()
-            elif self._last_total_legs_won is None:
-                self._last_total_legs_won = total_legs
 
-        # Check Turn Completion -> Transition to TAKEOUT (unless celebrating leg or match won)
-        if turns and isinstance(turns, list) and not self._in_leg_break and not self._last_match_finished:
-            last_turn = turns[-1]
-            throws = last_turn.get("throws", [])
-            is_turn_over = (len(throws) >= 3) or (last_turn.get("busted") is True or last_turn.get("bust") is True)
-            if is_turn_over and self._last_flow_state != "takeout" and self._last_flow_state != "takeout_in_progress":
-                self._last_flow_state = "takeout"
-                p_name = self.current_players[self.active_player_idx] if self.active_player_idx < len(self.current_players) else None
-                logger.info(f"Turn {self._last_turn_id} completed ({len(throws)} darts) -> transitioning to TAKEOUT")
-                await self._emit_event(DartEvent(
-                    event_type=DartEventType.TAKEOUT,
-                    player_name=p_name,
-                    player_index=self.active_player_idx,
-                    board_id=self.board_id
-                ))
+    async def _check_turn_over(self, turns: list) -> None:
+        """Three darts or a bust end the turn: TAKEOUT, unless a leg or match win is celebrated."""
+        if not turns or self._in_leg_break or self._last_match_finished:
+            return
+        last_turn = turns[-1]
+        throws = last_turn.get("throws", [])
+        is_turn_over = len(throws) >= 3 or last_turn.get("busted") is True or last_turn.get("bust") is True
+        if is_turn_over and self._last_flow_state not in ("takeout", "takeout_in_progress"):
+            self._last_flow_state = "takeout"
+            p_name = self._current_player()
+            logger.info(f"Turn {self._last_turn_id} completed ({len(throws)} darts) -> transitioning to TAKEOUT")
+            await self._emit_player_event(DartEventType.TAKEOUT, p_name, self.board_id)
 
     async def start_bull_off(self) -> None:
         """The match opens with a bull-off: play its animation now; Game Started follows when the first leg begins."""

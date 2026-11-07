@@ -18,7 +18,7 @@ import re
 from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
 from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
-from core.animations import render_animation_frame, blend_frames
+from core.effects import render_animation_frame, blend_frames
 from core.effects.flow import blend_flow, normalize_options, normalize_transition_style
 from core.effects.flow.renderers import FLOW_RENDERERS
 
@@ -631,10 +631,6 @@ class WLEDDriver:
                 req = urllib.request.Request(f"http://{ip_clean}/json/state", data=body, headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     resp.read()
-
-    def set_target_ips(self, ips: List[str]):
-        """Update list of active target WLED IPs for simultaneous broadcast."""
-        self.target_ips = [ip.strip() for ip in ips if ip and ip.strip()]
 
     def _get_socket(self) -> socket.socket:
         if self._sock is None:
@@ -1516,28 +1512,8 @@ class WLEDDriver:
             engine.stop()
             self._master_broadcast_task = None
 
-    def send_raw_frame(self, rgb_bytes: bytes) -> None:
-        """
-        Send a single raw RGB byte frame immediately over UDP to all targets and tap into WebSocket.
-        """
-        packets = self._create_udp_packets(rgb_bytes, timeout_sec=2)
-        if self._frame_tap_callback:
-            try:
-                self._frame_tap_callback(rgb_bytes)
-            except Exception:
-                pass
-        sock = self._get_socket()
-        port = self.config.udp_port
-        ips = [ip for ip in (self.target_ips if self.target_ips else [self.config.ip]) if ip]
-        for ip in ips:
-            try:
-                for packet in packets:
-                    sock.sendto(packet, (ip, port))
-            except Exception:
-                pass
-
     # -------------------------------------------------------------------------
-    # Frame Renderers (Delegated to core.animations)
+    # Frame Renderers (Delegated to core.effects)
     # -------------------------------------------------------------------------
     def _resolve_effective_config(
         self,

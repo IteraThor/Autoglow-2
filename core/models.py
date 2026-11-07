@@ -5,7 +5,7 @@ Clean, typed dataclasses for game events, device configuration, effects, and pro
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Collection, Dict, List, Optional, Set, Tuple
 
 
 def _safe_int(val: Any, default: int = 0) -> int:
@@ -125,7 +125,6 @@ class LightingMode(str, Enum):
 
 
 class DartEventType(str, Enum):
-    DART_THROWN = "dart_thrown"
     SCORE_180 = "180"
     TRIPLE = "triple"
     DOUBLE = "double"
@@ -134,7 +133,6 @@ class DartEventType(str, Enum):
     BUST = "bust"
     LEG_WON = "leg_won"
     MATCH_WON = "match_won"
-    TURN_CHANGE = "turn_change"
     GAME_START = "game_start"
     BULL_OFF_START = "bull_off_start"
     BULL_OFF_WON = "bull_off_won"
@@ -515,6 +513,14 @@ class DartEvent:
     board_id: Optional[str] = None
 
 
+def _slot_picks(slot: PlayerSlotConfig, name: str, match_type: NameMatchType) -> bool:
+    """Whether a slot's name filter of the given kind (exact or contains) picks a lower-case player name."""
+    filt = slot.name_filter.strip().lower()
+    if not filt or slot.match_type != match_type:
+        return False
+    return name == filt if match_type == NameMatchType.EXACT else filt in name
+
+
 @dataclass
 class ProfileConfig:
     name: str = "Default"
@@ -548,60 +554,34 @@ class ProfileConfig:
         p_name = player_name.strip().lower() if (player_name and player_name.strip()) else ""
         p_idx = player_index if (player_index is not None and player_index >= 0) else 0
 
-        target_slot: Optional[PlayerSlotConfig] = None
+        def first_pick(name: str, match_type: NameMatchType, skip: Collection[int] = ()) -> Optional[PlayerSlotConfig]:
+            return next((s for s in all_slots if s.id not in skip and _slot_picks(s, name, match_type)), None)
 
-        # Stage 1: Exact Name Match
-        if p_name:
-            for slot in all_slots:
-                filt = slot.name_filter.strip().lower()
-                if filt and slot.match_type == NameMatchType.EXACT and p_name == filt:
-                    target_slot = slot
-                    break
+        def is_named(name: str) -> bool:
+            return any(_slot_picks(s, name, NameMatchType.EXACT) or _slot_picks(s, name, NameMatchType.CONTAINS) for s in all_slots)
 
-        # Stage 2: Contains Name Match
-        if not target_slot and p_name:
-            for slot in all_slots:
-                filt = slot.name_filter.strip().lower()
-                if filt and slot.match_type == NameMatchType.CONTAINS and filt in p_name:
-                    target_slot = slot
-                    break
+        # Stages 1 and 2: Exact, then Contains Name Match
+        target_slot = (first_pick(p_name, NameMatchType.EXACT) or first_pick(p_name, NameMatchType.CONTAINS)) if p_name else None
 
         # Stage 3: Dynamic Slot Allocation for Unnamed Players in Match
         if not target_slot and match_players:
-            claimed_slot_ids = set()
+            claimed_slot_ids: Set[int] = set()
             for m_p in match_players:
                 m_name = m_p.strip().lower() if m_p else ""
                 if not m_name:
                     continue
-                # Check exact
-                for slot in all_slots:
-                    filt = slot.name_filter.strip().lower()
-                    if filt and slot.match_type == NameMatchType.EXACT and m_name == filt:
-                        claimed_slot_ids.add(slot.id)
-                        break
-                # Check contains if not yet claimed
-                for slot in all_slots:
-                    if slot.id in claimed_slot_ids:
-                        continue
-                    filt = slot.name_filter.strip().lower()
-                    if filt and slot.match_type == NameMatchType.CONTAINS and filt in m_name:
-                        claimed_slot_ids.add(slot.id)
-                        break
+                # A named player claims the first slot naming it exactly, and the first free one containing it
+                exact = first_pick(m_name, NameMatchType.EXACT)
+                if exact:
+                    claimed_slot_ids.add(exact.id)
+                contains = first_pick(m_name, NameMatchType.CONTAINS, skip=claimed_slot_ids)
+                if contains:
+                    claimed_slot_ids.add(contains.id)
 
             unallocated_slots = [s for s in all_slots if s.id not in claimed_slot_ids]
             if unallocated_slots:
-                unnamed_rank = 0
-                for i in range(min(p_idx, len(match_players))):
-                    prev_name = match_players[i].strip().lower() if match_players[i] else ""
-                    is_named = any(
-                        s.name_filter.strip().lower() and (
-                            (s.match_type == NameMatchType.EXACT and prev_name == s.name_filter.strip().lower()) or
-                            (s.match_type == NameMatchType.CONTAINS and s.name_filter.strip().lower() in prev_name)
-                        )
-                        for s in all_slots
-                    )
-                    if not is_named:
-                        unnamed_rank += 1
+                # Rank of the player among the unnamed players before it in the match
+                unnamed_rank = sum(1 for prev in match_players[:p_idx] if not is_named(prev.strip().lower() if prev else ""))
                 target_slot = unallocated_slots[unnamed_rank % len(unallocated_slots)]
 
         # Stage 4: Index-based slot lookup (Player 1 -> Slot 1)

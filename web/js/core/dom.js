@@ -1,5 +1,6 @@
 // AutoGlow 2 - DOM helpers shared by the core UI modules
 
+// HTML escaping for the ES modules; the classic scripts use window.escapeHtml (web/js/utils.js)
 export function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
