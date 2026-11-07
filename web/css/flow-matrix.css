@@ -14,33 +14,31 @@
   display: none;
 }
 
-/* --- Segment bar: one line; each GPIO output is one connected bar of its segments --- */
+/* --- Segment bar: a row per controller; each GPIO output is one connected bar of its segments --- */
 .fm-segbar {
   --seg-z0: #22d3ee;  /* zone colours, as on the controller page (--wz-z*) */
   --seg-z1: #f59e0b;
   --seg-z2: #a855f7;
   --seg-z3: #22c55e;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-3);
 }
 
 .fm-segbar-ctl {
+  display: contents;
+}
+
+/* The controller's strips, beside its name (names line up in one column) */
+.fm-segbar-outs {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: var(--space-2);
 }
 
-/* A thin line between controllers */
-.fm-segbar-ctl + .fm-segbar-ctl {
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.fm-segbar-ctl.is-offline {
+.fm-segbar-ctl.is-offline > * {
   opacity: 0.45;
 }
 
@@ -100,6 +98,7 @@
 }
 
 .fm-segbar-empty {
+  grid-column: 1 / -1;
   margin: var(--space-1) 0;
   color: var(--text-secondary);
 }

@@ -1299,7 +1299,7 @@ function segButton(dev, seg, label, cur, tone) {
   }, label);
 }
 
-// One line: each controller's name, then each GPIO output as one connected bar of its segments. Offline controllers
+// A row per controller: its name, then each GPIO output as one connected bar of its segments. Offline controllers
 // show dimmed when Settings asks for them.
 function segmentBar() {
   const o = page.overview;
@@ -1314,10 +1314,10 @@ function segmentBar() {
     !shown.length && h('span', { class: 'fm-segbar-empty' }, 'No controller online'),
     ...shown.map(dev => h('div', { class: `fm-segbar-ctl${isOnline(dev.ip) ? '' : ' is-offline'}` },
       h('span', { class: 'fm-segbar-dev', title: isOnline(dev.ip) ? dev.ip : `${dev.ip} · offline` }, dev.name),
-      ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
+      h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
         out.strip && h('span', { class: 'fm-segbar-name' }, out.strip),
         ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur,
-          out.segs.length > 1 ? String(i % 4) : 'whole')))))));
+          out.segs.length > 1 ? String(i % 4) : 'whole'))))))));
 }
 
 function lightsOption(p) {
