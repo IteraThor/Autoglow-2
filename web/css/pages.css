@@ -785,10 +785,6 @@ input.led-summary-seg-name:focus {
  * The controller on the left, one wire per GPIO pin, each strip with its zones sized by LED count.
  * ----------------------------------------------------------------------------- */
 .wz {
-  --wz-z0: #22d3ee;
-  --wz-z1: #f59e0b;
-  --wz-z2: #a855f7;
-  --wz-z3: #22c55e;
   --wz-wire: var(--border-strong, #3a3d47);
   display: grid;
   grid-template-columns: 136px minmax(0, 1fr);
@@ -954,10 +950,14 @@ input.led-summary-seg-name:focus {
   min-width: 150px;
 }
 
-.wz-zone[data-tone="0"] { --wz-tone: var(--wz-z0); }
-.wz-zone[data-tone="1"] { --wz-tone: var(--wz-z1); }
-.wz-zone[data-tone="2"] { --wz-tone: var(--wz-z2); }
-.wz-zone[data-tone="3"] { --wz-tone: var(--wz-z3); }
+.wz-zone[data-tone="0"] { --wz-tone: var(--zone-0); }
+.wz-zone[data-tone="1"] { --wz-tone: var(--zone-1); }
+.wz-zone[data-tone="2"] { --wz-tone: var(--zone-2); }
+.wz-zone[data-tone="3"] { --wz-tone: var(--zone-3); }
+.wz-zone[data-tone="4"] { --wz-tone: var(--zone-4); }
+.wz-zone[data-tone="5"] { --wz-tone: var(--zone-5); }
+.wz-zone[data-tone="6"] { --wz-tone: var(--zone-6); }
+.wz-zone[data-tone="7"] { --wz-tone: var(--zone-7); }
 
 .wz-zone-head {
   display: flex;
@@ -992,12 +992,6 @@ input.led-summary-seg-name:focus {
   font-weight: 700;
 }
 
-.wz-zone[data-tone="whole"] .wz-zone-tag {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-}
-
 .wz-leds {
   display: flex;
   gap: 2px;
@@ -1014,16 +1008,6 @@ input.led-summary-seg-name:focus {
   border-radius: 2px;
   background: var(--wz-tone);
   box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--wz-tone) var(--led-glow-mix), transparent);
-}
-
-.wz-zone[data-tone="whole"] .wz-leds {
-  border-color: var(--border-subtle);
-  background: var(--bg-workspace);
-}
-
-.wz-zone[data-tone="whole"] .wz-led {
-  background: rgba(var(--accent-rgb), 0.75);
-  box-shadow: 0 0 var(--led-glow-blur) color-mix(in srgb, var(--accent-primary) var(--led-glow-mix), transparent);
 }
 
 .wz-range {

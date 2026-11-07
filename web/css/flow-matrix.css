@@ -16,10 +16,6 @@
 
 /* --- Segment bar: a row per controller; each GPIO output is one connected bar of its segments --- */
 .fm-segbar {
-  --seg-z0: #22d3ee;  /* zone colours, as on the controller page (--wz-z*) */
-  --seg-z1: #f59e0b;
-  --seg-z2: #a855f7;
-  --seg-z3: #22c55e;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
@@ -77,10 +73,14 @@
   cursor: pointer;
 }
 
-.fm-segbar-seg[data-tone="0"] { --tone: var(--seg-z0); }
-.fm-segbar-seg[data-tone="1"] { --tone: var(--seg-z1); }
-.fm-segbar-seg[data-tone="2"] { --tone: var(--seg-z2); }
-.fm-segbar-seg[data-tone="3"] { --tone: var(--seg-z3); }
+.fm-segbar-seg[data-tone="0"] { --tone: var(--zone-0); }
+.fm-segbar-seg[data-tone="1"] { --tone: var(--zone-1); }
+.fm-segbar-seg[data-tone="2"] { --tone: var(--zone-2); }
+.fm-segbar-seg[data-tone="3"] { --tone: var(--zone-3); }
+.fm-segbar-seg[data-tone="4"] { --tone: var(--zone-4); }
+.fm-segbar-seg[data-tone="5"] { --tone: var(--zone-5); }
+.fm-segbar-seg[data-tone="6"] { --tone: var(--zone-6); }
+.fm-segbar-seg[data-tone="7"] { --tone: var(--zone-7); }
 
 /* Rounded only at the ends of the bar, so the pieces read as one strip */
 .fm-segbar-out > :first-child { border-radius: 4px 0 0 4px; }

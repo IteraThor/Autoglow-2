@@ -1289,7 +1289,12 @@ function outputs(dev) {
   });
 }
 
-// A segment is one piece of its strip's bar, in the zone colours of the controller page (a whole strip is teal)
+// A segment's colour: its place among the controller's RGB segments, as on the controller page
+function toneOf(dev, seg) {
+  return dev.segments.filter(sg => !sg.light_strip && sg.start < seg.start).length;
+}
+
+// A segment is one piece of its strip's bar, in its colour from the controller page
 function segButton(dev, seg, label, cur, tone) {
   const full = { ...seg, ip: dev.ip, controller: dev.name };
   const on = !!cur && segKey(full) === segKey(cur);
@@ -1316,8 +1321,7 @@ function segmentBar() {
       h('span', { class: 'fm-segbar-dev', title: isOnline(dev.ip) ? dev.ip : `${dev.ip} · offline` }, dev.name),
       h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
         out.strip && h('span', { class: 'fm-segbar-name' }, out.strip),
-        ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur,
-          out.segs.length > 1 ? String(i % 4) : 'whole'))))))));
+        ...out.segs.map(seg => segButton(dev, seg, out.label(seg), cur, String(toneOf(dev, seg) % 8)))))))));
 }
 
 function lightsOption(p) {

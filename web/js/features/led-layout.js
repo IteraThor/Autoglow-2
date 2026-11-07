@@ -105,6 +105,9 @@ export function draftFrom(live, dev) {
   } else {
     segments = [{ id: 0, name: 'RGB strip', start: 0, stop: outputs[0].len, of: 0, on: true, bri: 255 }];
   }
+  // A segment on exactly the same LEDs as an earlier one is a leftover on the controller (core/wled_layout.py)
+  const spans = new Set();
+  segments = segments.filter(s => !spans.has(`${s.start}-${s.stop}`) && spans.add(`${s.start}-${s.stop}`));
 
   const draft = {
     name: cleanName(dev?.name || live?.name || 'WLED Controller'),

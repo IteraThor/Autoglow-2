@@ -230,13 +230,13 @@ function ledCells(count, scale) {
 }
 
 // A whole strip is just its LEDs (name, count and profile are in the strip's header); a zone adds its number,
-// name, profile and LED range
-function zoneBlock(seg, index, whole, scale) {
+// name, profile and LED range. tone: the segment's colour, its place among the controller's RGB segments.
+function zoneBlock(seg, index, whole, scale, tone) {
   const count = seg.stop - seg.start;
   const leds = h('div', { class: 'wz-leds', role: 'img', 'aria-label': `LEDs ${seg.start + 1} to ${seg.stop}` }, ledCells(count, scale));
   const block = whole
-    ? h('div', { class: 'wz-zone', dataset: { tone: 'whole' } }, leds)
-    : h('div', { class: 'wz-zone', dataset: { tone: String(index % 4) } },
+    ? h('div', { class: 'wz-zone', dataset: { tone: String(tone % 8) } }, leds)
+    : h('div', { class: 'wz-zone', dataset: { tone: String(tone % 8) } },
       h('div', { class: 'wz-zone-head' },
         h('span', { class: 'wz-zone-tag', title: `Zone ${index + 1}` }, String(index + 1)),
         segmentNameInput(seg),
@@ -248,7 +248,7 @@ function zoneBlock(seg, index, whole, scale) {
   return block;
 }
 
-function stripCard(hw, busIdx, segs) {
+function stripCard(hw, busIdx, segs, firstTone) {
   const pwm = isPwmOutput(hw);
   const order = COLOR_ORDERS.find(o => o.value === hw.order)?.label;
   // The full technical line stays one hover away
@@ -273,7 +273,7 @@ function stripCard(hw, busIdx, segs) {
   const whole = segs.length <= 1;
   const scale = Math.min(1, LED_CELLS_MAX / Math.max(1, hw.len));
   const zones = segs.length
-    ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale)))
+    ? h('div', { class: 'wz-zones' }, segs.map((seg, i) => zoneBlock(seg, i, whole, scale, firstTone + i)))
     : h('p', { class: 'wz-none' }, 'No segment');
   // A whole strip is one line: name, LEDs, flow. Zones need the room, so they go under the header.
   return h('li', { class: 'wz-row', dataset: { kind: 'rgb' } }, wire,
@@ -345,7 +345,12 @@ function renderLedSummary(body) {
           svg('path', { d: 'M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3' })),
         // IP and WLED version (filled by renderHead); without the wiring they sit in the page head
         page.meta),
-      h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => stripCard(hw, busIdx, layout.segments.filter(seg => seg.busIdx === busIdx))))));
+      h('ul', { class: 'wz-rows' }, layout.outputs.map((hw, busIdx) => {
+        // Segment colours run on across the RGB strips, so no two segments of the controller share one
+        const segs = layout.segments.filter(seg => seg.busIdx === busIdx);
+        const firstTone = layout.segments.filter(seg => !isPwmOutput(layout.outputs[seg.busIdx]) && seg.start < (segs[0]?.start ?? 0)).length;
+        return stripCard(hw, busIdx, segs, firstTone);
+      }))));
   page.ledsActions.replaceChildren(
     h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…'),
     h('button', {

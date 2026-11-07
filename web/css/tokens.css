@@ -28,6 +28,17 @@
   --led-glow-blur: 4px;
   --led-glow-mix: 30%;
 
+  /* Segment colours: each RGB segment of a controller gets the next one, the same on the controller page and in
+     Lighting (by the segment's place among the controller's RGB segments) */
+  --zone-0: #22d3ee;
+  --zone-1: #f59e0b;
+  --zone-2: #a855f7;
+  --zone-3: #22c55e;
+  --zone-4: #ec4899;
+  --zone-5: #3b82f6;
+  --zone-6: #f97316;
+  --zone-7: #84cc16;
+
   --z-banner: 900;
   --z-dialog: 1000;
   --z-toast: 1100;

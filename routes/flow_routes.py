@@ -77,6 +77,7 @@ def _lights(request: web.Request, storage: GameFlowStorageManager) -> List[Dict[
                     "id": sid,
                     "name": _seg_attr(seg, "name", f"Segment {sid}"),
                     "gpio": str(_seg_attr(seg, "gpio", "") or ""),
+                    "start": int(_seg_attr(seg, "start", 0) or 0),
                     "length": int(_seg_attr(seg, "length", 0) or 0),
                     "role": _seg_attr(seg, "role", "dartboard_ring"),
                     "light_strip": pwm,
@@ -85,7 +86,7 @@ def _lights(request: web.Request, storage: GameFlowStorageManager) -> List[Dict[
                     "profile": None if pwm else storage.profile_name_for(dev.ip, sid),
                 })
         else:
-            segs.append({"id": None, "name": "All LEDs", "gpio": "", "length": int(dev.rgb_count or 0), "role": "dartboard_ring",
+            segs.append({"id": None, "name": "All LEDs", "gpio": "", "start": 0, "length": int(dev.rgb_count or 0), "role": "dartboard_ring",
                          "light_strip": False, "clockwise": True, "profile": storage.profile_name_for(dev.ip, None)})
         out.append({"ip": dev.ip, "name": dev.name or dev.ip, "segments": segs})
     return out
