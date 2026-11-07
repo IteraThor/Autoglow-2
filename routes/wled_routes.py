@@ -50,6 +50,19 @@ def _rgb_count(hw_ins) -> int:
     return _safe_int(rgb_hw.get("len"), 45) if rgb_hw else 45
 
 
+def _duplicate_name(names) -> Optional[str]:
+    """The first segment name used twice on one controller (case and spacing ignored), or None."""
+    seen = set()
+    for name in names:
+        key = " ".join(str(name or "").split()).casefold()
+        if not key:
+            continue
+        if key in seen:
+            return str(name).strip()
+        seen.add(key)
+    return None
+
+
 def _segments_from_wled(seg_data: list, hw_ins: Optional[list], previous: list) -> list:
     """
     AutoGlow's segments from a WLED layout. Each segment gets the data pin of the output it sits on, light
@@ -107,6 +120,9 @@ async def handle_wled_update(request: web.Request) -> web.Response:
     hw_ins = data.get("hw_ins")
     state = data.get("state", {})
     seg_data = state.get("seg", []) if isinstance(state, dict) else []
+    taken = _duplicate_name(s.get("n") for s in seg_data if isinstance(s, dict))
+    if taken:
+        raise ValidationError(f"Two segments are called '{taken}'. Give each segment its own name.", field="name")
 
     found = False
     for dev in cfg.devices:
@@ -206,6 +222,11 @@ async def handle_rename_segment(request: web.Request) -> web.Response:
         raise ValidationError("Choose a segment.", field="segment_id")
     if not name:
         raise ValidationError("Give the segment a name (letters, numbers, spaces, - and _).", field="name")
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    dev = next((d for d in cfg.devices if d.ip == ip), None)
+    others = [seg.name for seg in (dev.segments if dev else []) if _safe_int(getattr(seg, "id", None), -1) != seg_id]
+    if _duplicate_name([*others, name]):
+        raise ValidationError(f"Another segment on this controller is already called '{name}'.", field="name")
 
     def apply() -> None:
         WLEDDriver.rename_wled_segment(ip, seg_id, name)
@@ -217,7 +238,6 @@ async def handle_rename_segment(request: web.Request) -> web.Response:
         logger.warning(f"Could not rename segment {seg_id} on {ip}: {e}")
         raise DeviceUnreachable(f"Could not reach the WLED controller at {ip}", field="ip") from e
 
-    cfg = request.app.get("current_app_config") or load_app_config(config_path)
     engine = request.app.get("engine")
     for config in {id(c): c for c in (cfg, getattr(engine, "app_config", None)) if c}.values():
         for dev in config.devices:

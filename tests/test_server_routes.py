@@ -122,6 +122,26 @@ class TestServerRoutes(AioHTTPTestCase):
         self.assertEqual(dev.hw_ins[1]["order"], 1)
 
     @unittest_run_loop
+    async def test_segments_on_one_controller_need_their_own_names(self):
+        payload = {"ip": "192.168.2.215", "hw_ins": [{"pin": [16], "type": 22, "start": 0, "len": 90}],
+                   "state": {"seg": [{"id": 0, "n": "Ring", "start": 0, "stop": 45},
+                                     {"id": 1, "n": "ring ", "start": 45, "stop": 90}]}}
+        with unittest.mock.patch("core.wled_driver.WLEDDriver.apply_wled_mutations") as apply:
+            resp = await self.client.request("POST", "/api/wled/update", json=payload)
+            self.assertEqual(resp.status, 400, "same name, other case and spacing")
+            apply.assert_not_called()
+        self.assertFalse(any(d.ip == "192.168.2.215" for d in self.app["current_app_config"].devices))
+
+        self.app["current_app_config"].devices.append(DeviceConfig(ip="192.168.2.215", segments=[
+            SegmentConfig(id=0, name="Ring"), SegmentConfig(id=1, name="Shelf")]))
+        with unittest.mock.patch("core.wled_driver.WLEDDriver.rename_wled_segment") as rename:
+            resp = await self.client.request("POST", "/api/wled/segment-name", json={"ip": "192.168.2.215", "segment_id": 1, "name": "RING"})
+            self.assertEqual(resp.status, 400)
+            rename.assert_not_called()
+            resp = await self.client.request("POST", "/api/wled/segment-name", json={"ip": "192.168.2.215", "segment_id": 0, "name": "Ring"})
+            self.assertEqual(resp.status, 200, "keeping its own name is fine")
+
+    @unittest_run_loop
     async def test_wled_setup_preview_writes_nothing_to_config(self):
         payload = {"ip": "192.168.2.215", "hw_ins": [{"pin": [16], "type": 22, "start": 0, "len": 45}], "state": {"on": True}}
         with unittest.mock.patch("core.wled_driver.WLEDDriver.apply_setup_preview") as preview:

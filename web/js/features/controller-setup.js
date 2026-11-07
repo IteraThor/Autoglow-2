@@ -4,10 +4,10 @@
 // controller's own layout back.
 
 import { api } from '../core/api.js';
-import { h } from '../core/dom.js';
+import { clearFieldError, h, showFieldError } from '../core/dom.js';
 import { appStore } from '../core/store.js';
 import { toast } from '../core/toast.js';
-import { isPwmOutput as isPwmBus } from './led-layout.js';
+import { isPwmOutput as isPwmBus, nameKey } from './led-layout.js';
 
 const PWM_WHITE = 41;
 const WS281X = 22;
@@ -772,7 +772,19 @@ export async function runControllerSetup(ip, live) {
           class: 'ui-input sf-name-input', type: 'text', maxlength: NAME_MAX, value: o.name, placeholder: plainLabel(plan, o),
           'aria-label': 'Strip name', autocomplete: 'off'
         });
-        const ok = () => finish(true);
+        // Every segment on the controller needs its own name, zones ("<name> - 2") and other strips included
+        const ok = () => {
+          const before = o.name;
+          o.name = input.value.trim().slice(0, NAME_MAX);
+          const keys = layout(plan).map(e => nameKey(e.seg.n));
+          o.name = before;
+          if (keys.some((k, i) => keys.indexOf(k) !== i)) {
+            showFieldError(input, 'Another strip on this controller already has this name.');
+            return;
+          }
+          clearFieldError(input);
+          finish(true);
+        };
         const finish = result => {
           if (result) o.name = input.value.trim().slice(0, NAME_MAX);
           pop.close();

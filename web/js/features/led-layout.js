@@ -182,6 +182,20 @@ export function duplicatePins(draft) {
   return new Set(pins.filter((p, i) => pins.indexOf(p) !== i));
 }
 
+// Segment names used more than once on the controller (case and spacing ignored), as typed the second time
+export const nameKey = name => String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+export function duplicateNames(draft) {
+  const seen = new Set();
+  const dupes = new Set();
+  for (const seg of draft.segments) {
+    const key = nameKey(seg.name);
+    if (!key) continue;
+    if (seen.has(key)) dupes.add(key);
+    seen.add(key);
+  }
+  return dupes;
+}
+
 export function setOutputType(draft, busIdx, type) {
   const hw = draft.outputs[busIdx];
   if (!hw) return;

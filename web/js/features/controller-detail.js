@@ -13,8 +13,8 @@ import { runControllerSetup } from './controller-setup.js';
 import { createIdleEditor } from './idle-lighting.js';
 import { applySetup, devices, saveDevices } from './controllers.js';
 import {
-  COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicatePins, isPwmOutput, outputTypeLabel, pinOf,
-  removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
+  COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicateNames, duplicatePins, isPwmOutput, nameKey,
+  outputTypeLabel, pinOf, removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
 } from './led-layout.js';
 import { confirmLeave } from './lighting-guard.js';
 
@@ -143,6 +143,11 @@ async function renameSegment(seg, input) {
   }
   if (name === seg.name) {
     input.value = name;
+    return;
+  }
+  if (page.layout.segments.some(s => s.id !== seg.id && nameKey(s.name) === nameKey(name))) {
+    toast.error(`Another segment on this controller is already called '${name}'.`);
+    input.value = seg.name;
     return;
   }
   input.disabled = true;
@@ -361,14 +366,16 @@ async function openLedEditor() {
   renderLeds(page.bodies.leds);
 }
 
-function segName(seg) {
+function segName(seg, dupes) {
   const input = h('input', {
     type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
+    'aria-invalid': dupes.has(nameKey(seg.name)) ? 'true' : null, title: dupes.has(nameKey(seg.name)) ? 'Another segment has this name' : null,
     oninput: () => {
       seg.name = cleanName(input.value);
       if (seg.name !== input.value) input.value = seg.name;
       sync();
-    }
+    },
+    onchange: () => renderLeds(page.bodies.leds)
   });
   return input;
 }
@@ -394,6 +401,7 @@ function renderLeds(body) {
     sync();
   };
   const dupes = duplicatePins(layout);
+  const names = duplicateNames(layout);
 
   const outputCards = layout.outputs.map((hw, busIdx) => {
     const pwm = isPwmOutput(hw);
@@ -423,7 +431,7 @@ function renderLeds(body) {
       }, 'Remove output'));
 
     const rows = pwm ? [] : own.map(({ seg, segIdx }) => {
-      const nameInput = segName(seg);
+      const nameInput = segName(seg, names);
       const removable = own.length > 1;
       const first = numberInput(seg.start + 1, { min: 1, 'aria-label': 'First LED' });
       const last = numberInput(seg.stop, { min: 1, 'aria-label': 'Last LED' });
@@ -566,6 +574,15 @@ async function save() {
   if (layout && duplicatePins(layout).size) {
     toast.error('Two outputs use the same GPIO pin. Give each output its own pin.');
     // The summary does not show the pin error, so open the editor where it can be fixed
+    if (!page.ledsAdvanced) {
+      page.ledsAdvanced = true;
+      renderLeds(page.bodies.leds);
+    }
+    page.sections.leds.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return false;
+  }
+  if (layout && duplicateNames(layout).size) {
+    toast.error('Two segments have the same name. Give each segment its own name.');
     if (!page.ledsAdvanced) {
       page.ledsAdvanced = true;
       renderLeds(page.bodies.leds);
