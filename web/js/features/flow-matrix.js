@@ -137,14 +137,6 @@ function savedSeg() {
   try { return localStorage.getItem(SEG_KEY); } catch (err) { return null; }
 }
 
-// Segments with the same lights share a dot colour in the segment bar
-const PROFILE_COLOURS = ['#14b8a6', '#a78bfa', '#f97316', '#ec4899', '#38bdf8', '#eab308', '#22c55e', '#f43f5e'];
-
-function profileColour(name) {
-  const i = page.overview.profiles.findIndex(p => p.name === name);
-  return PROFILE_COLOURS[Math.max(0, i) % PROFILE_COLOURS.length];
-}
-
 // --- mini LED strips ---------------------------------------------------------
 
 const strips = new Map();
@@ -1292,19 +1284,18 @@ function outputs(dev) {
   });
 }
 
-function segButton(dev, seg, label, cur, linked) {
+// A segment is one piece of its strip's bar, in the zone colours of the controller page (a whole strip is teal)
+function segButton(dev, seg, label, cur, linked, tone) {
   const full = { ...seg, ip: dev.ip, controller: dev.name };
   const on = !!cur && segKey(full) === segKey(cur);
-  const btn = h('button', {
+  return h('button', {
     type: 'button', class: `fm-segbar-seg${on ? ' is-on' : ''}${!on && linked ? ' is-linked' : ''}`, 'aria-pressed': String(on),
-    title: `${dev.name} · ${seg.name} · plays '${seg.profile}'`, onclick: () => selectSegment(full)
-  }, h('span', { class: 'fm-segbar-dot', 'aria-hidden': 'true' }), label);
-  btn.style.setProperty('--seg-colour', profileColour(seg.profile));
-  return btn;
+    dataset: { tone }, title: `${dev.name} · ${seg.name} · ${seg.gpio || ''} · plays '${seg.profile}'`, onclick: () => selectSegment(full)
+  }, label);
 }
 
-// Every online controller in one slim block: its name, then each GPIO output as a group of segment buttons.
-// Offline controllers show on request, dimmed.
+// One line: each controller's name, then each GPIO output as one connected bar of its segments. Offline controllers
+// show (dimmed) behind the small button at the end.
 function segmentBar() {
   const o = page.overview;
   if (!allSegments().length) {
@@ -1316,17 +1307,19 @@ function segmentBar() {
   const devs = o.lights.filter(dev => outputs(dev).length);
   const offline = devs.filter(dev => !isOnline(dev.ip)).length;
   const shown = devs.filter(dev => page.showOffline || isOnline(dev.ip));
-  const toggle = offline > 0 && h('button', { type: 'button', class: 'ui-btn-link fm-segbar-toggle',
-    onclick: () => { page.showOffline = !page.showOffline; render(); } },
-  page.showOffline ? 'Hide offline' : `Show offline (${offline})`);
+  const toggle = offline > 0 && h('button', {
+    type: 'button', class: `fm-segbar-toggle${page.showOffline ? ' is-on' : ''}`, 'aria-pressed': String(page.showOffline),
+    title: page.showOffline ? 'Hide offline controllers' : `Show ${offline} offline controller${offline > 1 ? 's' : ''}`,
+    onclick: () => { page.showOffline = !page.showOffline; render(); }
+  }, page.showOffline ? '−' : `+${offline}`);
   return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
-    !shown.length && h('p', { class: 'fm-segbar-empty' }, 'No controller is online.'),
+    !shown.length && h('span', { class: 'fm-segbar-empty' }, 'No controller online'),
     ...shown.map(dev => h('div', { class: `fm-segbar-ctl${isOnline(dev.ip) ? '' : ' is-offline'}` },
-      h('span', { class: 'fm-segbar-dev', title: dev.ip }, dev.name, !isOnline(dev.ip) && h('small', {}, 'offline')),
-      h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', title: out.gpio || null },
-        out.strip && h('span', { class: 'fm-segbar-strip' }, out.strip),
-        h('div', { class: 'fm-segbar-segs', role: 'group', 'aria-label': out.strip || out.gpio || dev.name },
-          ...out.segs.map(seg => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })))))))))),
+      h('span', { class: 'fm-segbar-dev', title: isOnline(dev.ip) ? dev.ip : `${dev.ip} · offline` }, dev.name),
+      ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
+        out.strip && h('span', { class: 'fm-segbar-name' }, out.strip),
+        ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })),
+          out.segs.length > 1 ? String(i % 4) : 'whole')))))),
     toggle);
 }
 
