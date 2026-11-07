@@ -104,24 +104,6 @@
   font-weight: 600;
 }
 
-.fm-segbar-toggle {
-  min-width: 28px;
-  height: 26px;
-  padding: 0 var(--space-2);
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--text-muted);
-  font: var(--fs-xs) var(--font-ui);
-  cursor: pointer;
-}
-
-.fm-segbar-toggle:hover,
-.fm-segbar-toggle.is-on {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-}
-
 .fm-segbar-empty {
   margin: var(--space-1) 0;
   color: var(--text-secondary);

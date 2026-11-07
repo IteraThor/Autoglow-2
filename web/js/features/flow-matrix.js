@@ -58,7 +58,6 @@ const page = {
   selected: { kind: 'step', id: 'turn' },
   seg: null,       // the selected segment ("ip|id")
   scope: 'all',    // 'all' = edit every segment sharing these lights, 'one' = only the selected one
-  showOffline: false,
   live: null,
   liveHit: null,
   loading: false
@@ -104,6 +103,11 @@ function allSegments() {
 
 const SEG_KEY = 'autoglow_lighting_segment';
 const segKey = s => `${s.ip}|${s.id ?? ''}`;
+
+// Settings › Offline controllers in Lighting (per browser)
+function showOffline() {
+  try { return localStorage.getItem('autoglow_show_offline') === 'show'; } catch (err) { return false; }
+}
 
 // Offline until the overview says otherwise (only GET /api/flow/overview checks)
 const isOnline = ip => page.overview.online?.[ip] !== false;
@@ -1295,7 +1299,7 @@ function segButton(dev, seg, label, cur, linked, tone) {
 }
 
 // One line: each controller's name, then each GPIO output as one connected bar of its segments. Offline controllers
-// show (dimmed) behind the small button at the end.
+// show dimmed when Settings asks for them.
 function segmentBar() {
   const o = page.overview;
   if (!allSegments().length) {
@@ -1305,13 +1309,7 @@ function segmentBar() {
   const cur = currentSeg();
   const linked = new Set(sharedWith().map(segKey));
   const devs = o.lights.filter(dev => outputs(dev).length);
-  const offline = devs.filter(dev => !isOnline(dev.ip)).length;
-  const shown = devs.filter(dev => page.showOffline || isOnline(dev.ip));
-  const toggle = offline > 0 && h('button', {
-    type: 'button', class: `fm-segbar-toggle${page.showOffline ? ' is-on' : ''}`, 'aria-pressed': String(page.showOffline),
-    title: page.showOffline ? 'Hide offline controllers' : `Show ${offline} offline controller${offline > 1 ? 's' : ''}`,
-    onclick: () => { page.showOffline = !page.showOffline; render(); }
-  }, page.showOffline ? '−' : `+${offline}`);
+  const shown = devs.filter(dev => showOffline() || isOnline(dev.ip));
   return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
     !shown.length && h('span', { class: 'fm-segbar-empty' }, 'No controller online'),
     ...shown.map(dev => h('div', { class: `fm-segbar-ctl${isOnline(dev.ip) ? '' : ' is-offline'}` },
@@ -1319,8 +1317,7 @@ function segmentBar() {
       ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
         out.strip && h('span', { class: 'fm-segbar-name' }, out.strip),
         ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })),
-          out.segs.length > 1 ? String(i % 4) : 'whole')))))),
-    toggle);
+          out.segs.length > 1 ? String(i % 4) : 'whole')))))));
 }
 
 function lightsOption(p) {

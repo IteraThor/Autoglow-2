@@ -138,6 +138,20 @@ function currentFlowView() {
   try { return localStorage.getItem(FLOW_VIEW_KEY) === 'horizontal' ? 'horizontal' : 'vertical'; } catch { return 'vertical'; }
 }
 
+// Offline controllers in Lighting's segment bar: also per browser; Lighting reads it each time it draws
+const OFFLINE_KEY = 'autoglow_show_offline';
+
+function applyOffline(choice) {
+  try { localStorage.setItem(OFFLINE_KEY, choice); } catch { /* private window: this visit only */ }
+  document.querySelectorAll('#offlineSwitch [data-offline]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.offline === choice));
+  });
+}
+
+function currentOffline() {
+  try { return localStorage.getItem(OFFLINE_KEY) === 'show' ? 'show' : 'hide'; } catch { return 'hide'; }
+}
+
 export function initSettings() {
   window.settingsPage = { save, reset, isDirty };
   window.settingsDraftMode = () => draftMode;
@@ -174,6 +188,10 @@ export function initSettings() {
     btn.addEventListener('click', () => applyFlowView(btn.dataset.view));
   });
   applyFlowView(currentFlowView());
+  document.querySelectorAll('#offlineSwitch [data-offline]').forEach(btn => {
+    btn.addEventListener('click', () => applyOffline(btn.dataset.offline));
+  });
+  applyOffline(currentOffline());
   $('btnSettingsSave').addEventListener('click', save);
   $('btnSettingsDiscard').addEventListener('click', reset);
 

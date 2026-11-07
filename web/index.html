@@ -611,6 +611,15 @@
             <p class="form-hint">Narrow windows always show it vertical.</p>
           </div>
 
+          <!-- Offline controllers in Lighting's segment bar: applies at once, kept per browser (not part of Save) -->
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Offline controllers in Lighting</h2></div>
+            <div class="mode-switch pw-mode" id="offlineSwitch" role="group" aria-label="Offline controllers in Lighting">
+              <button type="button" class="mode-option" data-offline="hide" aria-pressed="false"><span>Hide</span></button>
+              <button type="button" class="mode-option" data-offline="show" aria-pressed="false"><span>Show</span></button>
+            </div>
+          </div>
+
           <!-- One save for everything on this page -->
           <div class="settings-savebar" id="settingsSaveBar">
             <span class="settings-savebar-note" id="settingsSaveNote" aria-live="polite">No unsaved changes</span>
