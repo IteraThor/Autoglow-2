@@ -225,6 +225,7 @@ class GameFlow:
     camera_friendly: bool = True
     hit_locator: bool = False
     preset: Optional[str] = None  # the preset this profile started from ("Reset to preset")
+    origin: str = ""  # where the look came from, shown next to the segment: "Arena", "Copied from RGB1"
     idle: FlowIdle = field(default_factory=FlowIdle)
 
     def __post_init__(self) -> None:
@@ -262,6 +263,8 @@ class GameFlow:
         }
         if self.preset:
             out["preset"] = self.preset
+        if self.origin:
+            out["origin"] = self.origin
         return out
 
     @classmethod
@@ -283,6 +286,7 @@ class GameFlow:
             camera_friendly=bool(data.get("camera_friendly", True)),
             hit_locator=bool(data.get("hit_locator", False)),
             preset=str(data["preset"]) if data.get("preset") else None,
+            origin=str(data.get("origin") or "")[:60],
             idle=FlowIdle.from_dict(data.get("idle")),
         )
 
@@ -386,9 +390,11 @@ class GameFlowStorageManager:
     Reads and atomically writes game_flows.json:
 
         {"version": 2, "default": "<profile>", "profiles": {"<name>": {...}},
-         "assign": {"<controller ip>": {"*": "<profile>", "<segment id>": "<profile>"}}}
+         "assign": {"<controller ip>": {"*": "<profile>", "<segment id>": "<profile>"}},
+         "presets": {"<name>": {...}}}
 
-    A segment uses its own profile, else its controller's ("*"), else the default profile.
+    A segment uses its own profile, else its controller's ("*"), else the default profile. The Lighting page
+    gives every segment a profile of its own (give_own_profiles); "presets" are the user's saved looks.
     Parsed profiles are cached and only re-read when the file changes (mtime and size), so the engine can
     look up a segment's flow on every dart without touching the disk. get_*() return shared, read-only
     entries; load_profile() returns a copy to edit.
@@ -602,6 +608,49 @@ class GameFlowStorageManager:
             data["assign"].setdefault(ip, {})[str(seg_id)] = name
         return self._write_raw(data)
 
+    def give_own_profiles(self, segments: List[Tuple[str, Any, str]]) -> bool:
+        """
+        Every segment ((ip, segment id, name), in page order) gets a profile it plays alone: the first segment
+        of a shared profile keeps it, the others get a copy named after them. Writes only when something changed.
+        """
+        data = self._edit()
+        taken = set(data["profiles"])
+        seen: set = set()
+        changed = False
+        for ip, seg_id, seg_name in segments:
+            name = self.profile_name_for(ip, seg_id)
+            key = "*" if seg_id is None else str(seg_id)
+            if name not in seen:
+                seen.add(name)
+                # Pin it, so a later controller-wide or default change does not move it
+                if data["assign"].get(ip, {}).get(key) != name:
+                    data["assign"].setdefault(ip, {})[key] = name
+                    changed = True
+                continue
+            own = _free_name(taken, seg_name or "Segment")
+            taken.add(own)
+            seen.add(own)
+            data["profiles"][own] = {**copy.deepcopy(data["profiles"][name]), "name": own}
+            data["assign"].setdefault(ip, {})[key] = own
+            changed = True
+        return self._write_raw(data) if changed else True
+
+    def user_presets(self) -> Dict[str, GameFlow]:
+        presets = _as_dict(self._data_now().get("presets"))
+        return {name: GameFlow.from_dict(raw, name=name) for name, raw in presets.items() if isinstance(raw, dict)}
+
+    def save_user_preset(self, flow: GameFlow) -> bool:
+        data = self._edit()
+        data.setdefault("presets", {})[flow.name] = flow.to_dict()
+        return self._write_raw(data)
+
+    def delete_user_preset(self, name: str) -> bool:
+        data = self._edit()
+        if name not in _as_dict(data.get("presets")):
+            return False
+        del data["presets"][name]
+        return self._write_raw(data)
+
     def _write_raw(self, data: Dict[str, Any]) -> bool:
         # SAFETY GUARD: unit tests must never overwrite the production flow file
         if ("unittest" in sys.modules or "pytest" in sys.modules) and not os.environ.get("AUTOGLOW_ALLOW_PROD_CONFIG_IN_TEST"):
@@ -637,6 +686,16 @@ class GameFlowStorageManager:
             if temp_name and os.path.exists(temp_name):
                 os.remove(temp_name)
             return False
+
+
+def _free_name(taken: set, base: str, limit: int = 40) -> str:
+    """base, or "base 2", "base 3", ... when taken."""
+    for i in range(1, 1000):
+        tail = "" if i == 1 else f" {i}"
+        name = base[:limit - len(tail)].rstrip() + tail
+        if name not in taken:
+            return name
+    raise ValueError("no free name")
 
 
 def _adopt_flow_file_from_cwd(target: str) -> None:

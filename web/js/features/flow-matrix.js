@@ -1,12 +1,11 @@
 // AutoGlow 2 - Flow Matrix page (/lighting/flow)
 // The controllers sit in a bar on top, each GPIO output with its segments. Clicking a segment edits what it plays:
 // a simple chart of how its lights follow a match. Clicking any part of the chart opens one panel with everything
-// needed to change it. Edits only ever change the selected segment: segments can share their lights (one profile),
-// and saving a shared one gives the selected segment its own copy. A status line says what is off or missing.
-// Edits are a draft until saved.
+// needed to change it. Every segment has its own look (a profile only it plays): Copy takes another segment's look
+// or sends this one to others, Presets starts from a built-in or saved look. A status line says what is off or
+// missing. Edits are a draft until saved.
 
 import { api } from '../core/api.js';
-import { confirmDialog, promptDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import { blendFlow, renderFlowFrame } from './flow-looks.js';
@@ -58,6 +57,7 @@ const page = {
   draft: null,
   selected: { kind: 'step', id: 'turn' },
   seg: null,       // the selected segment ("ip|id")
+  menu: null,      // the open Copy or Presets menu: { kind: 'copy', tab, to } or { kind: 'presets', naming, err }
   live: null,
   liveHit: null,
   loading: false
@@ -91,10 +91,6 @@ function stepLook(id) {
   return resolved(step.effect, id === 'turn');
 }
 
-function lightsUsing(name) {
-  return page.overview.profiles.find(p => p.name === name)?.used_by || [];
-}
-
 function allSegments() {
   return page.overview.lights.flatMap(dev => dev.segments.filter(s => !s.light_strip).map(s => ({ ...s, ip: dev.ip, controller: dev.name })));
 }
@@ -116,16 +112,6 @@ function currentSeg() {
   const segs = allSegments();
   return segs.find(s => segKey(s) === page.seg) || segs.find(s => isOnline(s.ip)) || segs[0] || null;
 }
-
-// The selected segment first, then every other segment playing the same lights
-function sharedWith() {
-  const cur = currentSeg();
-  if (!cur) return [];
-  return [cur, ...allSegments().filter(s => s.profile === cur.profile && segKey(s) !== segKey(cur))];
-}
-
-// Other segments play the same lights: saving gives the selected one its own copy, so they keep theirs
-const isShared = () => sharedWith().length > 1;
 
 function rememberSeg(key) {
   page.seg = key;
@@ -254,19 +240,19 @@ async function refresh(name) {
   render();
 }
 
+// "Arena" becomes "Arena · edited" once it is changed and saved
+const edited = origin => (origin && !origin.endsWith(' · edited') ? `${origin} · edited` : origin);
+
 async function save() {
   if (!isDirty()) return true;
-  const seg = currentSeg();
-  const own = isShared();
   try {
-    const data = own
-      ? await api.post('/api/flow/segment/own', { ip: seg.ip, segment_id: seg.id, flow: page.draft })
-      : await api.post('/api/flow/profile/save', { flow: page.draft, old_name: page.name });
+    const flow = { ...page.draft, origin: edited(page.draft.origin) };
+    const data = await api.post('/api/flow/profile/save', { flow, old_name: page.name });
     page.overview = { ...page.overview, ...data };
     page.name = data.flow.name;
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
-    toast.success(own ? `${seg.name} has its own lights now` : 'Saved');
+    toast.success('Saved');
     idleWarning(data);
     render();
     return true;
@@ -297,24 +283,13 @@ async function guardUnsaved() {
   return window.lightingGuard.confirmLeave({ what: 'flow', save, discard });
 }
 
-// --- profile actions ---------------------------------------------------------
-
-function uniqueName(base) {
-  const names = new Set(page.overview.profiles.map(p => p.name));
-  base = base.slice(0, 36).trim();
-  if (!names.has(base)) return base;
-  for (let i = 2; ; i++) if (!names.has(`${base} ${i}`)) return `${base} ${i}`;
-}
-
-function splitPick(value) {
-  const i = value.indexOf(':');
-  return [value.slice(0, i), value.slice(i + 1)];
-}
+// --- segments, copy and presets ----------------------------------------------
 
 async function selectSegment(seg) {
   if (segKey(seg) === page.seg) return;
   if (!(await guardUnsaved())) return;
   rememberSeg(segKey(seg));
+  page.menu = null;
   try {
     await openProfile(seg.profile);
   } catch (err) {
@@ -323,105 +298,89 @@ async function selectSegment(seg) {
   render();
 }
 
-// The Lights dropdown: play the same lights as other segments, or start fresh from a preset (a new profile
-// for this segment only). Without a controller it only switches which profile is shown.
-async function pickLights(value) {
-  const [kind, ref] = splitPick(value);
-  if (kind === 'profile' && ref === page.name) return;
-  if (!(await guardUnsaved())) { render(); return; }
+// After a copy, preset or undo: the new overview, the selected segment's look reloaded, and Undo for 8 s
+async function applied(data, message) {
+  page.overview = { ...page.overview, ...data };
+  idleWarning(data);
+  page.menu = null;
   const seg = currentSeg();
-  try {
-    if (!seg) {
-      await openProfile(ref);
-      render();
-      return;
-    }
-    let name = ref;
-    if (kind === 'preset') {
-      const preset = page.overview.presets.find(p => p.id === ref);
-      name = uniqueName(`${preset.name} · ${seg.name}`);
-      await api.post('/api/flow/profile/create', { name, preset: ref });
-    }
-    const data = await api.post('/api/flow/assign', { ip: seg.ip, segment_id: seg.id, name });
-    page.overview = { ...page.overview, ...data };
-    idleWarning(data);
-      await openProfile(name);
-    toast.success(kind === 'preset' ? `${seg.name} starts fresh` : `${seg.name} plays '${name}'`);
-  } catch (err) {
-    toast.error(err);
-  }
+  if (seg) await openProfile(seg.profile);
   render();
+  if (message && data.before?.length) {
+    toast.success(message, { duration: 8000, action: { label: 'Undo', onClick: () => undo(data.before) } });
+  }
 }
 
-async function renameProfile() {
-  const name = await promptDialog({
-    title: 'Rename profile', value: page.name, confirmLabel: 'Rename', maxLength: 40,
-    validate: v => (!v.trim() ? 'Give it a name.' : v.trim() !== page.name && page.overview.profiles.some(p => p.name === v.trim()) ? 'That name is taken.' : null)
-  });
-  if (!name || name.trim() === page.name) return;
-  page.draft.name = name.trim();
-  if (await save()) await refresh(page.draft.name);
-}
-
-async function deleteProfile() {
-  const users = lightsUsing(page.name);
-  const ok = await confirmDialog({
-    title: `Delete '${page.name}'?`,
-    body: users.length ? `${users.map(u => u.segment_name).join(', ')} will play '${page.overview.default === page.name ? 'another profile' : page.overview.default}' instead.` : 'No segment plays it.',
-    confirmLabel: 'Delete', danger: true
-  });
-  if (!ok) return;
+async function undo(before) {
   try {
-    const data = await api.post('/api/flow/profile/delete', { name: page.name });
-    page.overview = { ...page.overview, ...data };
-    idleWarning(data);
-    page.saved = null;
-    page.draft = null;
-    await refresh(data.default);
-    toast.success('Profile deleted');
+    await applied(await api.post('/api/flow/segment/restore', { flows: before }));
+    toast.info('Undone');
   } catch (err) {
     toast.error(err);
   }
 }
 
-async function resetProfile() {
-  const preset = page.overview.presets.find(p => p.id === (page.draft.preset || 'classic'));
-  // Shared lights stay as they are for the others: this segment starts fresh from the preset instead
-  if (isShared()) {
-    const fresh = await confirmDialog({
-      title: `Reset ${currentSeg().name}?`,
-      body: `It starts fresh from the ${preset?.name || 'Classic'} preset. The other segments keep their lights.`,
-      confirmLabel: 'Reset', danger: true
-    });
-    if (fresh) await pickLights(`preset:${preset?.id || 'classic'}`);
+const ref = s => ({ ip: s.ip, segment_id: s.id });
+
+async function copyFrom(src) {
+  if (!(await guardUnsaved())) return;
+  const cur = currentSeg();
+  try {
+    const data = await api.post('/api/flow/segment/copy', { from: ref(src), to: [ref(cur)] });
+    await applied(data, `${cur.name} copied from ${src.name}`);
+  } catch (err) {
+    toast.error(err);
+  }
+}
+
+async function copyTo(targets) {
+  if (!targets.length || !(await guardUnsaved())) return;
+  const cur = currentSeg();
+  try {
+    const data = await api.post('/api/flow/segment/copy', { from: ref(cur), to: targets.map(ref) });
+    await applied(data, `${cur.name} copied to ${targets.length === 1 ? targets[0].name : `${targets.length} segments`}`);
+  } catch (err) {
+    toast.error(err);
+  }
+}
+
+// A built-in preset ({ preset: id }) or one of the user's ({ mine: name })
+async function usePreset(pick, label) {
+  if (!(await guardUnsaved())) return;
+  const cur = currentSeg();
+  try {
+    const data = await api.post('/api/flow/segment/preset', { ...ref(cur), ...pick });
+    await applied(data, `${cur.name} now uses ${label}`);
+  } catch (err) {
+    toast.error(err);
+  }
+}
+
+async function savePreset(name) {
+  name = name.trim();
+  const taken = [...page.overview.presets, ...page.overview.user_presets].some(p => p.name.toLowerCase() === name.toLowerCase());
+  if (!name || taken) {
+    page.menu = { ...page.menu, err: name ? 'That name is taken.' : 'Give it a name.' };
+    render();
     return;
   }
-  const ok = await confirmDialog({
-    title: `Reset '${page.name}'?`,
-    body: `Everything goes back to the ${preset?.name || 'Classic'} preset. Your changes to this profile are lost.`,
-    confirmLabel: 'Reset', danger: true
-  });
-  if (!ok) return;
   try {
-    const data = await api.post('/api/flow/profile/reset', { name: page.name });
+    const data = await api.post('/api/flow/preset/save', { name, flow: page.draft });
     page.overview = { ...page.overview, ...data };
-    idleWarning(data);
-    page.draft = data.flow;
-    page.saved = JSON.stringify(data.flow);
+    page.menu = { kind: 'presets' };
     render();
-    toast.success('Profile reset');
+    toast.success(`Saved preset ${name}`);
   } catch (err) {
     toast.error(err);
   }
 }
 
-async function makeDefault() {
+async function deletePreset(name) {
   try {
-    const data = await api.post('/api/flow/profile/default', { name: page.name });
+    const data = await api.post('/api/flow/preset/delete', { name });
     page.overview = { ...page.overview, ...data };
-    idleWarning(data);
     render();
-    toast.success(`New controllers use '${page.name}'`);
+    toast.success(`Deleted preset ${name}`);
   } catch (err) {
     toast.error(err);
   }
@@ -431,7 +390,7 @@ async function makeDefault() {
 
 // Only the selected segment: what lights up is what is being edited
 function tryTargets() {
-  return sharedWith().slice(0, 1);
+  return [currentSeg()].filter(Boolean);
 }
 
 function tryLabel() {
@@ -1227,23 +1186,14 @@ function profilePanel() {
   const flow = page.draft;
   return [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Profile settings')),
-    h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. These settings apply to every segment with these lights.'),
+    h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. Changes only affect this segment.'),
     section('Camera-friendly',
       h('div', { class: 'fm-toggle-row' }, onOff(flow.camera_friendly, v => change(d => { d.camera_friendly = v; }), 'Camera-friendly')),
       h('p', { class: 'form-hint' }, 'Autodarts finds darts in camera images. With this on, hits during a turn play at half strength and for at most a second, so strong flashes don\'t disturb detection. Leg and match celebrations stay full.')),
     section('Hit locator',
       h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
       h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
-      flow.hit_locator && locatorCheck()),
-    section('These lights',
-      h('div', { class: 'fm-panel-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: page.overview.profiles.length <= 1 }, 'Delete'))),
-    section('New segments',
-      page.overview.default !== page.name
-        ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Start new segments with these lights'))
-        : h('p', { class: 'form-hint' }, 'New segments start with these lights.'))
+      flow.hit_locator && locatorCheck())
   ];
 }
 
@@ -1300,7 +1250,7 @@ function segButton(dev, seg, label, cur, tone) {
   const on = !!cur && segKey(full) === segKey(cur);
   return h('button', {
     type: 'button', class: `fm-segbar-seg${on ? ' is-on' : ''}`, 'aria-pressed': String(on),
-    dataset: { tone }, title: `${dev.name} · ${seg.name} · ${seg.gpio || ''} · plays '${seg.profile}'`, onclick: () => selectSegment(full)
+    dataset: { tone }, title: [dev.name, seg.name, seg.gpio].filter(Boolean).join(' · '), onclick: () => selectSegment(full)
   }, label);
 }
 
@@ -1324,23 +1274,76 @@ function segmentBar() {
         ...out.segs.map(seg => segButton(dev, seg, out.label(seg), cur, String(toneOf(dev, seg) % 8)))))))));
 }
 
-function lightsOption(p) {
-  const where = p.used_by.map(u => u.segment_name).join(', ');
-  return h('option', { value: `profile:${p.name}`, selected: p.name === page.name, title: where ? `On ${where}` : 'Not used' }, p.name);
+function toggleMenu(kind) {
+  page.menu = page.menu?.kind === kind ? null : (kind === 'copy' ? { kind, tab: 'from', to: [] } : { kind });
+  render();
 }
 
-// One row: the selected segment, its Lights dropdown and the status. Where it sits is in the segment bar.
-function editorHead() {
-  const o = page.overview;
+function segRow(s, onclick) {
+  return h('button', { type: 'button', class: 'fm-menu-item', onclick },
+    h('span', {}, s.name), h('span', { class: 'fm-menu-sub' }, s.controller));
+}
+
+function copyMenu() {
+  const m = page.menu;
   const cur = currentSeg();
+  const others = allSegments().filter(s => segKey(s) !== segKey(cur));
+  if (!others.length) return [h('p', { class: 'fm-menu-empty' }, 'No other segment yet')];
+  const tab = (id, label) => h('button', { type: 'button', class: m.tab === id ? 'is-on' : '', 'aria-pressed': String(m.tab === id),
+    onclick: () => { page.menu = { ...m, tab: id }; render(); } }, label);
+  const tabs = h('div', { class: 'fm-menu-tabs' }, tab('from', 'From'), tab('to', 'To'));
+  if (m.tab === 'from') return [tabs, ...others.map(s => segRow(s, () => copyFrom(s)))];
+  const picked = others.filter(s => m.to.includes(segKey(s)));
+  return [tabs,
+    ...others.map(s => h('label', { class: 'fm-menu-item' },
+      h('input', { type: 'checkbox', checked: m.to.includes(segKey(s)), onchange: e => {
+        page.menu = { ...m, to: e.target.checked ? [...m.to, segKey(s)] : m.to.filter(k => k !== segKey(s)) };
+        render();
+      } }),
+      h('span', {}, s.name), h('span', { class: 'fm-menu-sub' }, s.controller))),
+    h('div', { class: 'fm-menu-foot' },
+      h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => { page.menu = { ...m, to: others.map(segKey) }; render(); } }, 'All'),
+      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', disabled: !picked.length, onclick: () => copyTo(picked) },
+        picked.length ? `Copy to ${picked.length}` : 'Copy to …'))];
+}
+
+function presetsMenu() {
+  const m = page.menu;
+  const o = page.overview;
+  const mine = o.user_presets || [];
+  const foot = m.naming
+    ? h('form', { class: 'fm-menu-foot', onsubmit: e => { e.preventDefault(); savePreset(e.target.elements.name.value); } },
+      h('input', { class: 'ui-input', name: 'name', maxlength: 40, placeholder: 'Club night', 'aria-label': 'Preset name', autofocus: true }),
+      h('button', { type: 'submit', class: 'ui-btn ui-btn-sm ui-btn-primary' }, 'Save'))
+    : h('div', { class: 'fm-menu-foot' }, h('button', { type: 'button', class: 'ui-btn ui-btn-sm fm-menu-wide',
+      onclick: () => { page.menu = { ...m, naming: true, err: '' }; render(); } }, `Save ${currentSeg()?.name || 'this look'} as preset`));
+  return [
+    h('span', { class: 'fm-menu-k' }, 'Built-in'),
+    ...o.presets.map(p => h('button', { type: 'button', class: 'fm-menu-item', title: p.summary, onclick: () => usePreset({ preset: p.id }, p.name) },
+      h('span', {}, p.name))),
+    h('span', { class: 'fm-menu-k' }, 'Yours'),
+    ...(mine.length ? mine.map(p => h('div', { class: 'fm-menu-row' },
+      h('button', { type: 'button', class: 'fm-menu-item', onclick: () => usePreset({ mine: p.name }, p.name) }, h('span', {}, p.name)),
+      h('button', { type: 'button', class: 'fm-menu-x', 'aria-label': `Delete preset ${p.name}`, title: 'Delete preset', onclick: () => deletePreset(p.name) }, '×')))
+      : [h('p', { class: 'fm-menu-empty' }, 'None yet')]),
+    foot,
+    m.err && h('p', { class: 'fm-menu-err', role: 'alert' }, m.err)
+  ];
+}
+
+// One row: the selected segment, where its look came from, Copy and Presets, and the status
+function editorHead() {
+  const cur = currentSeg();
+  const menuBtn = (kind, label) => h('button', { type: 'button', class: 'ui-btn ui-btn-sm fm-menu-btn', 'aria-expanded': String(page.menu?.kind === kind),
+    onclick: () => toggleMenu(kind) }, label, ' ▾');
   return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
     h('div', { class: 'fm-bar-main' },
       h('h1', { class: 'page-title fm-title', title: cur ? [cur.controller, cur.gpio].filter(Boolean).join(' · ') : null }, cur ? cur.name : page.name),
-      h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Lights'),
-        h('select', { class: 'ui-select', onchange: e => pickLights(e.target.value) },
-          h('optgroup', { label: cur ? 'Same lights as' : 'Profiles' }, ...o.profiles.map(lightsOption)),
-          cur && h('optgroup', { label: 'Start fresh from' },
-            ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name)))))),
+      page.draft.origin && h('span', { class: 'fm-origin' }, page.draft.origin),
+      cur && h('div', { class: 'fm-head-actions' },
+        menuBtn('copy', 'Copy'), menuBtn('presets', 'Presets'),
+        page.menu && h('div', { class: 'fm-menu', role: 'dialog', 'aria-label': page.menu.kind === 'copy' ? 'Copy' : 'Presets' },
+          ...(page.menu.kind === 'copy' ? copyMenu() : presetsMenu())))),
     h('div', { class: 'fm-top-end' }, statusLine()));
 }
 
@@ -1354,10 +1357,6 @@ function statusLine() {
       : h('span', {}, n.text),
     n.link && h('a', { class: 'card-link', href: n.link[1], 'data-link': true }, n.link[0]),
     n.action && h('button', { type: 'button', class: 'ui-btn-link', onclick: n.action[1] }, n.action[0]))));
-}
-
-function savebarNote() {
-  return isShared() ? `Unsaved · only ${currentSeg().name}` : 'Unsaved changes';
 }
 
 function renderSavebar() {
@@ -1378,11 +1377,12 @@ function render() {
     editorHead(),
     h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
     h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
-      h('span', { class: 'savebar-note' }, savebarNote()),
+      h('span', { class: 'savebar-note' }, 'Unsaved changes'),
       h('button', { type: 'button', class: 'ui-btn', onclick: discard }, 'Discard'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: save }, 'Save')));
   const insp = document.getElementById('fmInspector');
   if (insp) insp.scrollTop = scroll;
+  if (page.menu?.naming) root.querySelector('.fm-menu input[name="name"]')?.focus();
 }
 
 // --- live follow -------------------------------------------------------------
@@ -1425,4 +1425,11 @@ export function initFlowMatrix() {
     refresh();
   };
   window.onFlowTelemetry = onTelemetry;
+  // A click elsewhere or Escape closes the Copy / Presets menu
+  document.addEventListener('click', e => {
+    if (page.menu && page.root?.isConnected && !e.target.closest('.fm-menu, .fm-menu-btn')) { page.menu = null; render(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && page.menu) { page.menu = null; render(); }
+  });
 }

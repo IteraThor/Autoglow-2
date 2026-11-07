@@ -287,7 +287,7 @@ export async function runControllerSetup(ip, live) {
   ]);
   const plan = planFromLive(ip, live, preset);
   const original = { hw_ins: structuredClone(live?.hw_ins || []), state: structuredClone(live?.state || {}) };
-  // Flow Matrix profiles a zone can play; none in the legacy Event Matrix
+  // Flow Matrix profiles: each zone keeps the look it had (looks are picked in Lighting); none in the legacy Event Matrix
   const flowMode = appStore.get().lightingMode !== 'matrix';
   const profileNames = flowMode ? (overview?.profiles || []).map(p => p.name) : [];
   const savedProfiles = Object.fromEntries(((overview?.lights || []).find(d => d.ip === ip)?.segments || [])
@@ -841,7 +841,7 @@ export async function runControllerSetup(ip, live) {
       return (was && savedProfiles[String(was.id)]) || defaultProfile;
     }
 
-    // The profile per new segment, for the caller to assign once the layout is on the controller
+    // The profile per new segment (the one it played before), for the caller to assign once the layout is on the controller
     function profileChoices() {
       if (!profileNames.length) return [];
       return layout(plan).filter(e => !e.light).map(e => ({ segment_id: e.seg.id, name: zoneProfile(e.o, e.range) }));
@@ -982,12 +982,7 @@ export async function runControllerSetup(ip, live) {
           const cell = h('div', { class: 'sf-zone' },
             h('span', { class: 'sf-zone-text' },
               h('span', { class: 'sf-zone-name' }, whole ? 'Whole strip' : `Zone ${i + 1}`),
-              h('span', { class: 'sf-zone-range' }, `${r.start + 1}–${r.stop} · ${r.stop - r.start}`)),
-            profileNames.length > 0 && h('select', {
-              class: 'ui-select ui-select-sm sf-zone-profile', 'aria-label': `Profile for ${whole ? 'the whole strip' : `zone ${i + 1}`}`,
-              title: 'Flow Matrix profile this zone plays',
-              onchange: event => { o.profiles[`${r.start}-${r.stop}`] = event.target.value; }
-            }, ...profileNames.map(name => h('option', { value: name, selected: name === zoneProfile(o, r) }, name))));
+              h('span', { class: 'sf-zone-range' }, `${r.start + 1}–${r.stop} · ${r.stop - r.start}`)));
           cell.style.setProperty('--c', color);
           cell.style.flexGrow = String(r.stop - r.start);
           return cell;

@@ -2394,10 +2394,6 @@ input.ui-input.sf-name-input {
   white-space: nowrap;
 }
 
-.sf-zone-profile {
-  max-width: 130px;
-}
-
 /* Done */
 .sf-done-check {
   width: 40px;

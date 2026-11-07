@@ -299,24 +299,56 @@ class TestFlowRoutes(AioHTTPTestCase):
         r = await self.client.post("/api/flow/try", json={"kind": "step", "id": "turn", "segments": []})
         self.assertEqual(r.status, 400, "nothing chosen is not the same as everything")
 
-    async def test_own_lights_splits_one_segment_off_a_shared_profile(self):
+    async def test_overview_gives_every_segment_its_own_profile(self):
         self.dev.segments.insert(1, SegmentConfig(id=2, name="Shelf", start=50, length=10))
-        flow = (await (await self.client.get("/api/flow/profile")).json())["flow"]
-        flow["hit_locator"] = True
-        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 2, "flow": flow})
+        data = await (await self.client.get("/api/flow/overview")).json()
+        segs = {s["id"]: s["profile"] for s in data["lights"][0]["segments"]}
+        self.assertEqual(segs[0], "Classic", "the first segment keeps the shared profile")
+        self.assertEqual(segs[2], "Shelf")
+        self.assertIsNone(segs[1], "light strips play no profile")
+        # Asking again changes nothing
+        data = await (await self.client.get("/api/flow/overview")).json()
+        self.assertEqual([p["name"] for p in data["profiles"]], ["Classic", "Shelf"])
+
+    async def test_copy_a_look_to_other_segments_and_undo(self):
+        self.dev.segments.insert(1, SegmentConfig(id=2, name="Shelf", start=50, length=10))
+        await self.client.get("/api/flow/overview")
+        flow = self.storage.load_profile("Classic")
+        flow.hit_locator = True
+        self.storage.save_profile(flow)
+        r = await self.client.post("/api/flow/segment/copy", json={
+            "from": {"ip": "192.168.1.100", "segment_id": 0}, "to": [{"ip": "192.168.1.100", "segment_id": 2}]})
         self.assertEqual(r.status, 200)
         data = await r.json()
-        self.assertEqual(data["flow"]["name"], "Classic · Shelf")
-        self.assertTrue(data["flow"]["hit_locator"])
-        segs = {s["id"]: s["profile"] for s in data["lights"][0]["segments"]}
-        self.assertEqual(segs[0], "Classic", "the other segment keeps the shared lights")
-        self.assertEqual(segs[2], "Classic · Shelf")
-        self.assertFalse(self.storage.get_profile("Classic").hit_locator)
-        # Splitting again never repeats the segment name
-        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 2, "flow": data["flow"]})
-        self.assertEqual((await r.json())["flow"]["name"], "Classic · Shelf 2")
-        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 1, "flow": flow})
+        shelf = self.storage.get_profile("Shelf")
+        self.assertTrue(shelf.hit_locator)
+        self.assertEqual(shelf.origin, "Copied from Ring")
+        self.assertEqual(shelf.name, "Shelf", "the copy keeps the segment's own profile")
+        r = await self.client.post("/api/flow/segment/restore", json={"flows": data["before"]})
+        self.assertEqual(r.status, 200)
+        self.assertFalse(self.storage.get_profile("Shelf").hit_locator)
+        r = await self.client.post("/api/flow/segment/copy", json={
+            "from": {"ip": "192.168.1.100", "segment_id": 0}, "to": [{"ip": "192.168.1.100", "segment_id": 1}]})
         self.assertEqual(r.status, 400, "light strips play no profile")
+
+    async def test_presets_built_in_and_saved(self):
+        seg = {"ip": "192.168.1.100", "segment_id": 0}
+        r = await self.client.post("/api/flow/segment/preset", json={**seg, "preset": "party"})
+        self.assertEqual(r.status, 200)
+        data = await r.json()
+        self.assertEqual(data["flow"]["origin"], "Party")
+        self.assertEqual(data["flow"]["name"], "Classic")
+        r = await self.client.post("/api/flow/preset/save", json={"name": "Club night", "flow": data["flow"]})
+        self.assertEqual(r.status, 200)
+        self.assertEqual([p["name"] for p in (await r.json())["user_presets"]], ["Club night"])
+        r = await self.client.post("/api/flow/preset/save", json={"name": "arena", "flow": data["flow"]})
+        self.assertEqual(r.status, 400, "built-in names are taken")
+        await self.client.post("/api/flow/segment/preset", json={**seg, "preset": "minimal"})
+        r = await self.client.post("/api/flow/segment/preset", json={**seg, "mine": "Club night"})
+        self.assertEqual((await r.json())["flow"]["origin"], "Club night")
+        self.assertEqual(self.storage.get_profile("Classic").preset, "party")
+        r = await self.client.post("/api/flow/preset/delete", json={"name": "Club night"})
+        self.assertEqual((await r.json())["user_presets"], [])
 
     async def test_try_is_refused_during_a_match(self):
         self.engine.autodarts = MagicMock(_active_match_id="m1", _last_match_finished=False)

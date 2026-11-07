@@ -6,6 +6,8 @@ the match preview, and the lighting mode switch.
 """
 
 import asyncio
+import copy
+import dataclasses
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -125,6 +127,7 @@ def _overview(request: web.Request) -> Dict[str, Any]:
         "live": engine.flow_runtime.snapshot() if engine else None,
         "catalog": catalog_for_ui(),
         "presets": presets_for_ui(),
+        "user_presets": [{"name": name} for name in storage.user_presets()],
         "steps": [
             {"id": sid, "label": STEP_LABELS[sid], "timed": sid in TIMED_STEPS, "always_on": sid in ALWAYS_ON_STEPS}
             for sid in STEP_IDS
@@ -182,6 +185,10 @@ async def _refresh_layouts(request: web.Request, online: Dict[str, bool]) -> Non
 async def handle_overview(request: web.Request) -> web.Response:
     online = await _online(request)
     await _refresh_layouts(request, online)
+    # Every RGB segment plays a profile of its own
+    storage = _storage(request)
+    storage.give_own_profiles([(dev["ip"], seg["id"], seg["name"]) for dev in _lights(request, storage)
+                               for seg in dev["segments"] if not seg["light_strip"]])
     return web.json_response({**_overview(request), "online": online})
 
 
@@ -292,43 +299,100 @@ async def handle_assign(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
 
 
-def _own_name(storage: GameFlowStorageManager, base: str, segment: str) -> str:
-    """A free profile name for a segment's own lights: "<profile> · <segment>" (2, 3, ... when taken)."""
-    suffix = f" · {segment}"
-    stem = base if base.endswith(suffix) else base + suffix
-    names = set(storage.profile_names())
-    for i in range(1, 100):
-        tail = "" if i == 1 else f" {i}"
-        name = stem[:MAX_NAME - len(tail)].rstrip() + tail
-        if name not in names:
-            return name
-    raise ValidationError("Too many profiles with that name.")
-
-
-async def handle_own_lights(request: web.Request) -> web.Response:
-    """Give one segment its own copy of a (possibly edited) flow, so changing it no longer changes the
-    other segments that shared it."""
-    data = await read_json(request)
-    storage = _storage(request)
-    engine = request.app.get("engine")
-    ip = str(data.get("ip") or "").strip()
-    seg = data.get("segment_id")
+def _segment(request: web.Request, storage: GameFlowStorageManager, ref: Any) -> Dict[str, Any]:
+    """An RGB segment from {ip, segment_id}, with its controller's ip and its profile."""
+    ref = ref if isinstance(ref, dict) else {}
+    ip = str(ref.get("ip") or "").strip()
+    seg = ref.get("segment_id")
     seg_id = None if seg is None else int(seg)
-    raw = data.get("flow")
-    if not isinstance(raw, dict) or "steps" not in raw:
-        raise ValidationError("No flow to save.")
-    lights = _lights(request, storage)
-    dev = next((d for d in lights if d["ip"] == ip), None)
+    dev = next((d for d in _lights(request, storage) if d["ip"] == ip), None)
     entry = next((s for s in dev["segments"] if s["id"] == seg_id), None) if dev else None
     if not entry or entry["light_strip"]:
         raise ValidationError("That RGB strip was not found.")
-    name = _own_name(storage, str(raw.get("name") or entry["profile"] or "Lights"), entry["name"])
-    flow = GameFlow.from_dict({**raw, "name": name}, name=name)
-    if not storage.save_profile(flow) or not storage.assign(ip, name, seg_id):
-        raise PersistenceError("Could not save the lights for this strip.")
-    failed = await apply_idle(engine, storage, ips=[ip])
-    return web.json_response({"status": "ok", "flow": storage.get_profile(name).to_dict(), "idle_failed": failed,
-                              **_overview(request)})
+    return {**entry, "ip": ip}
+
+
+def _put_look(storage: GameFlowStorageManager, seg: Dict[str, Any], flow: GameFlow, origin: str) -> Dict[str, Any]:
+    """Give a segment a look (saved as its own profile). Returns the look it had before, for Undo."""
+    before = storage.load_profile(seg["profile"]).to_dict()
+    new = dataclasses.replace(copy.deepcopy(flow), name=seg["profile"], origin=origin)
+    if not storage.save_profile(new):
+        raise PersistenceError("Could not save the look.")
+    return before
+
+
+async def handle_segment_copy(request: web.Request) -> web.Response:
+    """Copy one segment's look to one or more others: {from: {ip, segment_id}, to: [{ip, segment_id}, ...]}."""
+    data = await read_json(request)
+    storage = _storage(request)
+    src = _segment(request, storage, data.get("from"))
+    targets = [_segment(request, storage, ref) for ref in (data.get("to") or [])]
+    targets = [t for t in targets if (t["ip"], t["id"]) != (src["ip"], src["id"])]
+    if not targets:
+        raise ValidationError("Choose where to copy it to.")
+    flow = storage.load_profile(src["profile"])
+    before = [_put_look(storage, t, flow, f"Copied from {src['name']}") for t in targets]
+    failed = await apply_idle(request.app.get("engine"), storage, ips=sorted({t["ip"] for t in targets}))
+    return web.json_response({"status": "ok", "before": before, "idle_failed": failed, **_overview(request)})
+
+
+async def handle_segment_preset(request: web.Request) -> web.Response:
+    """Start a segment from a preset: a built-in one ({preset: id}) or one of the user's ({mine: name})."""
+    data = await read_json(request)
+    storage = _storage(request)
+    seg = _segment(request, storage, data)
+    mine = data.get("mine")
+    if mine:
+        flow = storage.user_presets().get(str(mine))
+        if not flow:
+            raise ValidationError(f"There is no preset called '{mine}'.")
+        origin = flow.name
+    else:
+        flow = build_preset(str(data.get("preset") or "classic"))
+        origin = flow.name
+    before = _put_look(storage, seg, flow, origin)
+    failed = await apply_idle(request.app.get("engine"), storage, ips=[seg["ip"]])
+    return web.json_response({"status": "ok", "before": [before], "flow": storage.get_profile(seg["profile"]).to_dict(),
+                              "idle_failed": failed, **_overview(request)})
+
+
+async def handle_segment_restore(request: web.Request) -> web.Response:
+    """Undo: put back the looks a copy or preset replaced ({flows: [flow, ...]}, as it returned them)."""
+    data = await read_json(request)
+    storage = _storage(request)
+    flows = [GameFlow.from_dict(raw) for raw in (data.get("flows") or []) if isinstance(raw, dict)]
+    if not flows or any(f.name not in storage.profile_names() for f in flows):
+        raise ValidationError("Nothing to undo.")
+    for flow in flows:
+        if not storage.save_profile(flow):
+            raise PersistenceError("Could not undo.")
+    failed = await apply_idle(request.app.get("engine"), storage)
+    return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
+
+
+async def handle_preset_save(request: web.Request) -> web.Response:
+    """Save a look as one of the user's presets: {name, flow}."""
+    data = await read_json(request)
+    storage = _storage(request)
+    name = _clean_name(data.get("name"))
+    raw = data.get("flow")
+    if not isinstance(raw, dict) or "steps" not in raw:
+        raise ValidationError("No look to save.")
+    builtin = {p["name"].lower() for p in presets_for_ui()}
+    if name.lower() in builtin or name in storage.user_presets():
+        raise ValidationError("That name is taken.")
+    flow = GameFlow.from_dict({**raw, "name": name, "origin": ""}, name=name)
+    if not storage.save_user_preset(flow):
+        raise PersistenceError("Could not save the preset.")
+    return web.json_response({"status": "ok", **_overview(request)})
+
+
+async def handle_preset_delete(request: web.Request) -> web.Response:
+    data = await read_json(request)
+    storage = _storage(request)
+    if not storage.delete_user_preset(str(data.get("name") or "")):
+        raise ValidationError("That preset was not found.")
+    return web.json_response({"status": "ok", **_overview(request)})
 
 
 async def handle_apply_idle(request: web.Request) -> web.Response:
@@ -560,7 +624,11 @@ def register_flow_routes(app: web.Application) -> None:
     app.router.add_post("/api/flow/profile/reset", handle_reset_profile)
     app.router.add_post("/api/flow/profile/default", handle_set_default)
     app.router.add_post("/api/flow/assign", handle_assign)
-    app.router.add_post("/api/flow/segment/own", handle_own_lights)
+    app.router.add_post("/api/flow/segment/copy", handle_segment_copy)
+    app.router.add_post("/api/flow/segment/preset", handle_segment_preset)
+    app.router.add_post("/api/flow/segment/restore", handle_segment_restore)
+    app.router.add_post("/api/flow/preset/save", handle_preset_save)
+    app.router.add_post("/api/flow/preset/delete", handle_preset_delete)
     app.router.add_post("/api/flow/idle/apply", handle_apply_idle)
     app.router.add_post("/api/flow/try", handle_try)
     app.router.add_post("/api/flow/preview", handle_preview)
