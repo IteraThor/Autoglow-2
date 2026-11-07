@@ -5,6 +5,7 @@ import { confirmLegacyMatrix, setLightingMode } from '../components/mode-switch.
 import { appStore } from '../core/store.js';
 import { router } from '../core/router.js';
 import { toast } from '../core/toast.js';
+import { confirmLeave } from './lighting-guard.js';
 
 const PIN_FIELDS = ['pinCurrentInput', 'pinNewInput', 'pinConfirmInput'];
 const $ = id => document.getElementById(id);
@@ -106,23 +107,7 @@ export async function save() {
   return ok;
 }
 
-async function confirmLeave() {
-  const choice = await window.choiceDialog({
-    title: 'Unsaved changes',
-    body: 'You changed settings that are not saved yet. Save them, or discard to go back to the saved values.',
-    choices: [
-      { value: 'stay', label: 'Keep editing' },
-      { value: 'discard', label: 'Discard', danger: true },
-      { value: 'save', label: 'Save', primary: true }
-    ]
-  });
-  if (choice === 'save') return save();
-  if (choice === 'discard') {
-    reset();
-    return true;
-  }
-  return false;
-}
+const LEAVE_BODY = 'You changed settings that are not saved yet. Save them, or discard to go back to the saved values.';
 
 // Interface size: a per-browser view preference, so it applies at once instead of waiting for Save
 const SCALE_KEY = 'autoglow.uiScale';
@@ -157,7 +142,9 @@ export function initSettings() {
   window.settingsPage = { save, reset, isDirty };
   window.settingsDraftMode = () => draftMode;
 
-  router.addLeaveGuard((from) => (from.pane === 'tab-settings' && isDirty() ? confirmLeave() : true));
+  router.addLeaveGuard((from) => (from.pane === 'tab-settings' && isDirty()
+    ? confirmLeave({ body: LEAVE_BODY, save, discard: reset })
+    : true));
   window.addEventListener('beforeunload', event => {
     if (isDirty()) event.preventDefault();
   });

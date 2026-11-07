@@ -14,7 +14,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 from core.autodarts_client import AutodartsClient
-from core.models import DartEvent, DartEventType
 
 logger = logging.getLogger("autoglow.autodarts_bridge")
 
@@ -251,9 +250,7 @@ class AutodartsBridgeClient(AutodartsClient):
         if (self._sources and self.tab_attached) or not self._active_match_id:
             return
         logger.info(f"No Autodarts tab for {SOURCE_LOST_GRACE_SECONDS:.0f}s -> ending match {self._active_match_id} and emitting GAME_IDLE")
-        self._active_match_id = None
-        self._reset_match_state()
-        await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=self.board_id))
+        await self._end_match(self.board_id)
 
     def _ingest_lobby(self, topic: str, data: Any) -> Optional[Dict[str, Any]]:
         """A lobby update: its full state (players, settings) or an event such as its deletion.

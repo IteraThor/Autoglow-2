@@ -10,7 +10,7 @@ import time
 from typing import Optional, Set, Callable, Awaitable, Dict, Any
 
 from core.models import (
-    AppConfig, DeviceConfig, ProfileConfig, DartEvent, DartEventType, ProtocolMode, LightingMode
+    AppConfig, DeviceConfig, EffectConfig, ProfileConfig, DartEvent, DartEventType, ProtocolMode, LightingMode
 )
 from core.wled_driver import WLEDDriver
 from core.autodarts_client import AutodartsClient
@@ -24,6 +24,24 @@ BULL_OFF_HOLD_ENDS = (
     DartEventType.BULL_OFF_WON, DartEventType.GAME_START, DartEventType.GAME_IDLE,
     DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_FINISH,
 )
+# Intro events: the turn color waits until their effect has played
+INTRO_EVENTS = (DartEventType.GAME_START, DartEventType.BULL_OFF_START)
+# Hits and match moments that end a running intro early
+INTRO_ENDING_EVENTS = (
+    DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
+    DartEventType.BULLSEYE, DartEventType.BUST, DartEventType.SCORE_180,
+    DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS,
+    DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_IDLE,
+    DartEventType.BULL_OFF_WON,
+)
+MATCH_END_EVENTS = (DartEventType.MATCH_WON, DartEventType.GAME_FINISH)
+# With Autodarts attached but no match running, only an intro or a hit starts game lighting
+MATCHLESS_GAME_EVENTS = INTRO_EVENTS + (
+    DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
+    DartEventType.BULLSEYE, DartEventType.SCORE_180, DartEventType.BUST,
+)
+# Not game moments: they never switch the lights to UDP streaming
+NON_GAME_EVENTS = (DartEventType.CALIBRATING, DartEventType.MANUAL_RESET, DartEventType.GAME_IDLE)
 
 
 def _seg_attr(seg: Any, name: str, default: Any = None) -> Any:
@@ -45,6 +63,19 @@ def _is_pwm_segment(seg: Any) -> bool:
     seg_type = (_seg_attr(seg, "type", "") or "").lower()
     seg_name = (_seg_attr(seg, "name", "") or "").lower()
     return "pwm" in seg_type or "white" in seg_type or "pwm" in seg_name
+
+
+def _effect_segment_ids(dev: Any) -> list:
+    """The segments of a device that play effects; [None] when it has none, so all its LEDs play."""
+    return [_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]
+
+
+def _cancel(task: Optional[asyncio.Task]) -> bool:
+    """Cancel a task that is still running; True when it was."""
+    if task and not task.done():
+        task.cancel()
+        return True
+    return False
 
 
 class AutoGlowEngine:
@@ -203,8 +234,7 @@ class AutoGlowEngine:
             self.flow_runtime.reset()
             for drv in self.drivers.values():
                 drv.flow_clear()
-            if self._game_start_task and not self._game_start_task.done():
-                self._game_start_task.cancel()
+            if _cancel(self._game_start_task):
                 self._game_start_task = None
             self._game_start_end_time = 0.0
             self._pending_throw_event = None
@@ -215,10 +245,6 @@ class AutoGlowEngine:
     def _is_flow_mode(self) -> bool:
         """True while the Flow Matrix (not the Event Matrix) decides what plays."""
         return bool(self.app_config) and self.app_config.lighting_mode == LightingMode.FLOW
-
-    def reload_game_flow(self, flow: Any = None) -> None:
-        """Flow profiles are re-read from disk when they change; nothing to reload by hand."""
-        logger.info("AutoGlow Engine uses the saved flow profiles.")
 
     # -------------------------------------------------------------------------
     # Public Lifecycle & Protocol Mode Controls
@@ -384,7 +410,7 @@ class AutoGlowEngine:
         """Calculate the maximum configured duration for a given event across enabled devices and segments."""
         max_dur = 0.0
         for dev in self._active_devices():
-            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+            for seg_id in _effect_segment_ids(dev):
                 eff = self._profile_for(dev.ip, seg_id).get_effect(event_key)
                 if eff and eff.enabled and eff.duration > 0:
                     max_dur = max(max_dur, eff.duration)
@@ -404,7 +430,7 @@ class AutoGlowEngine:
             eff = self.profile.get_effect(event_key)
             return bool(eff and eff.enabled)
         for dev in devices:
-            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
+            for seg_id in _effect_segment_ids(dev):
                 eff = self._profile_for(dev.ip, seg_id).get_effect(event_key)
                 if eff and eff.enabled:
                     return True
@@ -436,8 +462,8 @@ class AutoGlowEngine:
     async def process_event(self, event: DartEvent) -> None:
         """
         Handle a game event:
-        1. Wake up board from Dimmed/Off state on ANY active game event.
-        2. Reset activity timer.
+        1. Hold the turn color while an intro or a held bull-off animation plays.
+        2. Wake up board from Dimmed/Off state on ANY active game event; after the match release UDP if configured.
         3. Trigger WLED driver effect animation on target device drivers.
         4. Broadcast telemetry to subscribers.
         """
@@ -449,31 +475,45 @@ class AutoGlowEngine:
             await self._process_flow_event(event)
             return
 
-        # Intro duration gating (Game Started, Bull-off Started): the turn color waits for the intro to finish
-        if event.event_type in (DartEventType.GAME_START, DartEventType.BULL_OFF_START):
-            if self._game_start_task and not self._game_start_task.done():
-                self._game_start_task.cancel()
-            if self._match_end_task and not self._match_end_task.done():
-                self._match_end_task.cancel()
+        self._track_intro(event)
+        if event.event_type == DartEventType.THROW and await self._hold_turn_color(event):
+            return
+
+        is_match_end = event.event_type in MATCH_END_EVENTS
+        is_game_idle = event.event_type == DartEventType.GAME_IDLE
+        is_teardown_enabled = bool(self.app_config and self.app_config.disconnect_udp_on_match_end)
+        max_match_won_dur = self._get_max_effect_duration("match_won") if is_match_end and is_teardown_enabled else 0.0
+
+        # Going idle, or a match end that releases UDP at once (Match Won without a duration), does not wake the board
+        if not (is_game_idle or (is_match_end and is_teardown_enabled and max_match_won_dur <= 0.0)):
+            await self._wake_for(event)
+        if is_game_idle or is_match_end:
+            await self._release_udp_after_match(is_game_idle, is_teardown_enabled, max_match_won_dur)
+
+        self._record_event_name(event)
+        await self._play_event_effect(event, event_key)
+        await self._broadcast_telemetry(self._game_event_telemetry(event))
+
+    def _track_intro(self, event: DartEvent) -> None:
+        """
+        Intro gating: after Game Started / Bull-off Started the turn color waits until the intro has played,
+        and a hit or match moment ends the wait. A held Bull-off Started effect (duration 0) holds the turn
+        color until the bull-off is decided.
+        """
+        event_key = event.event_type.value
+        if event.event_type in INTRO_EVENTS:
+            _cancel(self._game_start_task)
+            if _cancel(self._match_end_task):
                 self._match_end_task = None
             self._pending_throw_event = None
-
             max_game_start_dur = self._get_max_effect_duration(event_key)
-
             if max_game_start_dur > 0.0:
                 self._game_start_end_time = time.time() + max_game_start_dur
                 self._game_start_task = asyncio.create_task(self._await_game_start_transition(max_game_start_dur))
             else:
                 self._game_start_end_time = 0.0
-        elif event.event_type in [
-            DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
-            DartEventType.BULLSEYE, DartEventType.BUST, DartEventType.SCORE_180,
-            DartEventType.TAKEOUT, DartEventType.TAKEOUT_IN_PROGRESS,
-            DartEventType.LEG_WON, DartEventType.MATCH_WON, DartEventType.GAME_IDLE,
-            DartEventType.BULL_OFF_WON
-        ]:
-            if self._game_start_task and not self._game_start_task.done():
-                self._game_start_task.cancel()
+        elif event.event_type in INTRO_ENDING_EVENTS:
+            _cancel(self._game_start_task)
             self._game_start_end_time = 0.0
             self._pending_throw_event = None
 
@@ -482,188 +522,136 @@ class AutoGlowEngine:
         elif event.event_type in BULL_OFF_HOLD_ENDS:
             self._bull_off_hold = False
 
-        if event.event_type == DartEventType.THROW and self._bull_off_hold:
+    async def _hold_turn_color(self, event: DartEvent) -> bool:
+        """True when a THROW's turn color must wait: a held bull-off animation plays, or the intro (then it is queued)."""
+        if self._bull_off_hold:
             logger.info("Bull-off animation held -> skipping the turn color until the bull-off is decided")
-            await self._broadcast_telemetry({
-                "type": "game_event",
-                "event": event_key,
-                "player_name": event.player_name,
-                "player_index": event.player_index,
-                "score": event.score,
-                "multiplier": event.multiplier,
-                "segment": event.segment_name or ""
-            })
-            return
-
-        if event.event_type == DartEventType.THROW and time.time() < self._game_start_end_time:
+        elif time.time() < self._game_start_end_time:
             remaining = self._game_start_end_time - time.time()
             logger.info(f"Intro animation playing ({remaining:.1f}s remaining) -> queued player throw color")
             self._pending_throw_event = event
-            await self._broadcast_telemetry({
-                "type": "game_event",
-                "event": event_key,
-                "player_name": event.player_name,
-                "player_index": event.player_index,
-                "score": event.score,
-                "multiplier": event.multiplier,
-                "segment": event.segment_name or ""
-            })
+        else:
+            return False
+        await self._broadcast_telemetry({
+            "type": "game_event",
+            "event": event.event_type.value,
+            "player_name": event.player_name,
+            "player_index": event.player_index,
+            "score": event.score,
+            "multiplier": event.multiplier,
+            "segment": event.segment_name or ""
+        })
+        return True
+
+    async def _wake_for(self, event: DartEvent) -> None:
+        """Wake the board from Inactivity Dimming or Standby Power-Off: game moments switch to UDP streaming."""
+        if self.autodarts and getattr(self.autodarts, "_active_match_id", None) is None:
+            # Autodarts client attached, but no active match in progress
+            is_active_game = event.event_type in MATCHLESS_GAME_EVENTS
+        else:
+            # Standalone mode OR active match in progress
+            is_active_game = event.event_type not in NON_GAME_EVENTS
+
+        if is_active_game:
+            if self.is_board_off or self.is_board_dimmed or any(drv.protocol_mode != ProtocolMode.ACTIVE_UDP for drv in self.drivers.values()):
+                await self.wake_up(mode=ProtocolMode.ACTIVE_UDP)
+        elif self.is_board_off or self.is_board_dimmed:
+            # Non-game events (camera calibration, idle reset) only wake to IDLE_HTTP if powered off
+            await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
+
+    async def _release_udp_after_match(self, aborted: bool, teardown: bool, celebration: float) -> None:
+        """
+        A match was aborted (game idle) or ended. With disconnect_udp_on_match_end, UDP is released and Idle
+        Preset 1 restored: at once, or after the Match Won celebration when it has a duration.
+        """
+        if _cancel(self._match_end_task):
+            self._match_end_task = None
+        if not teardown:
             return
+        if aborted:
+            logger.info("Match aborted / game idle -> releasing UDP mode and restoring Idle Preset 1 (disconnect_udp_on_match_end is True)")
+            await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
+        elif celebration > 0.0:
+            logger.info(f"Match won celebration scheduled ({celebration:.1f}s) -> will disconnect UDP after effect")
+            self._match_end_task = asyncio.create_task(self._await_match_end_teardown(celebration))
+        else:
+            logger.info("Match won -> releasing UDP mode and restoring Idle Preset 1 immediately")
+            await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
 
-        # Check if this event is match ending or abort teardown
-        is_match_end = event.event_type in [DartEventType.MATCH_WON, DartEventType.GAME_FINISH]
-        is_game_idle = event.event_type == DartEventType.GAME_IDLE
-        is_teardown_enabled = bool(self.app_config and self.app_config.disconnect_udp_on_match_end)
-
-        max_match_won_dur = 0.0
-        if is_match_end and is_teardown_enabled:
-            max_match_won_dur = self._get_max_effect_duration("match_won")
-
-        # Wake up board from Inactivity Dimming or Standby Power-Off on active game events
-        # (Skip wake-up if game_idle or if match_won with 0 duration and disconnect_udp_on_match_end is True)
-        skip_wake = is_game_idle or (is_match_end and is_teardown_enabled and max_match_won_dur <= 0.0)
-
-        if not skip_wake:
-            if self.autodarts and getattr(self.autodarts, "_active_match_id", None) is None:
-                # Autodarts client attached, but no active match in progress
-                is_active_game = (
-                    event.event_type in (DartEventType.GAME_START, DartEventType.BULL_OFF_START)
-                    or event.event_type in [
-                        DartEventType.SINGLE, DartEventType.DOUBLE, DartEventType.TRIPLE,
-                        DartEventType.BULLSEYE, DartEventType.SCORE_180, DartEventType.BUST
-                    ]
-                )
-            else:
-                # Standalone mode OR active match in progress
-                is_active_game = event.event_type not in [
-                    DartEventType.CALIBRATING, DartEventType.MANUAL_RESET, DartEventType.GAME_IDLE
-                ]
-
-            if is_active_game:
-                needs_udp_wake = (
-                    self.is_board_off
-                    or self.is_board_dimmed
-                    or any(drv.protocol_mode != ProtocolMode.ACTIVE_UDP for drv in self.drivers.values())
-                )
-                if needs_udp_wake:
-                    await self.wake_up(mode=ProtocolMode.ACTIVE_UDP)
-            else:
-                # Non-game events (camera calibration, idle reset) only wake to IDLE_HTTP if powered off
-                if self.is_board_off or self.is_board_dimmed:
-                    await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
-
-        # Handle Match Ending / Abortion teardown if configured
-        if is_game_idle:
-            if self._match_end_task and not self._match_end_task.done():
-                self._match_end_task.cancel()
-                self._match_end_task = None
-            if is_teardown_enabled:
-                logger.info("Match aborted / game idle -> releasing UDP mode and restoring Idle Preset 1 (disconnect_udp_on_match_end is True)")
-                await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
-
-        elif is_match_end:
-            if self._match_end_task and not self._match_end_task.done():
-                self._match_end_task.cancel()
-                self._match_end_task = None
-            if is_teardown_enabled:
-                if max_match_won_dur > 0.0:
-                    logger.info(f"Match won celebration scheduled ({max_match_won_dur:.1f}s) -> will disconnect UDP after effect")
-                    self._match_end_task = asyncio.create_task(self._await_match_end_teardown(max_match_won_dur))
-                else:
-                    logger.info("Match won -> releasing UDP mode and restoring Idle Preset 1 immediately")
-                    await self.set_protocol_mode(ProtocolMode.IDLE_HTTP)
-
-        # Lookup effect binding and dispatch across all configured devices and segments
-        new_event_name = f"{event_key} ; {event.segment_name}" if event.segment_name else event_key
-        if self.last_event_name and self.last_event_name != "Standby":
-            self.previous_event_name = self.last_event_name
-        self.last_event_name = new_event_name
-
+    async def _play_event_effect(self, event: DartEvent, event_key: str) -> None:
+        """Each segment plays the effect of the profile it is assigned; without controllers the active profile plays on every driver."""
         dispatched_any = False
-
-        match_players = getattr(self.autodarts, "current_players", []) if self.autodarts else []
-
+        match_players = self._match_players()
         for dev in self._active_devices():
             drv = self.get_driver(dev.ip)
             if not drv:
                 continue
-
-            # Each segment plays the effect of the profile it is assigned
-            for seg_id in ([_seg_id(seg) for seg in dev.segments if not _is_pwm_segment(seg)] if dev.segments else [None]):
-                profile = self._profile_for(dev.ip, seg_id)
-                if event.event_type == DartEventType.THROW:
-                    eff = profile.resolve_player_effect(
-                        player_name=event.player_name,
-                        player_index=event.player_index,
-                        match_players=match_players,
-                    )
-                else:
-                    eff = profile.get_effect(event_key)
+            for seg_id in _effect_segment_ids(dev):
+                eff = self._event_effect(self._profile_for(dev.ip, seg_id), event, event_key, match_players)
                 if not (eff and eff.enabled):
                     continue
                 where = f"Segment #{seg_id}" if seg_id is not None else "all segments"
                 logger.info(f"Dispatching effect '{eff.animation.value}' on {dev.name} ({dev.ip}) {where} for '{self.last_event_name}'")
-                if seg_id is None:
-                    await drv.play_effect(eff)
-                else:
-                    await drv.play_effect(eff, segment_id=seg_id)
+                await drv.play_effect(eff, segment_id=seg_id)
                 dispatched_any = True
 
         if not dispatched_any and not self._active_devices():
             # No controller configured: fall back to the active profile across all drivers
-            fallback_eff = self.profile.resolve_player_effect(
-                player_name=event.player_name,
-                player_index=event.player_index,
-                match_players=match_players
-            ) if event.event_type == DartEventType.THROW else self.profile.get_effect(event_key)
+            fallback_eff = self._event_effect(self.profile, event, event_key, match_players)
             if fallback_eff and fallback_eff.enabled:
                 logger.info(f"Dispatching global effect '{fallback_eff.animation.value}' for '{self.last_event_name}'")
                 for drv in self.drivers.values():
                     await drv.play_effect(fallback_eff)
 
-        # Notify UI telemetry subscribers
-        await self._broadcast_telemetry({
+    @staticmethod
+    def _event_effect(profile: ProfileConfig, event: DartEvent, event_key: str, match_players: list) -> Optional[EffectConfig]:
+        """The profile's effect for the event; a THROW plays the effect of the throwing player's slot."""
+        if event.event_type == DartEventType.THROW:
+            return profile.resolve_player_effect(
+                player_name=event.player_name,
+                player_index=event.player_index,
+                match_players=match_players,
+            )
+        return profile.get_effect(event_key)
+
+    def _match_players(self) -> list:
+        """The players of the running Autodarts match ([] without Autodarts)."""
+        return getattr(self.autodarts, "current_players", []) if self.autodarts else []
+
+    def _record_event_name(self, event: DartEvent) -> None:
+        """The last event (with its segment) and the one before it, as the dashboard shows them."""
+        event_key = event.event_type.value
+        if self.last_event_name and self.last_event_name != "Standby":
+            self.previous_event_name = self.last_event_name
+        self.last_event_name = f"{event_key} ; {event.segment_name}" if event.segment_name else event_key
+
+    def _game_event_telemetry(self, event: DartEvent) -> Dict[str, Any]:
+        """The game_event telemetry message the UI shows a processed event with."""
+        return {
             "type": "game_event",
-            "event": event_key,
+            "event": event.event_type.value,
             "display_event": self.last_event_name,
             "previous_event": self.previous_event_name,
             "segment_name": event.segment_name or "",
             "score": event.score,
             "multiplier": event.multiplier,
             "timestamp": time.time(),
-            "players": getattr(self.autodarts, "current_players", []) if self.autodarts else [],
+            "players": self._match_players(),
             "active_player_idx": getattr(self.autodarts, "active_player_idx", 0) if self.autodarts else 0,
             "lighting_mode": self.app_config.lighting_mode.value,
-            "flow_phase": self.flow_active_phase
-        })
+            "flow_phase": self.flow_active_phase,
+        }
 
     async def _process_flow_event(self, event: DartEvent) -> None:
         """Flow Matrix: the flow runtime follows the match and drives the strips."""
-        event_key = event.event_type.value
         if event.event_type in (DartEventType.CALIBRATING, DartEventType.MANUAL_RESET):
             # Not a game moment: only wake the lights (to the idle look) if they were off
             if self.is_board_off or self.is_board_dimmed:
                 await self.wake_up(mode=ProtocolMode.IDLE_HTTP)
         await self.flow_runtime.handle(event)
 
-        new_event_name = f"{event_key} ; {event.segment_name}" if event.segment_name else event_key
-        if self.last_event_name and self.last_event_name != "Standby":
-            self.previous_event_name = self.last_event_name
-        self.last_event_name = new_event_name
-        await self._broadcast_telemetry({
-            "type": "game_event",
-            "event": event_key,
-            "display_event": self.last_event_name,
-            "previous_event": self.previous_event_name,
-            "segment_name": event.segment_name or "",
-            "score": event.score,
-            "multiplier": event.multiplier,
-            "timestamp": time.time(),
-            "players": getattr(self.autodarts, "current_players", []) if self.autodarts else [],
-            "active_player_idx": getattr(self.autodarts, "active_player_idx", 0) if self.autodarts else 0,
-            "lighting_mode": self.app_config.lighting_mode.value,
-            "flow_phase": self.flow_runtime.step,
-        })
+        self._record_event_name(event)
+        await self._broadcast_telemetry(self._game_event_telemetry(event))
 
     # -------------------------------------------------------------------------
     # Idle & Power Management Loop
@@ -728,9 +716,6 @@ class AutoGlowEngine:
     # -------------------------------------------------------------------------
     def subscribe_telemetry(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]):
         self._telemetry_subscribers.add(callback)
-
-    def unsubscribe_telemetry(self, callback: Callable[[Dict[str, Any]], Awaitable[None]]):
-        self._telemetry_subscribers.discard(callback)
 
     async def _broadcast_telemetry(self, payload: Dict[str, Any]):
         for sub in list(self._telemetry_subscribers):

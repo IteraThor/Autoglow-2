@@ -230,11 +230,3 @@ class DiscoveryService:
         except Exception:
             logger.exception("Fast network discovery failed")
             return []
-
-    @staticmethod
-    async def probe_ip(ip: str) -> Optional[Dict[str, Any]]:
-        try:
-            async with aiohttp.ClientSession() as session:
-                return await _async_probe_ip(ip, session)
-        except Exception:
-            return None

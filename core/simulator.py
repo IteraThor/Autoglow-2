@@ -45,7 +45,6 @@ class VirtualWLEDServer:
         self.actual_port = port
         self.is_running = False
         self._transport: Optional[asyncio.DatagramTransport] = None
-        self._protocol: Optional[VirtualWLEDDatagramProtocol] = None
 
         # Pixel state (WS281x addressable LED strip)
         self.latest_pixels: bytearray = bytearray(45 * 3)  # Default: 45 WS281x LEDs
@@ -82,10 +81,6 @@ class VirtualWLEDServer:
         """Register a frame consumer."""
         self._subscribers.add(callback)
 
-    def unsubscribe(self, callback: Callable[[bytes, Dict[str, Any]], None]) -> None:
-        """Remove a frame consumer."""
-        self._subscribers.discard(callback)
-
     async def start(self) -> bool:
         """Start the async UDP receiver on host:port, falling back if busy."""
         if self.is_running:
@@ -96,12 +91,11 @@ class VirtualWLEDServer:
 
         for p in ports_to_try:
             try:
-                transport, protocol = await loop.create_datagram_endpoint(
+                transport, _ = await loop.create_datagram_endpoint(
                     lambda: VirtualWLEDDatagramProtocol(self._on_udp_packet),
                     local_addr=(self.host, p)
                 )
                 self._transport = transport
-                self._protocol = protocol
                 self.actual_port = p
                 self.is_running = True
                 logger.info(f"Virtual WLED UDP Receiver listening on {self.host}:{self.actual_port}")
@@ -126,7 +120,6 @@ class VirtualWLEDServer:
             except Exception:
                 pass
             self._transport = None
-            self._protocol = None
         self.is_running = False
         logger.info("Virtual WLED UDP Receiver stopped.")
 
@@ -173,81 +166,6 @@ class VirtualWLEDServer:
             "pwm_value": pwm_val,
             "last_packet_age_ms": age_ms,
             "timeout_sec": self.timeout_sec
-        }
-
-    # -------------------------------------------------------------------------
-    # WLED Mock API Emulation
-    # -------------------------------------------------------------------------
-    def get_mock_state(self) -> Dict[str, Any]:
-        """Generate a valid /json/state payload representing the virtual simulator controller."""
-        return {
-            "on": True,
-            "bri": 255,
-            "transition": 7,
-            "ps": 1,
-            "lor": 0,
-            "seg": [
-                {
-                    "id": 0,
-                    "start": 0,
-                    "stop": 45,
-                    "len": 45,
-                    "on": True,
-                    "bri": 255,
-                    "col": [[0, 255, 128], [0, 0, 0], [0, 0, 0]],
-                    "fx": 0,
-                    "sx": 128,
-                    "ix": 128,
-                    "n": "WS281x Ring"
-                }
-            ]
-        }
-
-    def get_mock_info(self) -> Dict[str, Any]:
-        """Generate a valid /json/info payload for device discovery/ping."""
-        return {
-            "ver": "0.15.0-virtual",
-            "vid": 2405010,
-            "name": "AutoGlow LED Simulator",
-            "udpport": self.actual_port,
-            "live": False,
-            "fxcount": 180,
-            "palcount": 71,
-            "arch": "Virtual",
-            "core": "AutoGlow Python",
-            "freeheap": 250000,
-            "uptime": int(time.time()),
-            "brand": "AutoGlow",
-            "product": "Simulator",
-            "mac": "02:00:00:00:00:01",
-            "ip": self.host,
-            "leds": {
-                "count": 45,
-                "rgbw": False,
-                "wv": False,
-                "cct": False,
-                "pwr": 0,
-                "maxpwr": 0,
-                "maxseg": 16,
-                "ins": [
-                    {"start": 0, "len": 45, "pin": [33], "type": 22, "order": 0}
-                ]
-            }
-        }
-
-    def get_mock_cfg(self) -> Dict[str, Any]:
-        """Generate a valid /json/cfg payload."""
-        return {
-            "id": {"name": "AutoGlow LED Simulator"},
-            "hw": {
-                "led": {
-                    "total": 45,
-                    "ins": [
-                        {"start": 0, "len": 45, "pin": [33], "type": 22, "order": 0}
-                    ]
-                }
-            },
-            "if": {"live": {"mso": False}}
         }
 
 

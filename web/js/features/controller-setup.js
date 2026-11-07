@@ -154,8 +154,6 @@ export function layout(plan, { whole = false, offsets = false } = {}) {
   return entries;
 }
 
-export const buildSegments = (plan, options) => layout(plan, options).map(e => e.seg);
-
 // Looks offered for the idle lighting (WLED effects: 9 Rainbow, 38 Aurora, 2 Breathe, 0 Solid)
 export const IDLE_LOOKS = [
   { id: 'rainbow', label: 'Rainbow', fx: { fx: 9, pal: 0, sx: 128, ix: 128 } },

@@ -57,21 +57,6 @@ def _render_legacy_wipe(effect: EffectConfig, frame: int, elapsed: float, count:
     return pixels
 
 
-def _render_legacy_breathe(effect: EffectConfig, frame: int, elapsed: float, count: int) -> bytearray:
-    pixels = bytearray(count * 3)
-    speed = max(0.01, effect.speed)
-    c1 = effect.color_primary
-    c2 = effect.color_secondary
-    phase = elapsed * speed * 3.5
-    norm_sin = 0.5 * (1.0 + math.sin(phase))
-    factor = math.pow(norm_sin, 2.2)
-    for i in range(count):
-        pixels[i * 3 + 0] = int(c1.r * factor + c2.r * (1.0 - factor))
-        pixels[i * 3 + 1] = int(c1.g * factor + c2.g * (1.0 - factor))
-        pixels[i * 3 + 2] = int(c1.b * factor + c2.b * (1.0 - factor))
-    return pixels
-
-
 def _render_legacy_scan(effect: EffectConfig, frame: int, elapsed: float, count: int) -> bytearray:
     pixels = bytearray(count * 3)
     speed = max(0.01, effect.speed)

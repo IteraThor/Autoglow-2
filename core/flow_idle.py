@@ -19,16 +19,12 @@ IDLE_PRESET_ID = 1
 IDLE_PRESET_NAME = "AutoGlow Default"
 
 
-def _seg(seg: Any, name: str, default: Any = None) -> Any:
-    return seg.get(name, default) if isinstance(seg, dict) else getattr(seg, name, default)
-
-
 def idle_preset_segments(dev: Any, storage: GameFlowStorageManager, saved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     The idle preset's segments for one controller. saved: the segments of its current idle preset, so
     settings AutoGlow does not manage (offset, grouping, reverse, palette ...) and light strips stay as they are.
     """
-    from core.engine import _is_pwm_segment, _seg_id
+    from core.engine import _is_pwm_segment, _seg_attr, _seg_id
     by_id = {int(s["id"]): s for s in saved if isinstance(s, dict) and isinstance(s.get("id"), int)}
     segments = list(dev.segments or [])
     if not segments:
@@ -36,10 +32,10 @@ def idle_preset_segments(dev: Any, storage: GameFlowStorageManager, saved: List[
     out = []
     for seg in segments:
         sid = _seg_id(seg)
-        start = int(_seg(seg, "start", 0) or 0)
-        entry = dict(by_id.get(sid) or {"of": int(_seg(seg, "offset", 0) or 0)})
-        entry.update({"id": sid, "start": start, "stop": start + max(1, int(_seg(seg, "length", 1) or 1)),
-                      "n": sanitize_wled_name(_seg(seg, "name", "") or f"Segment {sid}"), "sel": True})
+        start = int(_seg_attr(seg, "start", 0) or 0)
+        entry = dict(by_id.get(sid) or {"of": int(_seg_attr(seg, "offset", 0) or 0)})
+        entry.update({"id": sid, "start": start, "stop": start + max(1, int(_seg_attr(seg, "length", 1) or 1)),
+                      "n": sanitize_wled_name(_seg_attr(seg, "name", "") or f"Segment {sid}"), "sel": True})
         if _is_pwm_segment(seg):
             entry.setdefault("on", True)
             entry.setdefault("bri", 181)

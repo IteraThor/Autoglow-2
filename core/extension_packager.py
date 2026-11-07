@@ -77,13 +77,6 @@ def rsa_sign(key: Dict[str, int], message: bytes) -> bytes:
     return pow(int.from_bytes(padded, "big"), key["d"], key["n"]).to_bytes(size, "big")
 
 
-def rsa_verify(key: Dict[str, int], message: bytes, signature: bytes) -> bool:
-    size = (key["n"].bit_length() + 7) // 8
-    digest_info = _SHA256_DIGEST_INFO + hashlib.sha256(message).digest()
-    expected = b"\x00\x01" + b"\xff" * (size - len(digest_info) - 3) + b"\x00" + digest_info
-    return pow(int.from_bytes(signature, "big"), key["e"], key["n"]).to_bytes(size, "big") == expected
-
-
 # -----------------------------------------------------------------------------
 # DER / protobuf encoding
 # -----------------------------------------------------------------------------

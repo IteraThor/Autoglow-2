@@ -7,7 +7,7 @@ import { confirmDialog, promptDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import { blendFlow, renderFlowFrame } from './flow-looks.js';
-import { effectPicker as wledEffectPicker, loadEffects } from './idle-lighting.js';
+import { loadEffects, wledEffectPicker } from './idle-lighting.js';
 
 const STRIP_LEDS = 48;
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
@@ -832,7 +832,7 @@ function rangeField(label, { min, max, step, value, format, onset }) {
   return h('label', { class: 'fm-field' }, h('span', { class: 'form-label' }, label), h('span', { class: 'fm-range' }, input, out));
 }
 
-function effectPicker(effect, setEffect, forcePlayer) {
+function flowLookGrid(effect, setEffect, forcePlayer) {
   return h('div', { class: 'fm-effects' }, ...page.overview.catalog.effects.map(meta => {
     const on = effect.animation === meta.id;
     const sample = { ...effect, animation: meta.id, duration: effect.duration || 0 };
@@ -848,7 +848,7 @@ function effectPicker(effect, setEffect, forcePlayer) {
 
 function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false }) {
   const meta = effectMeta(effect.animation);
-  const parts = [effectPicker(effect, setEffect, forcePlayer)];
+  const parts = [flowLookGrid(effect, setEffect, forcePlayer)];
 
   for (const opt of meta.options) {
     const [label, names] = OPTION_LABELS[opt.key] || [opt.key, {}];
