@@ -1268,11 +1268,12 @@ function inspector() {
 
 // --- segment bar and editor head --------------------------------------------
 
-// A controller's outputs (one per GPIO pin), each with its segments. Zones named "<strip> · <zone>" (WLED keeps
-// them as "<strip> - <zone>") show the strip name once and the zone names on the buttons.
+// A controller's RGB outputs (one per GPIO pin), each with its segments; light strips play no lights, so they're left
+// out. Zones named "<strip> · <zone>" (WLED keeps them as "<strip> - <zone>") show the strip name once and the zone
+// names on the buttons.
 function outputs(dev) {
   const byPin = new Map();
-  for (const seg of dev.segments) {
+  for (const seg of dev.segments.filter(sg => !sg.light_strip)) {
     const key = seg.gpio || `seg-${seg.id}`;
     if (!byPin.has(key)) byPin.set(key, { gpio: seg.gpio, segs: [] });
     byPin.get(key).segs.push(seg);
@@ -1288,10 +1289,6 @@ function outputs(dev) {
 }
 
 function segButton(dev, seg, label, cur, linked) {
-  if (seg.light_strip) {
-    return h('a', { class: 'fm-segbar-seg is-dimmer', href: `/setup/controllers/${encodeURIComponent(dev.ip)}`, 'data-link': true,
-      title: 'Light strip: no game effects. Its brightness is set on the controller page.' }, label);
-  }
   const full = { ...seg, ip: dev.ip, controller: dev.name };
   const on = !!cur && segKey(full) === segKey(cur);
   const btn = h('button', {
@@ -1302,20 +1299,19 @@ function segButton(dev, seg, label, cur, linked) {
   return btn;
 }
 
-// Every controller in one slim block: name and IP, then each output as "GPIO 2 · Ring [Top|Left|Right]"
+// Every controller in one slim block: its name, then each GPIO output as a group of segment buttons
 function segmentBar() {
   const o = page.overview;
-  if (!o.lights.length) {
+  if (!allSegments().length) {
     return h('header', { class: 'fm-segbar card' }, h('p', { class: 'fm-segbar-empty' }, 'No controller yet. ',
       h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Add one in Setup')));
   }
   const cur = currentSeg();
   const linked = new Set(sharedWith().map(segKey));
   return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
-    ...o.lights.map(dev => h('div', { class: 'fm-segbar-ctl' },
-      h('span', { class: 'fm-segbar-dev' }, dev.name, h('small', {}, dev.ip)),
-      h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out' },
-        out.gpio && h('span', { class: 'fm-segbar-gpio' }, out.gpio),
+    ...o.lights.filter(dev => outputs(dev).length).map(dev => h('div', { class: 'fm-segbar-ctl' },
+      h('span', { class: 'fm-segbar-dev', title: dev.ip }, dev.name),
+      h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', title: out.gpio || null },
         out.strip && h('span', { class: 'fm-segbar-strip' }, out.strip),
         h('div', { class: 'fm-segbar-segs', role: 'group', 'aria-label': out.strip || out.gpio || dev.name },
           ...out.segs.map(seg => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })))))))))));

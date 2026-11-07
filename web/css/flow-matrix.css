@@ -23,7 +23,7 @@
 
 .fm-segbar-ctl {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 110px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2) var(--space-4);
   padding: var(--space-2) 0;
@@ -41,28 +41,16 @@
 }
 
 .fm-segbar-dev {
-  display: flex;
-  flex-direction: column;
   min-width: 0;
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.fm-segbar-dev small {
-  font: 400 var(--fs-xs) var(--font-mono);
-  color: var(--text-muted);
-}
-
 .fm-segbar-out {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.fm-segbar-gpio {
-  font: var(--fs-xs) var(--font-mono);
-  color: var(--text-muted);
 }
 
 .fm-segbar-strip {
@@ -108,10 +96,6 @@
   background: var(--accent-primary);
   color: var(--bg-workspace);
   font-weight: 600;
-}
-
-.fm-segbar-seg.is-dimmer {
-  color: var(--text-muted);
 }
 
 .fm-segbar-dot {
