@@ -21,7 +21,8 @@ from core.game_flow import (
     GameFlow, GameFlowStorageManager, player_colour_index,
 )
 from core.models import LightingMode, ProtocolMode
-from core.wled_driver import is_host_online
+from core.wled_driver import WLEDDriver, is_host_online
+from core.wled_layout import adopt_live_layout
 
 logger = logging.getLogger("autoglow.routes.flow")
 
@@ -148,8 +149,39 @@ async def _online(request: web.Request) -> Dict[str, bool]:
     return {dev.ip: bool(ok) for dev, ok in zip(devices, results, strict=True)}
 
 
+async def _refresh_layouts(request: web.Request, online: Dict[str, bool]) -> None:
+    """Read the LED layout of every online controller that is not streaming a game, so the segments shown are
+    the ones the controller really has. Changes are saved to the config."""
+    engine = request.app.get("engine")
+    if not engine:
+        return
+    ips = [ip for ip, ok in online.items()
+           if ok and not ((drv := engine.drivers.get(ip.strip())) and drv.protocol_mode == ProtocolMode.ACTIVE_UDP)]
+    if not ips:
+        return
+    loop = asyncio.get_running_loop()
+    infos = await asyncio.gather(*(loop.run_in_executor(None, WLEDDriver.fetch_live_device_info, ip) for ip in ips),
+                                 return_exceptions=True)
+    live = {ip: info for ip, info in zip(ips, infos, strict=True) if isinstance(info, dict)}
+    from core.storage import load_app_config, save_app_config
+    config_path = request.app.get("config_path") or "config.json"
+    cfg = request.app.get("current_app_config") or load_app_config(config_path)
+    changed = False
+    for config in {id(c): c for c in (cfg, engine.app_config) if c}.values():
+        for dev in config.devices:
+            if dev.ip in live and adopt_live_layout(dev, live[dev.ip]):
+                changed = True
+    if changed:
+        save_app_config(cfg, config_path)
+        request.app["current_app_config"] = cfg
+        engine.sync_drivers(cfg)
+        logger.info("Took the controllers' current LED layouts for the Lighting page.")
+
+
 async def handle_overview(request: web.Request) -> web.Response:
-    return web.json_response({**_overview(request), "online": await _online(request)})
+    online = await _online(request)
+    await _refresh_layouts(request, online)
+    return web.json_response({**_overview(request), "online": online})
 
 
 async def handle_get_profile(request: web.Request) -> web.Response:

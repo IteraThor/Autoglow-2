@@ -8,7 +8,7 @@ import os
 import unittest
 
 from core.models import SegmentConfig
-from routes.wled_routes import _segments_from_wled
+from core.wled_layout import segments_from_wled as _segments_from_wled
 
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "btf_wled_layout_2026-11-02.json")
 

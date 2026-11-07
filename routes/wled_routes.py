@@ -10,12 +10,13 @@ from aiohttp import web
 
 from core.errors import DeviceUnreachable, NotFound, PersistenceError, ServiceUnavailable, ValidationError, read_json
 from core.models import (
-    DeviceConfig, SegmentConfig, EffectConfig, AnimationType,
+    DeviceConfig, EffectConfig, AnimationType,
     RGBColor, ProtocolMode, _safe_int, is_pwm_output
 )
 from core.storage import load_app_config, save_app_config
 from core.engine import _is_pwm_segment
 from core.wled_driver import WLEDDriver, sanitize_wled_name
+from core.wled_layout import segments_from_wled, unique_ranges
 from core.discovery import DiscoveryService
 
 logger = logging.getLogger("autoglow.routes.wled")
@@ -63,48 +64,6 @@ def _duplicate_name(names) -> Optional[str]:
     return None
 
 
-def _segments_from_wled(seg_data: list, hw_ins: Optional[list], previous: list) -> list:
-    """
-    AutoGlow's segments from a WLED layout. Each segment gets the data pin of the output it sits on, light
-    strips are white illumination, and what only AutoGlow knows (role, hit-locator direction) is kept from the
-    previous segment with the same id and start, so re-running the setup guide does not reset it.
-    """
-    outputs = [h for h in (hw_ins or []) if isinstance(h, dict)]
-    before = {(p.id, p.start): p for p in previous or []}
-    segments = []
-    for s_idx, s in enumerate(seg_data):
-        if not isinstance(s, dict):
-            continue
-        start = _safe_int(s.get("start"), 0)
-        out = next((h for h in outputs if _safe_int(h.get("start"), 0) <= start < _safe_int(h.get("start"), 0) + _safe_int(h.get("len"), 1)), None)
-        pwm = bool(out and is_pwm_output(out))
-        pins = out.get("pin") if out else None
-        pin = pins[0] if isinstance(pins, list) and pins else None
-        seg_id = _safe_int(s.get("id"), s_idx)
-        old = before.get((seg_id, start))
-        seg = SegmentConfig(
-            id=seg_id,
-            name=str(s.get("n") or s.get("name") or f"Segment {s_idx}"),
-            start=start,
-            length=max(1, (_safe_int(s.get("stop"), 1) - start)),
-            type="PWM White" if pwm else "WS281x",
-            offset=max(0, _safe_int(s.get("of"), 0)),
-        )
-        if pin is not None:
-            seg.gpio = f"GPIO {pin}"
-        elif old:
-            seg.gpio = old.gpio
-        if pwm:
-            seg.role = "white_illumination"
-        elif old and old.role != "white_illumination":
-            seg.role = old.role
-        if old:
-            seg.clockwise = old.clockwise
-            seg.locator = old.locator
-        segments.append(seg)
-    return segments
-
-
 async def handle_wled_update(request: web.Request) -> web.Response:
     config_path = request.app.get("config_path", "config.json")
     data = await read_json(request)
@@ -120,7 +79,7 @@ async def handle_wled_update(request: web.Request) -> web.Response:
     hw_ins = data.get("hw_ins")
     state = data.get("state", {})
     seg_data = state.get("seg", []) if isinstance(state, dict) else []
-    taken = _duplicate_name(s.get("n") for s in seg_data if isinstance(s, dict))
+    taken = _duplicate_name(s.get("n") for s in unique_ranges(seg_data))
     if taken:
         raise ValidationError(f"Two segments are called '{taken}'. Give each segment its own name.", field="name")
 
@@ -156,10 +115,10 @@ async def handle_wled_update(request: web.Request) -> web.Response:
                     dev.pwm_index = None
 
             if seg_data and isinstance(seg_data, list):
-                dev.segments = _segments_from_wled(seg_data, hw_ins or dev.hw_ins, dev.segments)
+                dev.segments = segments_from_wled(seg_data, hw_ins or dev.hw_ins, dev.segments)
 
     if not found:
-        segments = _segments_from_wled(seg_data, hw_ins, []) if seg_data else []
+        segments = segments_from_wled(seg_data, hw_ins, []) if seg_data else []
 
         pwm_hw = next((h for h in hw_ins if is_pwm_output(h)), None) if (hw_ins and isinstance(hw_ins, list)) else None
         pwm_idx = _safe_int(pwm_hw.get("start"), 45) if pwm_hw else None

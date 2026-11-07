@@ -131,7 +131,7 @@ async def _async_sync_hardware_on_boot(app: web.Application):
         return
 
     from core.wled_driver import WLEDDriver
-    from core.models import SegmentConfig
+    from core.wled_layout import adopt_live_layout
     from core.storage import save_app_config
 
     # Query every controller first; this can take seconds per offline controller
@@ -153,26 +153,10 @@ async def _async_sync_hardware_on_boot(app: web.Application):
         if not info:
             continue
         try:
-            if info.get("online") and info.get("segments"):
-                live_segs = [
-                    SegmentConfig(
-                        id=s["id"],
-                        name=s.get("name", f"Segment {s['id']}"),
-                        type=s.get("type", "WS281x"),
-                        gpio=s.get("gpio", ""),
-                        start=s.get("start", 0),
-                        length=s.get("len", s.get("stop", 0) - s.get("start", 0)),
-                        role="white_illumination" if "pwm" in str(s.get("type", "")).lower() or "pwm" in str(s.get("name", "")).lower() else "dartboard_ring"
-                    )
-                    for s in info["segments"]
-                ]
-                live_hw = info.get("hw_ins", [])
-                if dev.segments != live_segs or dev.hw_ins != live_hw:
-                    dev.segments = live_segs
-                    dev.hw_ins = live_hw
-                    if info.get("name"):
-                        dev.name = info.get("name")
-                    changed = True
+            if adopt_live_layout(dev, info):
+                if info.get("name"):
+                    dev.name = info.get("name")
+                changed = True
         except Exception as e:
             logger.warning(f"Hardware sync check failed for {dev.ip}: {e}")
 
