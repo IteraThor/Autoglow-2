@@ -93,11 +93,6 @@
   background: color-mix(in srgb, var(--tone) 30%, transparent);
 }
 
-/* Same lights as the selected segment */
-.fm-segbar-seg.is-linked {
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--tone) 80%, transparent);
-}
-
 .fm-segbar-seg.is-on {
   background: var(--tone);
   color: var(--bg-workspace);
@@ -137,11 +132,6 @@
 
 .fm-title {
   margin-right: var(--space-2);
-}
-
-/* "All N | Only this" beside the Lights dropdown when the lights are shared */
-.fm-scope {
-  align-self: center;
 }
 
 .fm-profile-pick {

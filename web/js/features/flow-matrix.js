@@ -1,8 +1,9 @@
 // AutoGlow 2 - Flow Matrix page (/lighting/flow)
 // The controllers sit in a bar on top, each GPIO output with its segments. Clicking a segment edits what it plays:
 // a simple chart of how its lights follow a match. Clicking any part of the chart opens one panel with everything
-// needed to change it. Segments can share their lights (one profile); then "Only <segment>" gives one of them its
-// own copy when saved. A status line says what is off or missing. Edits are a draft until saved.
+// needed to change it. Edits only ever change the selected segment: segments can share their lights (one profile),
+// and saving a shared one gives the selected segment its own copy. A status line says what is off or missing.
+// Edits are a draft until saved.
 
 import { api } from '../core/api.js';
 import { confirmDialog, promptDialog } from '../core/dialog.js';
@@ -57,7 +58,6 @@ const page = {
   draft: null,
   selected: { kind: 'step', id: 'turn' },
   seg: null,       // the selected segment ("ip|id")
-  scope: 'all',    // 'all' = edit every segment sharing these lights, 'one' = only the selected one
   live: null,
   liveHit: null,
   loading: false
@@ -124,13 +124,8 @@ function sharedWith() {
   return [cur, ...allSegments().filter(s => s.profile === cur.profile && segKey(s) !== segKey(cur))];
 }
 
-// "Only <segment>" while the lights are shared: saving makes the segment its own copy
-const editsOne = () => page.scope === 'one' && sharedWith().length > 1;
-
-function listNames(segs) {
-  const names = segs.map(s => s.name);
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] || '';
-}
+// Other segments play the same lights: saving gives the selected one its own copy, so they keep theirs
+const isShared = () => sharedWith().length > 1;
 
 function rememberSeg(key) {
   page.seg = key;
@@ -262,8 +257,7 @@ async function refresh(name) {
 async function save() {
   if (!isDirty()) return true;
   const seg = currentSeg();
-  const own = editsOne();
-  const group = sharedWith();
+  const own = isShared();
   try {
     const data = own
       ? await api.post('/api/flow/segment/own', { ip: seg.ip, segment_id: seg.id, flow: page.draft })
@@ -272,8 +266,7 @@ async function save() {
     page.name = data.flow.name;
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
-    page.scope = 'all';
-    toast.success(own ? `${seg.name} has its own lights now` : group.length > 1 ? `Saved for all ${group.length}` : 'Saved');
+    toast.success(own ? `${seg.name} has its own lights now` : 'Saved');
     idleWarning(data);
     render();
     return true;
@@ -322,7 +315,6 @@ async function selectSegment(seg) {
   if (segKey(seg) === page.seg) return;
   if (!(await guardUnsaved())) return;
   rememberSeg(segKey(seg));
-  page.scope = 'all';
   try {
     await openProfile(seg.profile);
   } catch (err) {
@@ -353,8 +345,7 @@ async function pickLights(value) {
     const data = await api.post('/api/flow/assign', { ip: seg.ip, segment_id: seg.id, name });
     page.overview = { ...page.overview, ...data };
     idleWarning(data);
-    page.scope = 'all';
-    await openProfile(name);
+      await openProfile(name);
     toast.success(kind === 'preset' ? `${seg.name} starts fresh` : `${seg.name} plays '${name}'`);
   } catch (err) {
     toast.error(err);
@@ -395,6 +386,16 @@ async function deleteProfile() {
 
 async function resetProfile() {
   const preset = page.overview.presets.find(p => p.id === (page.draft.preset || 'classic'));
+  // Shared lights stay as they are for the others: this segment starts fresh from the preset instead
+  if (isShared()) {
+    const fresh = await confirmDialog({
+      title: `Reset ${currentSeg().name}?`,
+      body: `It starts fresh from the ${preset?.name || 'Classic'} preset. The other segments keep their lights.`,
+      confirmLabel: 'Reset', danger: true
+    });
+    if (fresh) await pickLights(`preset:${preset?.id || 'classic'}`);
+    return;
+  }
   const ok = await confirmDialog({
     title: `Reset '${page.name}'?`,
     body: `Everything goes back to the ${preset?.name || 'Classic'} preset. Your changes to this profile are lost.`,
@@ -428,14 +429,14 @@ async function makeDefault() {
 
 // --- trying on the lights ----------------------------------------------------
 
-// The selected segment, plus the ones sharing its lights unless "Only <segment>" is on
+// Only the selected segment: what lights up is what is being edited
 function tryTargets() {
-  return editsOne() ? sharedWith().slice(0, 1) : sharedWith();
+  return sharedWith().slice(0, 1);
 }
 
 function tryLabel() {
-  const segs = tryTargets();
-  return segs.length > 1 ? `▶ Try on all ${segs.length}` : segs.length ? `▶ Try on ${segs[0].name}` : '▶ Try on my lights';
+  const seg = currentSeg();
+  return seg ? `▶ Try on ${seg.name}` : '▶ Try on my lights';
 }
 
 async function tryOnLights(kind, id, extra = {}) {
@@ -1289,11 +1290,11 @@ function outputs(dev) {
 }
 
 // A segment is one piece of its strip's bar, in the zone colours of the controller page (a whole strip is teal)
-function segButton(dev, seg, label, cur, linked, tone) {
+function segButton(dev, seg, label, cur, tone) {
   const full = { ...seg, ip: dev.ip, controller: dev.name };
   const on = !!cur && segKey(full) === segKey(cur);
   return h('button', {
-    type: 'button', class: `fm-segbar-seg${on ? ' is-on' : ''}${!on && linked ? ' is-linked' : ''}`, 'aria-pressed': String(on),
+    type: 'button', class: `fm-segbar-seg${on ? ' is-on' : ''}`, 'aria-pressed': String(on),
     dataset: { tone }, title: `${dev.name} · ${seg.name} · ${seg.gpio || ''} · plays '${seg.profile}'`, onclick: () => selectSegment(full)
   }, label);
 }
@@ -1307,7 +1308,6 @@ function segmentBar() {
       h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Add one in Setup')));
   }
   const cur = currentSeg();
-  const linked = new Set(sharedWith().map(segKey));
   const devs = o.lights.filter(dev => outputs(dev).length);
   const shown = devs.filter(dev => showOffline() || isOnline(dev.ip));
   return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
@@ -1316,7 +1316,7 @@ function segmentBar() {
       h('span', { class: 'fm-segbar-dev', title: isOnline(dev.ip) ? dev.ip : `${dev.ip} · offline` }, dev.name),
       ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out', role: 'group', 'aria-label': out.strip || out.gpio || dev.name, title: out.gpio || null },
         out.strip && h('span', { class: 'fm-segbar-name' }, out.strip),
-        ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })),
+        ...out.segs.map((seg, i) => segButton(dev, seg, out.label(seg), cur,
           out.segs.length > 1 ? String(i % 4) : 'whole')))))));
 }
 
@@ -1325,20 +1325,10 @@ function lightsOption(p) {
   return h('option', { value: `profile:${p.name}`, selected: p.name === page.name, title: where ? `On ${where}` : 'Not used' }, p.name);
 }
 
-// One row: the selected segment, its Lights dropdown, "All N | Only this" when the lights are shared, and the
-// status. Where it sits and who shares it is in the segment bar (and in the tooltips).
+// One row: the selected segment, its Lights dropdown and the status. Where it sits is in the segment bar.
 function editorHead() {
   const o = page.overview;
   const cur = currentSeg();
-  const group = sharedWith();
-  const shared = group.length > 1 && segmented(['all', 'one'], page.scope, v => { page.scope = v; render(); },
-    { all: `All ${group.length}`, one: 'Only this' });
-  if (shared) {
-    shared.classList.add('fm-scope');
-    shared.title = page.scope === 'one'
-      ? `Saving gives ${cur.name} its own lights. ${listNames(group.slice(1))} keep theirs.`
-      : `Changes show on ${listNames(group)}.`;
-  }
   return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
     h('div', { class: 'fm-bar-main' },
       h('h1', { class: 'page-title fm-title', title: cur ? [cur.controller, cur.gpio].filter(Boolean).join(' · ') : null }, cur ? cur.name : page.name),
@@ -1346,8 +1336,7 @@ function editorHead() {
         h('select', { class: 'ui-select', onchange: e => pickLights(e.target.value) },
           h('optgroup', { label: cur ? 'Same lights as' : 'Profiles' }, ...o.profiles.map(lightsOption)),
           cur && h('optgroup', { label: 'Start fresh from' },
-            ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name))))),
-      shared),
+            ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name)))))),
     h('div', { class: 'fm-top-end' }, statusLine()));
 }
 
@@ -1364,9 +1353,7 @@ function statusLine() {
 }
 
 function savebarNote() {
-  const group = sharedWith();
-  if (editsOne()) return `Unsaved · only ${group[0].name}`;
-  return group.length > 1 ? `Unsaved · all ${group.length}` : 'Unsaved changes';
+  return isShared() ? `Unsaved · only ${currentSeg().name}` : 'Unsaved changes';
 }
 
 function renderSavebar() {
