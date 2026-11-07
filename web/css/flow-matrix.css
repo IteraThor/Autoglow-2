@@ -157,35 +157,11 @@
 }
 
 .fm-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
   margin-right: var(--space-2);
 }
 
-.fm-title-where {
-  font-size: var(--fs-sm);
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.fm-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* "Same lights as ... [Edit all N | Only X]" */
-.fm-shared {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.fm-shared .fm-seg {
+/* "All N | Only this" beside the Lights dropdown when the lights are shared */
+.fm-scope {
   align-self: center;
 }
 
@@ -199,12 +175,6 @@
 .fm-profile-pick .ui-select {
   flex: 1;
   max-width: 340px;
-}
-
-.fm-profile-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
 }
 
 .fm-top-end {

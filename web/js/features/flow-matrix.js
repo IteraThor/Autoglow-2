@@ -273,7 +273,7 @@ async function save() {
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
     page.scope = 'all';
-    toast.success(own ? `${seg.name} has its own lights now` : group.length ? `Saved for ${listNames(group)}` : `Saved '${page.name}'`);
+    toast.success(own ? `${seg.name} has its own lights now` : group.length > 1 ? `Saved for all ${group.length}` : 'Saved');
     idleWarning(data);
     render();
     return true;
@@ -1234,6 +1234,11 @@ function profilePanel() {
       h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
       h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
       flow.hit_locator && locatorCheck()),
+    section('These lights',
+      h('div', { class: 'fm-panel-actions' },
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: page.overview.profiles.length <= 1 }, 'Delete'))),
     section('New segments',
       page.overview.default !== page.name
         ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Start new segments with these lights'))
@@ -1285,7 +1290,7 @@ function outputs(dev) {
 function segButton(dev, seg, label, cur, linked) {
   if (seg.light_strip) {
     return h('a', { class: 'fm-segbar-seg is-dimmer', href: `/setup/controllers/${encodeURIComponent(dev.ip)}`, 'data-link': true,
-      title: 'Light strip: no game effects. Its brightness is set on the controller page.' }, `${label} · dimmer`);
+      title: 'Light strip: no game effects. Its brightness is set on the controller page.' }, label);
   }
   const full = { ...seg, ip: dev.ip, controller: dev.name };
   const on = !!cur && segKey(full) === segKey(cur);
@@ -1318,38 +1323,33 @@ function segmentBar() {
 
 function lightsOption(p) {
   const where = p.used_by.map(u => u.segment_name).join(', ');
-  return h('option', { value: `profile:${p.name}`, selected: p.name === page.name }, `${p.name} — ${where ? `on ${where}` : 'not used'}`);
+  return h('option', { value: `profile:${p.name}`, selected: p.name === page.name, title: where ? `On ${where}` : 'Not used' }, p.name);
 }
 
-// What the selected segment plays: its name and place, the Lights dropdown, the profile tools and the status.
-// Shared lights add a row with "Edit all N | Only <segment>".
+// One row: the selected segment, its Lights dropdown, "All N | Only this" when the lights are shared, and the
+// status. Where it sits and who shares it is in the segment bar (and in the tooltips).
 function editorHead() {
   const o = page.overview;
   const cur = currentSeg();
   const group = sharedWith();
-  const where = cur && [cur.controller, cur.gpio].filter(Boolean).join(' · ');
-  const head = h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
+  const shared = group.length > 1 && segmented(['all', 'one'], page.scope, v => { page.scope = v; render(); },
+    { all: `All ${group.length}`, one: 'Only this' });
+  if (shared) {
+    shared.classList.add('fm-scope');
+    shared.title = page.scope === 'one'
+      ? `Saving gives ${cur.name} its own lights. ${listNames(group.slice(1))} keep theirs.`
+      : `Changes show on ${listNames(group)}.`;
+  }
+  return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
     h('div', { class: 'fm-bar-main' },
-      h('h1', { class: 'page-title fm-title' }, cur ? cur.name : page.name, where && h('span', { class: 'fm-title-where' }, where)),
+      h('h1', { class: 'page-title fm-title', title: cur ? [cur.controller, cur.gpio].filter(Boolean).join(' · ') : null }, cur ? cur.name : page.name),
       h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Lights'),
         h('select', { class: 'ui-select', onchange: e => pickLights(e.target.value) },
           h('optgroup', { label: cur ? 'Same lights as' : 'Profiles' }, ...o.profiles.map(lightsOption)),
           cur && h('optgroup', { label: 'Start fresh from' },
             ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name))))),
-      h('div', { class: 'fm-profile-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete'))),
+      shared),
     h('div', { class: 'fm-top-end' }, statusLine()));
-  if (group.length < 2) return head;
-  const one = page.scope === 'one';
-  return h('div', { class: 'fm-head' }, head,
-    h('div', { class: 'fm-shared' },
-      h('span', { class: 'fm-shared-text' }, `Same lights as ${listNames(group.slice(1))}`),
-      segmented(['all', 'one'], page.scope, v => { page.scope = v; render(); }, { all: `Edit all ${group.length}`, one: `Only ${cur.name}` }),
-      h('span', { class: 'form-hint' }, one
-        ? `Saving gives ${cur.name} its own lights. The others keep theirs.`
-        : `Changes show on ${listNames(group)}.`)));
 }
 
 function statusLine() {
@@ -1366,8 +1366,8 @@ function statusLine() {
 
 function savebarNote() {
   const group = sharedWith();
-  if (editsOne()) return `Unsaved · for ${group[0].name} only`;
-  return group.length > 1 ? `Unsaved · for ${listNames(group)}` : 'Unsaved changes';
+  if (editsOne()) return `Unsaved · only ${group[0].name}`;
+  return group.length > 1 ? `Unsaved · all ${group.length}` : 'Unsaved changes';
 }
 
 function renderSavebar() {
