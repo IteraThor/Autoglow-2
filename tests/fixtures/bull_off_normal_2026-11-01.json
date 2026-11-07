@@ -1,0 +1,1062 @@
+[
+ {
+  "channel": "autodarts.users",
+  "topic": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1.events",
+  "data": {
+   "body": {
+    "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+    "type": "lobby"
+   },
+   "event": "lobby-enter"
+  }
+ },
+ {
+  "channel": "autodarts.lobbies",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.state",
+  "data": {
+   "bullOffMode": "Normal",
+   "createdAt": "2026-11-01T14:57:45.63192477Z",
+   "hasReferee": false,
+   "host": {
+    "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+    "average": 63.07342657342657,
+    "country": "de",
+    "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+    "membership": "free",
+    "name": "iterathor"
+   },
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "isPrivate": true,
+   "legs": 1,
+   "maxPlayers": 6,
+   "minPlayers": 1,
+   "players": [
+    {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "index": 0,
+     "isPending": false,
+     "name": "iterathor",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "user": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+    },
+    {
+     "avatarUrl": "",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "index": 1,
+     "isPending": false,
+     "name": "THOR",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "userId": null
+    }
+   ],
+   "settings": {
+    "baseScore": 501,
+    "bullMode": "25/50",
+    "inMode": "Straight",
+    "maxRounds": 50,
+    "outMode": "Double"
+   },
+   "variant": "X01"
+  }
+ },
+ {
+  "channel": "autodarts.lobbies",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.events",
+  "data": {
+   "body": {
+    "createdAt": "2026-11-01T14:58:16.484302119Z",
+    "hasReferee": false,
+    "host": {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "average": 63.07342657342657,
+     "country": "de",
+     "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "membership": "free",
+     "name": "iterathor"
+    },
+    "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+    "legs": 1,
+    "players": [
+     {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+      "boardName": "Linux PC",
+      "boardType": "vantage",
+      "cpuPPR": null,
+      "cpuSpeed": null,
+      "host": {
+       "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+       "average": 63.07342657342657,
+       "country": "de",
+       "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+       "membership": "free",
+       "name": "iterathor"
+      },
+      "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+      "index": 0,
+      "isPending": false,
+      "name": "iterathor",
+      "refereeState": "",
+      "tournamentPlayerId": null,
+      "user": {
+       "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+       "average": 63.07342657342657,
+       "country": "de",
+       "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+       "membership": "free",
+       "name": "iterathor"
+      },
+      "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+     },
+     {
+      "avatarUrl": "",
+      "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+      "boardName": "Linux PC",
+      "boardType": "vantage",
+      "cpuPPR": null,
+      "cpuSpeed": null,
+      "host": {
+       "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+       "average": 63.07342657342657,
+       "country": "de",
+       "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+       "membership": "free",
+       "name": "iterathor"
+      },
+      "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+      "index": 1,
+      "isPending": false,
+      "name": "THOR",
+      "refereeState": "",
+      "tournamentPlayerId": null,
+      "userId": null
+     }
+    ],
+    "scores": null,
+    "settings": {
+     "mode": "Normal"
+    },
+    "type": "Local",
+    "variant": "Bull-off"
+   },
+   "event": "start",
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.users",
+  "topic": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1.events",
+  "data": {
+   "body": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "event": "active-match"
+  }
+ },
+ {
+  "channel": "autodarts.boards",
+  "topic": "11179e9c-be45-4c61-957e-b5f11ee70a5f.state",
+  "data": {
+   "connected": true,
+   "event": "Manual reset",
+   "numThrows": 0,
+   "status": "Throw"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "coords": {
+     "x": 0.6903223516744036,
+     "y": -0.19046295290644832
+    },
+    "segment": {
+     "bed": "SingleOuter",
+     "multiplier": 1,
+     "name": "S10",
+     "number": 10
+    }
+   },
+   "event": "throw",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.state",
+  "data": {
+   "createdAt": "2026-11-01T14:58:16.484302119Z",
+   "finished": false,
+   "gameFinished": false,
+   "gameScores": [
+    121,
+    0
+   ],
+   "gameWinner": -1,
+   "hasReferee": false,
+   "host": {
+    "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+    "average": 63.07342657342657,
+    "country": "de",
+    "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+    "membership": "free",
+    "name": "iterathor"
+   },
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "leg": 1,
+   "legs": 1,
+   "player": 0,
+   "players": [
+    {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "index": 0,
+     "isPending": false,
+     "name": "iterathor",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "user": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+    },
+    {
+     "avatarUrl": "",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "index": 1,
+     "isPending": false,
+     "name": "THOR",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "userId": null
+    }
+   ],
+   "round": 1,
+   "scores": null,
+   "set": 1,
+   "settings": {
+    "mode": "Normal"
+   },
+   "skippedPlayers": [
+    false,
+    false
+   ],
+   "state": {},
+   "stats": [
+    {
+     "legStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "setStats": null
+    },
+    {
+     "legStats": {
+      "bullDistance": 0,
+      "coords": null,
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 0,
+      "coords": null,
+      "segmentNumber": 0
+     },
+     "setStats": null
+    }
+   ],
+   "turnBusted": false,
+   "turnScore": 0,
+   "turns": [
+    {
+     "busted": false,
+     "createdAt": "2026-11-01T14:58:16.484299866Z",
+     "finishedAt": "0001-01-01T00:00:00Z",
+     "id": "01a1979e-4d24-7492-a2ab-981a16579e03",
+     "marks": null,
+     "playerId": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "points": 0,
+     "round": 1,
+     "score": 121,
+     "throws": [
+      {
+       "coords": {
+        "x": 0.6903223516744036,
+        "y": -0.19046295290644832
+       },
+       "createdAt": "2026-11-01T14:58:36.382439439Z",
+       "entry": "manual_coords",
+       "id": "01a1979e-9add-733f-bf6c-e592973816df",
+       "marks": null,
+       "segment": {
+        "bed": "SingleOuter",
+        "multiplier": 1,
+        "name": "S10",
+        "number": 10
+       },
+       "throw": 0
+      }
+     ],
+     "turn": 0
+    }
+   ],
+   "type": "Local",
+   "variant": "Bull-off",
+   "winner": -1
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "points": 0
+   },
+   "event": "turn_end",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "isCheckout": false,
+    "player": "THOR",
+    "playerId": "01a1979e-28d8-7ce4-b410-5089cb957907",
+    "score": 0
+   },
+   "event": "turn_start",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.state",
+  "data": {
+   "createdAt": "2026-11-01T14:58:16.484302119Z",
+   "finished": false,
+   "gameFinished": false,
+   "gameScores": [
+    121,
+    0
+   ],
+   "gameWinner": -1,
+   "hasReferee": false,
+   "host": {
+    "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+    "average": 63.07342657342657,
+    "country": "de",
+    "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+    "membership": "free",
+    "name": "iterathor"
+   },
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "leg": 1,
+   "legs": 1,
+   "player": 1,
+   "players": [
+    {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "index": 0,
+     "isPending": false,
+     "name": "iterathor",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "user": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+    },
+    {
+     "avatarUrl": "",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "index": 1,
+     "isPending": false,
+     "name": "THOR",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "userId": null
+    }
+   ],
+   "round": 1,
+   "scores": null,
+   "set": 1,
+   "settings": {
+    "mode": "Normal"
+   },
+   "skippedPlayers": [
+    false,
+    false
+   ],
+   "state": {},
+   "stats": [
+    {
+     "legStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "setStats": null
+    },
+    {
+     "legStats": {
+      "bullDistance": 0,
+      "coords": null,
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 0,
+      "coords": null,
+      "segmentNumber": 0
+     },
+     "setStats": null
+    }
+   ],
+   "turnBusted": false,
+   "turnScore": 0,
+   "turns": [
+    {
+     "busted": false,
+     "createdAt": "2026-11-01T14:59:00.710134478Z",
+     "finishedAt": "0001-01-01T00:00:00Z",
+     "id": "01a1979e-f9e6-720c-b86f-d935be45a252",
+     "marks": null,
+     "playerId": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "points": 0,
+     "round": 1,
+     "score": 0,
+     "throws": [],
+     "turn": 1
+    }
+   ],
+   "type": "Local",
+   "variant": "Bull-off",
+   "winner": -1
+  }
+ },
+ {
+  "channel": "autodarts.boards",
+  "topic": "11179e9c-be45-4c61-957e-b5f11ee70a5f.state",
+  "data": {
+   "connected": true,
+   "event": "Manual reset",
+   "numThrows": 0,
+   "status": "Throw"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "player": "THOR",
+    "type": "set"
+   },
+   "event": "game_shot",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "coords": {
+     "x": 0.7410184166941185,
+     "y": -0.3208242629571443
+    },
+    "segment": {
+     "bed": "SingleOuter",
+     "multiplier": 1,
+     "name": "S10",
+     "number": 10
+    }
+   },
+   "event": "throw",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.state",
+  "data": {
+   "createdAt": "2026-11-01T14:58:16.484302119Z",
+   "finished": false,
+   "gameFinished": true,
+   "gameScores": [
+    121,
+    137
+   ],
+   "gameWinner": 0,
+   "hasReferee": false,
+   "host": {
+    "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+    "average": 63.07342657342657,
+    "country": "de",
+    "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+    "membership": "free",
+    "name": "iterathor"
+   },
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "leg": 1,
+   "legs": 1,
+   "player": 1,
+   "players": [
+    {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "index": 0,
+     "isPending": false,
+     "name": "iterathor",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "user": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+    },
+    {
+     "avatarUrl": "",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "index": 1,
+     "isPending": false,
+     "name": "THOR",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "userId": null
+    }
+   ],
+   "round": 1,
+   "scores": null,
+   "set": 1,
+   "settings": {
+    "mode": "Normal"
+   },
+   "skippedPlayers": [
+    false,
+    false
+   ],
+   "state": {},
+   "stats": [
+    {
+     "legStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 121.7395965794098,
+      "coords": {
+       "x": 0.6903223516744036,
+       "y": -0.19046295290644832
+      },
+      "segmentNumber": 0
+     },
+     "setStats": null
+    },
+    {
+     "legStats": {
+      "bullDistance": 137.27292120340252,
+      "coords": {
+       "x": 0.7410184166941185,
+       "y": -0.3208242629571443
+      },
+      "segmentNumber": 0
+     },
+     "matchStats": {
+      "bullDistance": 137.27292120340252,
+      "coords": {
+       "x": 0.7410184166941185,
+       "y": -0.3208242629571443
+      },
+      "segmentNumber": 0
+     },
+     "setStats": null
+    }
+   ],
+   "turnBusted": false,
+   "turnScore": 0,
+   "turns": [
+    {
+     "busted": false,
+     "createdAt": "2026-11-01T14:59:00.710134478Z",
+     "finishedAt": "0001-01-01T00:00:00Z",
+     "id": "01a1979e-f9e6-720c-b86f-d935be45a252",
+     "marks": null,
+     "playerId": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "points": 0,
+     "round": 1,
+     "score": 137,
+     "throws": [
+      {
+       "coords": {
+        "x": 0.7410184166941185,
+        "y": -0.3208242629571443
+       },
+       "createdAt": "2026-11-01T14:59:02.883406812Z",
+       "entry": "manual_coords",
+       "id": "01a1979f-025f-7e20-b3ab-a7b0537ddbc6",
+       "marks": null,
+       "segment": {
+        "bed": "SingleOuter",
+        "multiplier": 1,
+        "name": "S10",
+        "number": 10
+       },
+       "throw": 0
+      }
+     ],
+     "turn": 1
+    }
+   ],
+   "type": "Local",
+   "variant": "Bull-off",
+   "winner": -1
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.game-events",
+  "data": {
+   "body": {
+    "isCheckout": false,
+    "leg": 1,
+    "player": "iterathor",
+    "playerId": "00000000-0000-0000-0000-000000000000",
+    "score": 501,
+    "set": 1,
+    "variant": "X01"
+   },
+   "event": "game_on",
+   "matchId": "01a1979d-d49f-7e1b-8911-682929db5800"
+  }
+ },
+ {
+  "channel": "autodarts.matches",
+  "topic": "01a1979d-d49f-7e1b-8911-682929db5800.state",
+  "data": {
+   "chalkboards": [
+    {
+     "rows": [
+      {
+       "isPointsStruck": false,
+       "isScoreStruck": false,
+       "points": 0,
+       "round": 0,
+       "score": 501
+      }
+     ]
+    },
+    {
+     "rows": [
+      {
+       "isPointsStruck": false,
+       "isScoreStruck": false,
+       "points": 0,
+       "round": 0,
+       "score": 501
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-11-01T14:58:16.484302119Z",
+   "finished": false,
+   "gameFinished": false,
+   "gameScores": [
+    501,
+    501
+   ],
+   "gameWinner": -1,
+   "hasReferee": false,
+   "host": {
+    "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+    "average": 63.07342657342657,
+    "country": "de",
+    "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+    "membership": "free",
+    "name": "iterathor"
+   },
+   "id": "01a1979d-d49f-7e1b-8911-682929db5800",
+   "leg": 1,
+   "legs": 1,
+   "player": 0,
+   "players": [
+    {
+     "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "index": 0,
+     "isPending": false,
+     "name": "iterathor",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "user": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "userId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1"
+    },
+    {
+     "avatarUrl": "",
+     "boardId": "11179e9c-be45-4c61-957e-b5f11ee70a5f",
+     "boardName": "Linux PC",
+     "boardType": "vantage",
+     "cpuPPR": null,
+     "cpuSpeed": null,
+     "host": {
+      "avatarUrl": "https://storage.autodarts.io/avatars/presets/avatar_2.png",
+      "average": 63.07342657342657,
+      "country": "de",
+      "id": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+      "membership": "free",
+      "name": "iterathor"
+     },
+     "hostId": "a6c8ca9b-7236-42db-a2b0-7c1f3e1901f1",
+     "id": "01a1979e-28d8-7ce4-b410-5089cb957907",
+     "index": 1,
+     "isPending": false,
+     "name": "THOR",
+     "refereeState": "",
+     "tournamentPlayerId": null,
+     "userId": null
+    }
+   ],
+   "round": 1,
+   "scores": [
+    {
+     "legs": 0,
+     "sets": 0
+    },
+    {
+     "legs": 0,
+     "sets": 0
+    }
+   ],
+   "set": 1,
+   "settings": {
+    "baseScore": 501,
+    "bullMode": "25/50",
+    "inMode": "Straight",
+    "maxRounds": 50,
+    "outMode": "Double"
+   },
+   "skippedPlayers": [
+    false,
+    false
+   ],
+   "state": {
+    "checkoutGuide": null,
+    "checkoutGuides": [
+     null,
+     null
+    ]
+   },
+   "stats": [
+    {
+     "legStats": {
+      "average": 0,
+      "averageUntil170": 0,
+      "checkoutPercent": 0,
+      "checkoutPoints": 0,
+      "checkoutPointsAverage": 0,
+      "checkouts": 0,
+      "checkoutsHit": 0,
+      "dartsThrown": 0,
+      "dartsUntil170": 0,
+      "first9Average": 0,
+      "first9Score": 0,
+      "less60": 0,
+      "plus100": 0,
+      "plus140": 0,
+      "plus170": 0,
+      "plus60": 0,
+      "score": 0,
+      "scoreUntil170": 0,
+      "total180": 0
+     },
+     "matchStats": {
+      "average": 0,
+      "averageUntil170": 0,
+      "checkoutPercent": 0,
+      "checkoutPoints": 0,
+      "checkoutPointsAverage": 0,
+      "checkouts": 0,
+      "checkoutsHit": 0,
+      "dartsThrown": 0,
+      "dartsUntil170": 0,
+      "first9Average": 0,
+      "first9Score": 0,
+      "less60": 0,
+      "plus100": 0,
+      "plus140": 0,
+      "plus170": 0,
+      "plus60": 0,
+      "score": 0,
+      "scoreUntil170": 0,
+      "total180": 0
+     },
+     "setStats": null
+    },
+    {
+     "legStats": {
+      "average": 0,
+      "averageUntil170": 0,
+      "checkoutPercent": 0,
+      "checkoutPoints": 0,
+      "checkoutPointsAverage": 0,
+      "checkouts": 0,
+      "checkoutsHit": 0,
+      "dartsThrown": 0,
+      "dartsUntil170": 0,
+      "first9Average": 0,
+      "first9Score": 0,
+      "less60": 0,
+      "plus100": 0,
+      "plus140": 0,
+      "plus170": 0,
+      "plus60": 0,
+      "score": 0,
+      "scoreUntil170": 0,
+      "total180": 0
+     },
+     "matchStats": {
+      "average": 0,
+      "averageUntil170": 0,
+      "checkoutPercent": 0,
+      "checkoutPoints": 0,
+      "checkoutPointsAverage": 0,
+      "checkouts": 0,
+      "checkoutsHit": 0,
+      "dartsThrown": 0,
+      "dartsUntil170": 0,
+      "first9Average": 0,
+      "first9Score": 0,
+      "less60": 0,
+      "plus100": 0,
+      "plus140": 0,
+      "plus170": 0,
+      "plus60": 0,
+      "score": 0,
+      "scoreUntil170": 0,
+      "total180": 0
+     },
+     "setStats": null
+    }
+   ],
+   "turnBusted": false,
+   "turnScore": 0,
+   "turns": [
+    {
+     "busted": false,
+     "createdAt": "2026-11-01T14:59:16.304390064Z",
+     "finishedAt": "0001-01-01T00:00:00Z",
+     "id": "01a1979f-36d0-75f3-b3cf-febeaea7ceab",
+     "marks": null,
+     "playerId": "01a1979d-d542-79d5-b2bb-985d3d0d96f3",
+     "points": 0,
+     "round": 1,
+     "score": 0,
+     "throws": [],
+     "turn": 0
+    }
+   ],
+   "type": "Local",
+   "variant": "X01",
+   "winner": -1
+  }
+ },
+ {
+  "channel": "autodarts.boards",
+  "topic": "11179e9c-be45-4c61-957e-b5f11ee70a5f.state",
+  "data": {
+   "connected": true,
+   "event": "Manual reset",
+   "numThrows": 0,
+   "status": "Throw"
+  }
+ }
+]

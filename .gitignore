@@ -53,7 +53,6 @@ docs/superpowers/
 old autoglow version/
 
 # Development files: kept locally, not published (the repository holds only what runs the app)
-/tests/
 /.github/
 /docs/
 /dev.py

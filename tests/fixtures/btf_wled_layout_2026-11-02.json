@@ -1,0 +1,90 @@
+{
+ "hw_ins": [
+  {
+   "start": 0,
+   "len": 45,
+   "pin": [
+    16
+   ],
+   "order": 1,
+   "rev": false,
+   "skip": 0,
+   "type": 22,
+   "ref": false,
+   "rgbwm": 0,
+   "freq": 0
+  },
+  {
+   "start": 45,
+   "len": 45,
+   "pin": [
+    17
+   ],
+   "order": 0,
+   "rev": false,
+   "skip": 0,
+   "type": 22,
+   "ref": false,
+   "rgbwm": 0,
+   "freq": 0
+  },
+  {
+   "start": 90,
+   "len": 1,
+   "pin": [
+    26
+   ],
+   "order": 1,
+   "rev": false,
+   "skip": 0,
+   "type": 41,
+   "ref": false,
+   "rgbwm": 4,
+   "freq": 19531
+  }
+ ],
+ "seg": [
+  {
+   "id": 0,
+   "n": "RGB 1 zone 1",
+   "start": 0,
+   "stop": 12,
+   "of": 0
+  },
+  {
+   "id": 1,
+   "n": "RGB 1 zone 2",
+   "start": 12,
+   "stop": 23,
+   "of": 0
+  },
+  {
+   "id": 2,
+   "n": "RGB 1 zone 3",
+   "start": 23,
+   "stop": 34,
+   "of": 0
+  },
+  {
+   "id": 3,
+   "n": "RGB 1 zone 4",
+   "start": 34,
+   "stop": 45,
+   "of": 0
+  },
+  {
+   "id": 4,
+   "n": "RGB 2 Strip",
+   "start": 45,
+   "stop": 90,
+   "of": 0
+  },
+  {
+   "id": 5,
+   "n": "Light strip",
+   "start": 90,
+   "stop": 91,
+   "of": 0
+  }
+ ]
+}
