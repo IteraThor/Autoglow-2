@@ -217,6 +217,14 @@ class TestFlowRoutes(AioHTTPTestCase):
         self.assertIsNone(segs[1]["profile"])
         self.assertEqual(data["profiles"][0]["used_by"][0]["segment_name"], "Ring")
 
+    async def test_overview_says_which_controllers_are_online(self):
+        with patch("routes.flow_routes.is_host_online", return_value=False):
+            data = await (await self.client.get("/api/flow/overview")).json()
+        self.assertEqual(data["online"], {"192.168.1.100": False})
+        with patch("routes.flow_routes.is_host_online", return_value=True):
+            data = await (await self.client.get("/api/flow/overview")).json()
+        self.assertEqual(data["online"], {"192.168.1.100": True})
+
     async def test_create_from_preset_copy_rename_and_delete(self):
         r = await self.client.post("/api/flow/profile/create", json={"name": "Party night", "preset": "party"})
         self.assertEqual(r.status, 200)

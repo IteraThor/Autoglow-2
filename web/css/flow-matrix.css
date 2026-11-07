@@ -109,6 +109,24 @@
   box-shadow: 0 0 0 2px var(--bg-workspace);
 }
 
+/* Shown with "Show offline": dimmed, still clickable */
+.fm-segbar-ctl.is-offline {
+  opacity: 0.55;
+}
+
+.fm-segbar-dev small {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--status-danger);
+}
+
+.fm-segbar-toggle {
+  align-self: flex-start;
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--fs-xs);
+}
+
 .fm-segbar-empty {
   margin: var(--space-2) 0;
   color: var(--text-secondary);

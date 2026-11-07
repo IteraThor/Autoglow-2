@@ -5,6 +5,7 @@ Profiles (named flows), which controller / segment uses which, trying a step or 
 the match preview, and the lighting mode switch.
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -19,7 +20,8 @@ from core.game_flow import (
     ALWAYS_ON_STEPS, HIT_IDS, HIT_LABELS, MAX_PLAYERS, STEP_IDS, STEP_LABELS, TIMED_STEPS,
     GameFlow, GameFlowStorageManager, player_colour_index,
 )
-from core.models import LightingMode
+from core.models import LightingMode, ProtocolMode
+from core.wled_driver import is_host_online
 
 logger = logging.getLogger("autoglow.routes.flow")
 
@@ -130,8 +132,24 @@ def _overview(request: web.Request) -> Dict[str, Any]:
     }
 
 
+async def _online(request: web.Request) -> Dict[str, bool]:
+    """Which controllers answer, by ip (checked in parallel; one streaming the game counts as online)."""
+    engine = request.app.get("engine")
+    devices = list(engine._active_devices()) if engine else []
+    loop = asyncio.get_running_loop()
+
+    async def check(dev: Any) -> bool:
+        drv = engine.drivers.get(dev.ip.strip())
+        if drv and drv.protocol_mode == ProtocolMode.ACTIVE_UDP:
+            return True
+        return await loop.run_in_executor(None, is_host_online, dev.ip.strip(), 80, 0.3)
+
+    results = await asyncio.gather(*(check(dev) for dev in devices))
+    return {dev.ip: bool(ok) for dev, ok in zip(devices, results, strict=True)}
+
+
 async def handle_overview(request: web.Request) -> web.Response:
-    return web.json_response(_overview(request))
+    return web.json_response({**_overview(request), "online": await _online(request)})
 
 
 async def handle_get_profile(request: web.Request) -> web.Response:
