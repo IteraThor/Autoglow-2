@@ -1,6 +1,6 @@
 // AutoGlow 2 - Setup › Controllers › <controller>
 // One page per controller: name and on/off in the header, then the wiring.
-// Then the wiring, where each RGB strip gets its profile (which also sets its idle effect), and the light strips' idle brightness.
+// Then the wiring, where each RGB strip links to its lights on the Lighting page, and the light strips' idle brightness.
 // Everything is a draft until the save bar's Save; leaving with unsaved changes asks first.
 
 import { api } from '../core/api.js';
@@ -168,7 +168,7 @@ async function renameSegment(seg, input) {
 }
 
 // What a segment plays during a game (Flow Matrix profile; light strips play none).
-// RGB strips get a dropdown that switches the profile straight away (not part of the wiring draft).
+// RGB strips link to the Lighting page with that segment selected, where its lights are chosen and edited.
 function segmentProfile(seg, pwm) {
   const text = (label, muted) => h('span', { class: `led-summary-seg-profile${muted ? ' is-none' : ''}` }, label);
   if (pwm) return text('No game effects', true);
@@ -177,31 +177,13 @@ function segmentProfile(seg, pwm) {
   if (!profiles) return text('…', true);
   const entry = profiles.segments[String(seg.id)];
   // A segment that is only in the draft has no saved profile yet
-  if (!entry || !profiles.names.length) return text(entry?.profile ?? profiles.default ?? '—', !entry);
-  const current = entry.profile ?? profiles.default;
-  const el = select(profiles.names.map(name => ({ value: name, label: name })), current, {
-    class: 'ui-select ui-select-sm led-summary-seg-profile-select',
-    'aria-label': `Profile for ${seg.name}`, title: 'Flow Matrix profile: what this strip plays during a game, and its look between games',
-    onchange: () => assignSegmentProfile(seg, entry, el)
-  });
-  return el;
-}
-
-async function assignSegmentProfile(seg, entry, el) {
-  const name = el.value;
-  const opened = page;
-  el.disabled = true;
-  try {
-    const data = await api.post('/api/flow/assign', { ip: page.ip, segment_id: entry.id, name });
-    entry.profile = name;
-    if (data.idle_failed?.length) toast.warning(`${seg.name} plays '${name}', but its idle effect could not be set: the controller did not answer.`);
-    else toast.success(`${seg.name} plays '${name}'`);
-  } catch (err) {
-    el.value = entry.profile ?? opened.segProfiles.default;
-    toast.error(err);
-  } finally {
-    el.disabled = false;
-  }
+  if (!entry) return text(profiles.default ?? '—', true);
+  const ip = page.ip;
+  return h('a', {
+    class: 'led-summary-seg-profile led-summary-seg-profile-link', href: '/lighting/flow', 'data-link': true,
+    title: 'What this segment plays during a game, and its look between games. Change it on the Lighting page.',
+    onclick: () => window.selectLightingSegment?.(ip, entry.id)
+  }, `${entry.profile ?? profiles.default} →`);
 }
 
 async function loadSegmentProfiles() {
@@ -210,12 +192,11 @@ async function loadSegmentProfiles() {
     const dev = data.lights.find(d => d.ip === page.ip);
     return {
       default: data.default,
-      names: data.profiles.map(p => p.name),
       // Keyed like the layout's segment ids; id stays null for a controller without segments
       segments: Object.fromEntries((dev?.segments || []).map(seg => [String(seg.id ?? 0), { id: seg.id, profile: seg.profile }]))
     };
   } catch (err) {
-    return { default: null, names: [], segments: {} };
+    return { default: null, segments: {} };
   }
 }
 

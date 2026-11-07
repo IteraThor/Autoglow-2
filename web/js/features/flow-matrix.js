@@ -1,6 +1,8 @@
 // AutoGlow 2 - Flow Matrix page (/lighting/flow)
-// A simple chart of how the light strips follow a match. Clicking any part opens one panel with
-// everything needed to change it. A status line says what is off or missing. Edits are a draft until saved.
+// The controllers sit in a bar on top, each GPIO output with its segments. Clicking a segment edits what it plays:
+// a simple chart of how its lights follow a match. Clicking any part of the chart opens one panel with everything
+// needed to change it. Segments can share their lights (one profile); then "Only <segment>" gives one of them its
+// own copy when saved. A status line says what is off or missing. Edits are a draft until saved.
 
 import { api } from '../core/api.js';
 import { confirmDialog, promptDialog } from '../core/dialog.js';
@@ -54,6 +56,8 @@ const page = {
   saved: null,
   draft: null,
   selected: { kind: 'step', id: 'turn' },
+  seg: null,       // the selected segment ("ip|id")
+  scope: 'all',    // 'all' = edit every segment sharing these lights, 'one' = only the selected one
   live: null,
   liveHit: null,
   loading: false
@@ -93,6 +97,48 @@ function lightsUsing(name) {
 
 function allSegments() {
   return page.overview.lights.flatMap(dev => dev.segments.filter(s => !s.light_strip).map(s => ({ ...s, ip: dev.ip, controller: dev.name })));
+}
+
+// --- the selected segment ----------------------------------------------------
+
+const SEG_KEY = 'autoglow_lighting_segment';
+const segKey = s => `${s.ip}|${s.id ?? ''}`;
+
+function currentSeg() {
+  const segs = allSegments();
+  return segs.find(s => segKey(s) === page.seg) || segs[0] || null;
+}
+
+// The selected segment first, then every other segment playing the same lights
+function sharedWith() {
+  const cur = currentSeg();
+  if (!cur) return [];
+  return [cur, ...allSegments().filter(s => s.profile === cur.profile && segKey(s) !== segKey(cur))];
+}
+
+// "Only <segment>" while the lights are shared: saving makes the segment its own copy
+const editsOne = () => page.scope === 'one' && sharedWith().length > 1;
+
+function listNames(segs) {
+  const names = segs.map(s => s.name);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] || '';
+}
+
+function rememberSeg(key) {
+  page.seg = key;
+  try { localStorage.setItem(SEG_KEY, key); } catch (err) { /* private window: the choice lasts this visit */ }
+}
+
+function savedSeg() {
+  try { return localStorage.getItem(SEG_KEY); } catch (err) { return null; }
+}
+
+// Segments with the same lights share a dot colour in the segment bar
+const PROFILE_COLOURS = ['#14b8a6', '#a78bfa', '#f97316', '#ec4899', '#38bdf8', '#eab308', '#22c55e', '#f43f5e'];
+
+function profileColour(name) {
+  const i = page.overview.profiles.findIndex(p => p.name === name);
+  return PROFILE_COLOURS[Math.max(0, i) % PROFILE_COLOURS.length];
 }
 
 // --- mini LED strips ---------------------------------------------------------
@@ -198,7 +244,10 @@ async function refresh(name) {
   page.loading = true;
   try {
     await loadOverview();
-    const want = name || page.name || page.overview.default;
+    if (!page.seg) page.seg = savedSeg();
+    const seg = currentSeg();
+    if (seg) page.seg = segKey(seg);
+    const want = seg?.profile || name || page.name || page.overview.default;
     const exists = page.overview.profiles.some(p => p.name === want);
     await openProfile(exists ? want : page.overview.default);
     if (page.overview.live && page.overview.live.step !== 'waiting') page.live = page.overview.live;
@@ -212,13 +261,19 @@ async function refresh(name) {
 
 async function save() {
   if (!isDirty()) return true;
+  const seg = currentSeg();
+  const own = editsOne();
+  const group = sharedWith();
   try {
-    const data = await api.post('/api/flow/profile/save', { flow: page.draft, old_name: page.name });
+    const data = own
+      ? await api.post('/api/flow/segment/own', { ip: seg.ip, segment_id: seg.id, flow: page.draft })
+      : await api.post('/api/flow/profile/save', { flow: page.draft, old_name: page.name });
     page.overview = { ...page.overview, ...data };
     page.name = data.flow.name;
     page.draft = data.flow;
     page.saved = JSON.stringify(data.flow);
-    toast.success(`Saved '${page.name}'`);
+    page.scope = 'all';
+    toast.success(own ? `${seg.name} has its own lights now` : group.length ? `Saved for ${listNames(group)}` : `Saved '${page.name}'`);
     idleWarning(data);
     render();
     return true;
@@ -253,23 +308,9 @@ async function guardUnsaved() {
 
 function uniqueName(base) {
   const names = new Set(page.overview.profiles.map(p => p.name));
+  base = base.slice(0, 36).trim();
   if (!names.has(base)) return base;
   for (let i = 2; ; i++) if (!names.has(`${base} ${i}`)) return `${base} ${i}`;
-}
-
-// The profile dropdown holds your profiles and the presets; picking a preset makes a new profile from it
-async function pickFromDropdown(value) {
-  const [kind, ref] = splitPick(value);
-  if (kind === 'preset') {
-    const preset = page.overview.presets.find(p => p.id === ref);
-    await createProfile({ title: `New profile from '${preset.name}'`, base: preset.name, source: { preset: ref } });
-    render();
-    return;
-  }
-  if (ref === page.name) return;
-  if (!(await guardUnsaved())) { render(); return; }
-  await openProfile(ref);
-  render();
 }
 
 function splitPick(value) {
@@ -277,38 +318,48 @@ function splitPick(value) {
   return [value.slice(0, i), value.slice(i + 1)];
 }
 
-// A blank profile (default settings), or a copy of an existing one
-async function newProfile() {
-  const source = h('select', { class: 'ui-select', 'aria-label': 'Start from' },
-    h('option', { value: 'preset:classic' }, 'Default settings'),
-    ...page.overview.profiles.map(p => h('option', { value: `copy:${p.name}` }, `Copy of '${p.name}'`)));
-  await createProfile({
-    title: 'New flow profile', base: 'New profile',
-    body: h('label', { class: 'fm-new-source' }, 'Start from', source),
-    source: () => {
-      const [kind, ref] = splitPick(source.value);
-      return kind === 'copy' ? { copy_from: ref } : { preset: ref };
-    }
-  });
-}
-
-async function createProfile({ title, base, body, source }) {
+async function selectSegment(seg) {
+  if (segKey(seg) === page.seg) return;
   if (!(await guardUnsaved())) return;
-  const name = await promptDialog({
-    title, body, value: uniqueName(base), confirmLabel: 'Create', maxLength: 40,
-    validate: v => (!v.trim() ? 'Give it a name.' : page.overview.profiles.some(p => p.name === v.trim()) ? 'That name is taken.' : null)
-  });
-  if (!name) return;
+  rememberSeg(segKey(seg));
+  page.scope = 'all';
   try {
-    const from = typeof source === 'function' ? source() : source;
-    const data = await api.post('/api/flow/profile/create', { name: name.trim(), ...from });
-    page.overview = { ...page.overview, ...data };
-    await openProfile(data.flow.name);
-    toast.success(`Created '${data.flow.name}'`);
-    render();
+    await openProfile(seg.profile);
   } catch (err) {
     toast.error(err);
   }
+  render();
+}
+
+// The Lights dropdown: play the same lights as other segments, or start fresh from a preset (a new profile
+// for this segment only). Without a controller it only switches which profile is shown.
+async function pickLights(value) {
+  const [kind, ref] = splitPick(value);
+  if (kind === 'profile' && ref === page.name) return;
+  if (!(await guardUnsaved())) { render(); return; }
+  const seg = currentSeg();
+  try {
+    if (!seg) {
+      await openProfile(ref);
+      render();
+      return;
+    }
+    let name = ref;
+    if (kind === 'preset') {
+      const preset = page.overview.presets.find(p => p.id === ref);
+      name = uniqueName(`${preset.name} · ${seg.name}`);
+      await api.post('/api/flow/profile/create', { name, preset: ref });
+    }
+    const data = await api.post('/api/flow/assign', { ip: seg.ip, segment_id: seg.id, name });
+    page.overview = { ...page.overview, ...data };
+    idleWarning(data);
+    page.scope = 'all';
+    await openProfile(name);
+    toast.success(kind === 'preset' ? `${seg.name} starts fresh` : `${seg.name} plays '${name}'`);
+  } catch (err) {
+    toast.error(err);
+  }
+  render();
 }
 
 async function renameProfile() {
@@ -325,7 +376,7 @@ async function deleteProfile() {
   const users = lightsUsing(page.name);
   const ok = await confirmDialog({
     title: `Delete '${page.name}'?`,
-    body: users.length ? `${users.length} light strip(s) use it. They will use '${page.overview.default === page.name ? 'another profile' : page.overview.default}' instead.` : 'No light strip uses it.',
+    body: users.length ? `${users.map(u => u.segment_name).join(', ')} will play '${page.overview.default === page.name ? 'another profile' : page.overview.default}' instead.` : 'No segment plays it.',
     confirmLabel: 'Delete', danger: true
   });
   if (!ok) return;
@@ -377,13 +428,25 @@ async function makeDefault() {
 
 // --- trying on the lights ----------------------------------------------------
 
+// The selected segment, plus the ones sharing its lights unless "Only <segment>" is on
+function tryTargets() {
+  return editsOne() ? sharedWith().slice(0, 1) : sharedWith();
+}
+
+function tryLabel() {
+  const segs = tryTargets();
+  return segs.length > 1 ? `▶ Try on all ${segs.length}` : segs.length ? `▶ Try on ${segs[0].name}` : '▶ Try on my lights';
+}
+
 async function tryOnLights(kind, id, extra = {}) {
   if (!allSegments().length) {
     toast.warning('Add a controller in Setup first.');
     return;
   }
+  // The hit locator check names its own segment
+  const segments = extra.ip ? undefined : tryTargets().map(s => ({ ip: s.ip, segment_id: s.id }));
   try {
-    await api.post('/api/flow/try', { flow: page.draft, kind, id, ...extra });
+    await api.post('/api/flow/try', { flow: page.draft, kind, id, segments, ...extra });
   } catch (err) {
     toast.error(err);
   }
@@ -395,11 +458,6 @@ function statusNotes() {
   const notes = [];
   const flow = page.draft;
   const o = page.overview;
-  if (!o.lights.length) {
-    notes.push({ tone: 'warn', text: 'No controller yet.', link: ['Add one in Setup', '/setup/controllers'] });
-  } else if (!lightsUsing(page.name).length) {
-    notes.push({ tone: 'warn', text: 'No light strip plays this profile.', action: ['Choose strips', () => select({ kind: 'profile' })] });
-  }
   if (o.lighting_mode !== 'flow') {
     notes.push({ tone: 'warn', text: 'Games use the legacy Event Matrix right now (not supported).', action: ['Use the Flow Matrix', () => window.switchLightingMode('flow')] });
   }
@@ -946,7 +1004,7 @@ function stepPanel(id) {
         h('span', { class: 'fm-link-value' }, transitionSummary(id)),
         h('span', { class: 'fm-link-go', 'aria-hidden': 'true' }, 'Edit ›')),
       h('div', { class: 'fm-panel-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, '▶ Try on my lights'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, tryLabel()),
         h('label', { class: 'fm-copy' }, h('span', { class: 'visually-hidden' }, 'Copy look from'),
           h('select', { class: 'ui-select', onchange: e => {
             const from = e.target.value;
@@ -974,7 +1032,7 @@ function transitionPanel(id) {
       strip(transitionFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero' })),
     section('Style', ...transitionEditor(id)),
     h('div', { class: 'fm-panel-actions' },
-      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, '▶ Try on my lights'),
+      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, tryLabel()),
       h('button', { type: 'button', class: 'ui-btn', onclick: () => select({ kind: 'step', id }) }, `Edit the ${meta.label} look`))
   ];
 }
@@ -1069,7 +1127,7 @@ function hitPanel(id) {
     h('div', { class: hit.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(hit, { setEffect, timed: true, playerChoice: true, playerWord: 'Player colour', isHit: true })),
       h('div', { class: 'fm-panel-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('hit', id) }, '▶ Try on my lights')))
+        h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('hit', id) }, tryLabel())))
   ];
 }
 
@@ -1117,7 +1175,7 @@ function wledEffects() {
 function waitingPanel() {
   const head = [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting/Idle')),
-    h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every strip that plays this profile (Setup) gets it when you save.')
+    h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every segment with these lights gets it when you save.')
   ];
   page.draft.idle ||= structuredClone(IDLE_DEFAULT);
   const idle = page.draft.idle;
@@ -1166,10 +1224,9 @@ function locatorCheck() {
 
 function profilePanel() {
   const flow = page.draft;
-  const users = lightsUsing(page.name);
   return [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Profile settings')),
-    h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. These settings apply to the whole profile.'),
+    h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. These settings apply to every segment with these lights.'),
     section('Camera-friendly',
       h('div', { class: 'fm-toggle-row' }, onOff(flow.camera_friendly, v => change(d => { d.camera_friendly = v; }), 'Camera-friendly')),
       h('p', { class: 'form-hint' }, 'Autodarts finds darts in camera images. With this on, hits during a turn play at half strength and for at most a second, so strong flashes don\'t disturb detection. Leg and match celebrations stay full.')),
@@ -1177,69 +1234,10 @@ function profilePanel() {
       h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
       h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
       flow.hit_locator && locatorCheck()),
-    section('Plays on',
-      ...playsOnRows(),
+    section('New segments',
       page.overview.default !== page.name
-        ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Use this profile for new lights'))
-        : h('p', { class: 'form-hint' }, 'New lights play this profile until you choose another.'))
-  ];
-}
-
-// Pick a controller and one of its sections (or all of them) to play this profile
-async function applyToSection() {
-  const lights = page.overview.lights
-    .map(dev => ({ ...dev, segments: dev.segments.filter(seg => !seg.light_strip) }))
-    .filter(dev => dev.segments.length);
-  if (!lights.length) {
-    toast.warning('Add a controller in Setup first.');
-    return;
-  }
-  if (!(await guardUnsaved())) return;
-  const controller = h('select', { class: 'ui-select', 'aria-label': 'Controller' },
-    ...lights.map((dev, i) => h('option', { value: String(i) }, `${dev.name} (${dev.ip})`)));
-  const section = h('select', { class: 'ui-select', 'aria-label': 'Section' });
-  const fillSections = () => {
-    const dev = lights[Number(controller.value)];
-    section.replaceChildren(
-      ...dev.segments.map(seg => h('option', { value: String(seg.id) },
-        seg.profile && seg.profile !== page.name ? `${seg.name} (now: ${seg.profile})` : seg.profile === page.name ? `${seg.name} (already)` : seg.name)),
-      dev.segments.length > 1 && h('option', { value: 'all' }, 'All sections'));
-  };
-  controller.onchange = fillSections;
-  fillSections();
-  const ok = await confirmDialog({
-    title: `Apply '${page.name}' to a section`,
-    confirmLabel: 'Apply',
-    body: h('div', {},
-      h('label', { class: 'fm-new-source' }, 'Controller', controller),
-      h('label', { class: 'fm-new-source' }, 'Section', section))
-  });
-  if (!ok) return;
-  const dev = lights[Number(controller.value)];
-  const segs = section.value === 'all' ? dev.segments : dev.segments.filter(seg => String(seg.id) === section.value);
-  try {
-    let data = null;
-    for (const seg of segs) data = await api.post('/api/flow/assign', { ip: dev.ip, segment_id: seg.id, name: page.name });
-    page.overview = { ...page.overview, ...data };
-    idleWarning(data);
-    toast.success(segs.length > 1 ? `All sections of ${dev.name} play '${page.name}'` : `${dev.name} · ${segs[0].name} plays '${page.name}'`);
-    render();
-  } catch (err) {
-    toast.error(err);
-  }
-}
-
-// Which RGB strips play this profile. Change it with "Apply to section" or on the controller's page in Setup.
-function playsOnRows() {
-  const segs = allSegments();
-  if (!segs.length) return [h('p', { class: 'form-hint' }, 'Add a controller in Setup first.')];
-  const mine = segs.filter(seg => seg.profile === page.name);
-  return [
-    mine.length
-      ? h('ul', { class: 'fm-plays-on' }, ...mine.map(seg => h('li', {},
-        h('a', { href: `/setup/controllers/${encodeURIComponent(seg.ip)}`, 'data-link': true }, `${seg.controller} · ${seg.name}`))))
-      : h('p', { class: 'form-hint' }, 'No strip plays this profile yet.'),
-    h('p', { class: 'form-hint' }, 'Use "Apply to section" above the chart, or choose on the controller\'s page in Setup.')
+        ? h('p', {}, h('button', { type: 'button', class: 'ui-btn-link', onclick: makeDefault }, 'Start new segments with these lights'))
+        : h('p', { class: 'form-hint' }, 'New segments start with these lights.'))
   ];
 }
 
@@ -1263,26 +1261,95 @@ function inspector() {
 
 // --- page --------------------------------------------------------------------
 
-// Title, profile tools and status share one row (they wrap on narrow screens)
-function profileBar() {
+// --- segment bar and editor head --------------------------------------------
+
+// A controller's outputs (one per GPIO pin), each with its segments. Zones named "<strip> · <zone>" (WLED keeps
+// them as "<strip> - <zone>") show the strip name once and the zone names on the buttons.
+function outputs(dev) {
+  const byPin = new Map();
+  for (const seg of dev.segments) {
+    const key = seg.gpio || `seg-${seg.id}`;
+    if (!byPin.has(key)) byPin.set(key, { gpio: seg.gpio, segs: [] });
+    byPin.get(key).segs.push(seg);
+  }
+  return [...byPin.values()].map(out => {
+    const sep = [' · ', ' - '].find(sp => {
+      const prefix = out.segs[0].name.split(sp)[0];
+      return out.segs.length > 1 && out.segs.every(seg => seg.name.startsWith(prefix + sp) && seg.name.length > prefix.length + sp.length);
+    });
+    const prefix = sep ? out.segs[0].name.split(sep)[0] : null;
+    return { ...out, strip: prefix, label: seg => (prefix ? seg.name.slice(prefix.length + sep.length) : seg.name) };
+  });
+}
+
+function segButton(dev, seg, label, cur, linked) {
+  if (seg.light_strip) {
+    return h('a', { class: 'fm-segbar-seg is-dimmer', href: `/setup/controllers/${encodeURIComponent(dev.ip)}`, 'data-link': true,
+      title: 'Light strip: no game effects. Its brightness is set on the controller page.' }, `${label} · dimmer`);
+  }
+  const full = { ...seg, ip: dev.ip, controller: dev.name };
+  const on = !!cur && segKey(full) === segKey(cur);
+  const btn = h('button', {
+    type: 'button', class: `fm-segbar-seg${on ? ' is-on' : ''}${!on && linked ? ' is-linked' : ''}`, 'aria-pressed': String(on),
+    title: `${dev.name} · ${seg.name} · plays '${seg.profile}'`, onclick: () => selectSegment(full)
+  }, h('span', { class: 'fm-segbar-dot', 'aria-hidden': 'true' }), label);
+  btn.style.setProperty('--seg-colour', profileColour(seg.profile));
+  return btn;
+}
+
+// Every controller in one slim block: name and IP, then each output as "GPIO 2 · Ring [Top|Left|Right]"
+function segmentBar() {
   const o = page.overview;
-  // Same columns as the chart and edit panel below, so Apply to section ends where the chart box ends
-  return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
+  if (!o.lights.length) {
+    return h('header', { class: 'fm-segbar card' }, h('p', { class: 'fm-segbar-empty' }, 'No controller yet. ',
+      h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Add one in Setup')));
+  }
+  const cur = currentSeg();
+  const linked = new Set(sharedWith().map(segKey));
+  return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
+    ...o.lights.map(dev => h('div', { class: 'fm-segbar-ctl' },
+      h('span', { class: 'fm-segbar-dev' }, dev.name, h('small', {}, dev.ip)),
+      h('div', { class: 'fm-segbar-outs' }, ...outputs(dev).map(out => h('div', { class: 'fm-segbar-out' },
+        out.gpio && h('span', { class: 'fm-segbar-gpio' }, out.gpio),
+        out.strip && h('span', { class: 'fm-segbar-strip' }, out.strip),
+        h('div', { class: 'fm-segbar-segs', role: 'group', 'aria-label': out.strip || out.gpio || dev.name },
+          ...out.segs.map(seg => segButton(dev, seg, out.label(seg), cur, linked.has(segKey({ ...seg, ip: dev.ip })))))))))));
+}
+
+function lightsOption(p) {
+  const where = p.used_by.map(u => u.segment_name).join(', ');
+  return h('option', { value: `profile:${p.name}`, selected: p.name === page.name }, `${p.name} — ${where ? `on ${where}` : 'not used'}`);
+}
+
+// What the selected segment plays: its name and place, the Lights dropdown, the profile tools and the status.
+// Shared lights add a row with "Edit all N | Only <segment>".
+function editorHead() {
+  const o = page.overview;
+  const cur = currentSeg();
+  const group = sharedWith();
+  const where = cur && [cur.controller, cur.gpio].filter(Boolean).join(' · ');
+  const head = h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
     h('div', { class: 'fm-bar-main' },
-      h('h1', { class: 'page-title fm-title' }, 'Flow Matrix'),
-      h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Profile'),
-        h('select', { class: 'ui-select', onchange: e => pickFromDropdown(e.target.value) },
-          h('optgroup', { label: 'Your profiles' },
-            ...o.profiles.map(p => h('option', { value: `profile:${p.name}`, selected: p.name === page.name }, p.name + (p.name === o.default ? ' (default)' : '')))),
-          h('optgroup', { label: 'New from preset' },
+      h('h1', { class: 'page-title fm-title' }, cur ? cur.name : page.name, where && h('span', { class: 'fm-title-where' }, where)),
+      h('label', { class: 'fm-profile-pick' }, h('span', { class: 'form-label' }, 'Lights'),
+        h('select', { class: 'ui-select', onchange: e => pickLights(e.target.value) },
+          h('optgroup', { label: cur ? 'Same lights as' : 'Profiles' }, ...o.profiles.map(lightsOption)),
+          cur && h('optgroup', { label: 'Start fresh from' },
             ...o.presets.map(p => h('option', { value: `preset:${p.id}`, title: p.summary }, p.name))))),
       h('div', { class: 'fm-profile-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: newProfile }, '+ New'),
         h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: renameProfile }, 'Rename'),
         h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: resetProfile, title: 'Back to the preset it started from' }, 'Reset'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete')),
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary fm-apply', onclick: applyToSection, title: 'Choose a controller section that plays this profile' }, 'Apply to section')),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', onclick: deleteProfile, disabled: o.profiles.length <= 1 }, 'Delete'))),
     h('div', { class: 'fm-top-end' }, statusLine()));
+  if (group.length < 2) return head;
+  const one = page.scope === 'one';
+  return h('div', { class: 'fm-head' }, head,
+    h('div', { class: 'fm-shared' },
+      h('span', { class: 'fm-shared-text' }, `Same lights as ${listNames(group.slice(1))}`),
+      segmented(['all', 'one'], page.scope, v => { page.scope = v; render(); }, { all: `Edit all ${group.length}`, one: `Only ${cur.name}` }),
+      h('span', { class: 'form-hint' }, one
+        ? `Saving gives ${cur.name} its own lights. The others keep theirs.`
+        : `Changes show on ${listNames(group)}.`)));
 }
 
 function statusLine() {
@@ -1295,6 +1362,12 @@ function statusLine() {
       : h('span', {}, n.text),
     n.link && h('a', { class: 'card-link', href: n.link[1], 'data-link': true }, n.link[0]),
     n.action && h('button', { type: 'button', class: 'ui-btn-link', onclick: n.action[1] }, n.action[0]))));
+}
+
+function savebarNote() {
+  const group = sharedWith();
+  if (editsOne()) return `Unsaved · for ${group[0].name} only`;
+  return group.length > 1 ? `Unsaved · for ${listNames(group)}` : 'Unsaved changes';
 }
 
 function renderSavebar() {
@@ -1311,10 +1384,11 @@ function render() {
   }
   const scroll = document.getElementById('fmInspector')?.scrollTop || 0;
   root.replaceChildren(
-    profileBar(),
+    segmentBar(),
+    editorHead(),
     h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
     h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
-      h('span', { class: 'savebar-note' }, 'Unsaved changes'),
+      h('span', { class: 'savebar-note' }, savebarNote()),
       h('button', { type: 'button', class: 'ui-btn', onclick: discard }, 'Discard'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: save }, 'Save')));
   const insp = document.getElementById('fmInspector');
@@ -1352,6 +1426,8 @@ function updateLive() {
 
 export function initFlowMatrix() {
   window.flowPage = { isDirty, save, discard };
+  // Setup's "Lights" links open this page with their segment selected
+  window.selectLightingSegment = (ip, id) => rememberSeg(segKey({ ip, id }));
   window.addEventListener('resize', () => {
     const wanted = currentView();
     if (page.root?.isConnected && !page.root.querySelector(`.fc-${wanted}`)) render();

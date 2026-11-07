@@ -279,6 +279,37 @@ class TestFlowRoutes(AioHTTPTestCase):
         drv.flow_hit.assert_called_once()
         self.assertTrue(self.engine.lighting_test_active)
 
+    async def test_try_plays_only_on_the_chosen_segments(self):
+        self.dev.segments.insert(1, SegmentConfig(id=2, name="Shelf", start=50, length=10))
+        drv = self.engine.get_driver("192.168.1.100")
+        drv._protocol_mode = ProtocolMode.ACTIVE_UDP
+        drv.flow_show = MagicMock(return_value=True)
+        r = await self.client.post("/api/flow/try", json={"kind": "step", "id": "turn",
+                                                          "segments": [{"ip": "192.168.1.100", "segment_id": 2}]})
+        self.assertEqual(r.status, 200)
+        self.assertEqual([c[0][0] for c in drv.flow_show.call_args_list], [2])
+        r = await self.client.post("/api/flow/try", json={"kind": "step", "id": "turn", "segments": []})
+        self.assertEqual(r.status, 400, "nothing chosen is not the same as everything")
+
+    async def test_own_lights_splits_one_segment_off_a_shared_profile(self):
+        self.dev.segments.insert(1, SegmentConfig(id=2, name="Shelf", start=50, length=10))
+        flow = (await (await self.client.get("/api/flow/profile")).json())["flow"]
+        flow["hit_locator"] = True
+        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 2, "flow": flow})
+        self.assertEqual(r.status, 200)
+        data = await r.json()
+        self.assertEqual(data["flow"]["name"], "Classic · Shelf")
+        self.assertTrue(data["flow"]["hit_locator"])
+        segs = {s["id"]: s["profile"] for s in data["lights"][0]["segments"]}
+        self.assertEqual(segs[0], "Classic", "the other segment keeps the shared lights")
+        self.assertEqual(segs[2], "Classic · Shelf")
+        self.assertFalse(self.storage.get_profile("Classic").hit_locator)
+        # Splitting again never repeats the segment name
+        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 2, "flow": data["flow"]})
+        self.assertEqual((await r.json())["flow"]["name"], "Classic · Shelf 2")
+        r = await self.client.post("/api/flow/segment/own", json={"ip": "192.168.1.100", "segment_id": 1, "flow": flow})
+        self.assertEqual(r.status, 400, "light strips play no profile")
+
     async def test_try_is_refused_during_a_match(self):
         self.engine.autodarts = MagicMock(_active_match_id="m1", _last_match_finished=False)
         r = await self.client.post("/api/flow/try", json={"kind": "step", "id": "turn"})

@@ -73,6 +73,7 @@ def _lights(request: web.Request, storage: GameFlowStorageManager) -> List[Dict[
                 segs.append({
                     "id": sid,
                     "name": _seg_attr(seg, "name", f"Segment {sid}"),
+                    "gpio": str(_seg_attr(seg, "gpio", "") or ""),
                     "length": int(_seg_attr(seg, "length", 0) or 0),
                     "role": _seg_attr(seg, "role", "dartboard_ring"),
                     "light_strip": pwm,
@@ -81,7 +82,7 @@ def _lights(request: web.Request, storage: GameFlowStorageManager) -> List[Dict[
                     "profile": None if pwm else storage.profile_name_for(dev.ip, sid),
                 })
         else:
-            segs.append({"id": None, "name": "All LEDs", "length": int(dev.rgb_count or 0), "role": "dartboard_ring",
+            segs.append({"id": None, "name": "All LEDs", "gpio": "", "length": int(dev.rgb_count or 0), "role": "dartboard_ring",
                          "light_strip": False, "clockwise": True, "profile": storage.profile_name_for(dev.ip, None)})
         out.append({"ip": dev.ip, "name": dev.name or dev.ip, "segments": segs})
     return out
@@ -240,6 +241,45 @@ async def handle_assign(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "idle_failed": failed, **_overview(request)})
 
 
+def _own_name(storage: GameFlowStorageManager, base: str, segment: str) -> str:
+    """A free profile name for a segment's own lights: "<profile> · <segment>" (2, 3, ... when taken)."""
+    suffix = f" · {segment}"
+    stem = base if base.endswith(suffix) else base + suffix
+    names = set(storage.profile_names())
+    for i in range(1, 100):
+        tail = "" if i == 1 else f" {i}"
+        name = stem[:MAX_NAME - len(tail)].rstrip() + tail
+        if name not in names:
+            return name
+    raise ValidationError("Too many profiles with that name.")
+
+
+async def handle_own_lights(request: web.Request) -> web.Response:
+    """Give one segment its own copy of a (possibly edited) flow, so changing it no longer changes the
+    other segments that shared it."""
+    data = await read_json(request)
+    storage = _storage(request)
+    engine = request.app.get("engine")
+    ip = str(data.get("ip") or "").strip()
+    seg = data.get("segment_id")
+    seg_id = None if seg is None else int(seg)
+    raw = data.get("flow")
+    if not isinstance(raw, dict) or "steps" not in raw:
+        raise ValidationError("No flow to save.")
+    lights = _lights(request, storage)
+    dev = next((d for d in lights if d["ip"] == ip), None)
+    entry = next((s for s in dev["segments"] if s["id"] == seg_id), None) if dev else None
+    if not entry or entry["light_strip"]:
+        raise ValidationError("That RGB strip was not found.")
+    name = _own_name(storage, str(raw.get("name") or entry["profile"] or "Lights"), entry["name"])
+    flow = GameFlow.from_dict({**raw, "name": name}, name=name)
+    if not storage.save_profile(flow) or not storage.assign(ip, name, seg_id):
+        raise PersistenceError("Could not save the lights for this strip.")
+    failed = await apply_idle(engine, storage, ips=[ip])
+    return web.json_response({"status": "ok", "flow": storage.get_profile(name).to_dict(), "idle_failed": failed,
+                              **_overview(request)})
+
+
 async def handle_apply_idle(request: web.Request) -> web.Response:
     """Write the waiting look of the assigned profiles to one controller (ip) or all of them."""
     data = await read_json(request)
@@ -248,8 +288,13 @@ async def handle_apply_idle(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok", "idle_failed": failed})
 
 
-def _targets(engine: Any, ip: Optional[str], seg: Any) -> List[tuple]:
+def _targets(engine: Any, ip: Optional[str], seg: Any, chosen: Any = None) -> List[tuple]:
+    """The RGB segments to try a look on: the chosen ones ([{ip, segment_id}]), one controller / segment, or all."""
     segs = EngineFlowOutput(engine).segments()
+    if isinstance(chosen, list):
+        want = {(str(c.get("ip") or ""), None if c.get("segment_id") is None else int(c["segment_id"]))
+                for c in chosen if isinstance(c, dict)}
+        return [s for s in segs if (s[0], s[1]) in want]
     if ip:
         segs = [s for s in segs if s[0] == ip and (seg is None or s[1] == int(seg))]
     return segs
@@ -270,7 +315,7 @@ async def handle_try(request: web.Request) -> web.Response:
     kind = str(data.get("kind") or "step")
     item = str(data.get("id") or "turn")
     player = max(0, min(MAX_PLAYERS - 1, int(data.get("player") or 0)))
-    targets = _targets(engine, data.get("ip"), data.get("segment_id"))
+    targets = _targets(engine, data.get("ip"), data.get("segment_id"), data.get("segments"))
     if not targets:
         raise ValidationError("No light strip to try it on. Add a controller in Setup first.")
 
@@ -464,6 +509,7 @@ def register_flow_routes(app: web.Application) -> None:
     app.router.add_post("/api/flow/profile/reset", handle_reset_profile)
     app.router.add_post("/api/flow/profile/default", handle_set_default)
     app.router.add_post("/api/flow/assign", handle_assign)
+    app.router.add_post("/api/flow/segment/own", handle_own_lights)
     app.router.add_post("/api/flow/idle/apply", handle_apply_idle)
     app.router.add_post("/api/flow/try", handle_try)
     app.router.add_post("/api/flow/preview", handle_preview)

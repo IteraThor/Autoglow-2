@@ -14,6 +14,122 @@
   display: none;
 }
 
+/* --- Segment bar: every controller, its GPIO outputs and their segments --- */
+.fm-segbar {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-1) var(--space-4);
+}
+
+.fm-segbar-ctl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+/* Outputs that don't fit wrap under each other, beside the controller name */
+.fm-segbar-outs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.fm-segbar-ctl + .fm-segbar-ctl {
+  border-top: 1px solid var(--border-divider);
+}
+
+.fm-segbar-dev {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fm-segbar-dev small {
+  font: 400 var(--fs-xs) var(--font-mono);
+  color: var(--text-muted);
+}
+
+.fm-segbar-out {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fm-segbar-gpio {
+  font: var(--fs-xs) var(--font-mono);
+  color: var(--text-muted);
+}
+
+.fm-segbar-strip {
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.fm-segbar-segs {
+  display: inline-flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.fm-segbar-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: var(--fs-sm) var(--font-ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fm-segbar-seg:last-child {
+  border-right: 0;
+}
+
+.fm-segbar-seg:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Same lights as the selected segment */
+.fm-segbar-seg.is-linked {
+  background: var(--accent-dim);
+}
+
+.fm-segbar-seg.is-on {
+  background: var(--accent-primary);
+  color: var(--bg-workspace);
+  font-weight: 600;
+}
+
+.fm-segbar-seg.is-dimmer {
+  color: var(--text-muted);
+}
+
+.fm-segbar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--seg-colour, var(--text-muted));
+}
+
+.fm-segbar-seg.is-on .fm-segbar-dot {
+  box-shadow: 0 0 0 2px var(--bg-workspace);
+}
+
+.fm-segbar-empty {
+  margin: var(--space-2) 0;
+  color: var(--text-secondary);
+}
+
 /* --- Profile bar --------------------------------------------------------- */
 .fm-profile-bar {
   display: flex;
@@ -31,11 +147,6 @@
   min-width: 0;
 }
 
-/* Ends where the chart box ends (the far right when the chart is full width) */
-.fm-apply {
-  margin-left: auto;
-}
-
 /* Beside the edit panel: the bar takes the chart's column and the panel's 440px, like .fm-layout-vertical */
 @media (min-width: 1280px) {
   .fm-profile-bar-vertical {
@@ -46,7 +157,36 @@
 }
 
 .fm-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   margin-right: var(--space-2);
+}
+
+.fm-title-where {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.fm-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* "Same lights as ... [Edit all N | Only X]" */
+.fm-shared {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.fm-shared .fm-seg {
+  align-self: center;
 }
 
 .fm-profile-pick {
@@ -58,6 +198,7 @@
 
 .fm-profile-pick .ui-select {
   flex: 1;
+  max-width: 340px;
 }
 
 .fm-profile-actions {
