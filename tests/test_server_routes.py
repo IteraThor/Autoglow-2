@@ -249,6 +249,7 @@ class TestServerRoutes(AioHTTPTestCase):
         self.assertTrue(line('1.2.3.4 [t] "POST /api/config HTTP/1.1" 200 20 "-" "UA"'))
         self.assertTrue(line('1.2.3.4 [t] "GET /api/hub/status HTTP/1.1" 500 20 "-" "UA"'))
 
+    @unittest.skip("WLED Hardware Simulator is switched off for now (routes commented out in routes/__init__.py)")
     @unittest_run_loop
     async def test_simulator_status_route(self):
         resp = await self.client.request("GET", "/api/simulator/status")

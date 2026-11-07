@@ -633,7 +633,9 @@
         <section id="tab-simulator" class="tab-pane true-size">
           <div id="flowMatrixRoot" class="fm-page"></div>
 
-          <!-- WLED Hardware Simulator: what the strips show right now (collapsed by default) -->
+          <!-- WLED Hardware Simulator: switched off for now (2026-11-07), kept to bring back later.
+               To turn it on again: remove this comment's start and end lines, change the inner "<!~~ ~~>" back
+               to normal comments, and uncomment the simulator.js script tag, the routes and server.py on_startup.
           <div class="sim-stage-card" id="hwSimCard">
             <div class="sim-stage-header">
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -650,7 +652,7 @@
               </div>
 
               <div style="display: flex; align-items: center; gap: 8px;">
-                <!-- LED 0 / Cable Start Position (Snapped to one of the 3 cameras, 120° steps) -->
+                <!~~ LED 0 / Cable Start Position (Snapped to one of the 3 cameras, 120° steps) ~~>
                 <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Physical LED 0 entry point (always starts on one of the 3 cameras, 120° spacing)">
                   <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -664,7 +666,7 @@
                   </div>
                 </div>
 
-                <!-- Camera Orientation Switcher -->
+                <!~~ Camera Orientation Switcher ~~>
                 <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 8px;" title="Autodarts camera mount orientation">
                   <span style="font-size: 11px; color: var(--text-muted); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -677,7 +679,7 @@
                   </div>
                 </div>
 
-                <!-- Live Stream Hardware Toggle -->
+                <!~~ Live Stream Hardware Toggle ~~>
                 <div class="sim-dest-pills" title="Toggle live streaming to physical WLED hardware">
                   <button class="sim-dest-pill active" id="btnToggleLiveStream" onclick="toggleSimulatorLiveStream()" style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;">
                     <span class="dot dot-green" id="liveStreamDot" style="width: 6px; height: 6px;"></span>
@@ -687,9 +689,9 @@
               </div>
             </div>
 
-            <!-- Canvas Viewport — Dual Board Layout (collapsed by default, a nice-to-have preview) -->
+            <!~~ Canvas Viewport — Dual Board Layout (collapsed by default, a nice-to-have preview) ~~>
             <div class="sim-canvas-viewport sim-dual-viewport" id="hwSimBody" hidden>
-              <!-- Live Board -->
+              <!~~ Live Board ~~>
               <div class="sim-board-wrap">
                 <div class="sim-board-label">
                   <span class="sim-board-label-dot sim-board-label-dot--live"></span>
@@ -698,7 +700,7 @@
                 </div>
                 <canvas id="simulatorCanvas"></canvas>
               </div>
-              <!-- Dummy Board -->
+              <!~~ Dummy Board ~~>
               <div class="sim-board-wrap">
                 <div class="sim-board-label sim-board-label--dummy">
                   <span class="sim-board-label-dot sim-board-label-dot--dummy"></span>
@@ -712,6 +714,7 @@
               </div>
             </div>
           </div>
+          -->
         </section>
 
 
@@ -853,7 +856,7 @@
   <script defer src="/js/utils.js?v=2.2-p25"></script>
   <script defer src="/js/autodarts.js?v=2.2-p25"></script>
   <script defer src="/js/matrix.js?v=2.2-p25"></script>
-  <script defer src="/js/simulator.js?v=2.2-p27"></script>
+  <!-- WLED Hardware Simulator (switched off for now): <script defer src="/js/simulator.js?v=2.2-p27"></script> -->
   <script defer src="/app.js?v=2.2-p25"></script>
 
 </body>

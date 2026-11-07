@@ -225,17 +225,18 @@ async def on_startup(app: web.Application):
     app["engine"] = engine
     engine.subscribe_telemetry(broadcast_telemetry)
 
-    # Initialize Virtual WLED Simulator UDP Receiver & WebSocket broadcaster
-    from core.simulator import get_simulator_server
-    from routes.simulator_routes import broadcast_simulator_frame
-    sim = get_simulator_server()
-    if primary:
-        sim.ws_led_count = primary.rgb_count or 45
-        sim.pwm_index = primary.pwm_index
-    await sim.start()
-    app["simulator"] = sim
-    sim.subscribe(lambda px, st: asyncio.create_task(broadcast_simulator_frame(px, st)))
-    engine.set_frame_tap_callback(sim.tap_frame)
+    # WLED Hardware Simulator: switched off for now (2026-11-07), kept to bring back later. Uncomment this block,
+    # the simulator routes in routes/__init__.py and the card + script in web/index.html to turn it on again.
+    # from core.simulator import get_simulator_server
+    # from routes.simulator_routes import broadcast_simulator_frame
+    # sim = get_simulator_server()
+    # if primary:
+    #     sim.ws_led_count = primary.rgb_count or 45
+    #     sim.pwm_index = primary.pwm_index
+    # await sim.start()
+    # app["simulator"] = sim
+    # sim.subscribe(lambda px, st: asyncio.create_task(broadcast_simulator_frame(px, st)))
+    # engine.set_frame_tap_callback(sim.tap_frame)
 
     await engine.start()
 

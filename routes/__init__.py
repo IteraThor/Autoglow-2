@@ -31,10 +31,11 @@ from routes.power_routes import (
     handle_test_inactivity_dim, handle_test_power_off, handle_test_wake
 )
 from routes.telemetry_routes import handle_ws_telemetry
-from routes.simulator_routes import (
-    handle_ws_simulator, handle_simulator_status, handle_simulator_dest,
-    handle_simulator_test_effect, handle_simulator_cable_offset
-)
+# WLED Hardware Simulator: switched off for now, kept to bring back later (see server.py on_startup)
+# from routes.simulator_routes import (
+#     handle_ws_simulator, handle_simulator_status, handle_simulator_dest,
+#     handle_simulator_test_effect, handle_simulator_cable_offset
+# )
 from routes.flow_routes import register_flow_routes
 from routes.studio_routes import register_studio_routes
 from routes.hub_routes import handle_hub_status, handle_status, handle_setup_checklist
@@ -136,12 +137,12 @@ def register_routes(app: web.Application, web_dir: str):
     # Live WebSocket Telemetry
     app.router.add_get("/ws/telemetry", handle_ws_telemetry)
 
-    # Simulator Endpoints
-    app.router.add_get("/api/simulator/status", handle_simulator_status)
-    app.router.add_post("/api/simulator/dest", handle_simulator_dest)
-    app.router.add_post("/api/simulator/cable_offset", handle_simulator_cable_offset)
-    app.router.add_post("/api/simulator/test_effect", handle_simulator_test_effect)
-    app.router.add_get("/ws/simulator", handle_ws_simulator)
+    # Simulator Endpoints (switched off for now, kept to bring back later)
+    # app.router.add_get("/api/simulator/status", handle_simulator_status)
+    # app.router.add_post("/api/simulator/dest", handle_simulator_dest)
+    # app.router.add_post("/api/simulator/cable_offset", handle_simulator_cable_offset)
+    # app.router.add_post("/api/simulator/test_effect", handle_simulator_test_effect)
+    # app.router.add_get("/ws/simulator", handle_ws_simulator)
 
     # Game Flow Simulator & Visual Planner Routes
     register_flow_routes(app)
