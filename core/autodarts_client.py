@@ -495,6 +495,13 @@ class AutodartsClient:
         self._last_flow_state = flow_state
         await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=board_id))
 
+    def _leave_match(self, reason: str) -> None:
+        """Another match takes over: drop the current one without going to idle (the new one starts next)."""
+        logger.info(reason)
+        self._active_match_id = None
+        self._paused_match_id = None
+        self._reset_match_state()
+
     async def _resume_match(self, ws, match_id: str) -> None:
         """A match ended softly sends again: it is still running, so its lighting comes back."""
         self._active_match_id = match_id
@@ -649,6 +656,8 @@ class AutodartsClient:
         if match_id_from_topic in self._ended_match_ids:
             logger.debug(f"Ignoring message for ended match {match_id_from_topic}")
             return
+        if self._last_match_finished and self._active_match_id not in (None, match_id_from_topic) and match_id_from_topic:
+            self._leave_match(f"Match {match_id_from_topic} follows the finished match {self._active_match_id}")
         if not self._active_match_id and match_id_from_topic and match_id_from_topic == self._paused_match_id:
             await self._resume_match(ws, match_id_from_topic)
         elif not self._active_match_id and match_id_from_topic:

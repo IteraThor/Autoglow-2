@@ -172,6 +172,7 @@ def _recorded_match():
 RECORDED_MATCH = "01a1997e-c072-7d06-9963-6de07bdd7c6e"
 RECORDED_OLD_MATCH = "01a1997c-cb60"  # deleted before the recording's match started
 RECORDED_BOARD = "11179e9c-be45-4c61-957e-b5f11ee70a5f"
+NEXT_MATCH = "01a1997f-0000-7000-8000-000000000002"
 
 
 class TestMatchKeepsRunning(unittest.IsolatedAsyncioTestCase):
@@ -233,6 +234,42 @@ class TestMatchKeepsRunning(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.events[0], DartEventType.THROW, "the current turn's colour comes back")
         self.assertNotIn(DartEventType.GAME_START, self.events, "no second Game Started")
         self.assertEqual(self.events[-1], DartEventType.MATCH_WON)
+
+    def next_match(self):
+        """The recorded match again under a new id: the match played right after the first one."""
+        return [json.loads(json.dumps(m).replace(RECORDED_MATCH, NEXT_MATCH)) for m in self.first_half]
+
+    async def finish_recorded_match(self):
+        await self.play(self.first_half + self.second_half)
+        # As on 2026-11-08: "finish", but no "delete" before the next match starts
+        await self.client.ingest(self.source, _ws("autodarts.matches", f"{RECORDED_MATCH}.events",
+                                                  {"body": {}, "event": "finish", "id": RECORDED_MATCH}))
+        self.assertEqual(self.events[-1], DartEventType.MATCH_WON)
+        self.events.clear()
+
+    async def test_lobby_starts_the_next_match_before_the_last_is_deleted(self):
+        await self.finish_recorded_match()
+        await self.client.ingest(self.source, _ws("autodarts.lobbies", f"{NEXT_MATCH}.state",
+                                                  {"id": NEXT_MATCH, "bullOffMode": "Off", "players": []}))
+        await self.client.ingest(self.source, _ws("autodarts.lobbies", f"{NEXT_MATCH}.events",
+                                                  {"body": {}, "event": "start", "id": NEXT_MATCH}))
+        await self.client.ingest(self.source, _ws("autodarts.matches", ".corrections", {}))
+        await self.play(self.next_match())
+        self.assertEqual(self.client._active_match_id, NEXT_MATCH)
+        self.assertEqual(self.events[0], DartEventType.GAME_START)
+        self.assertNotIn(DartEventType.GAME_IDLE, self.events)
+        self.assertIn(DartEventType.SINGLE, self.events)
+
+    async def test_next_match_replaces_a_finished_one_without_a_lobby(self):
+        await self.finish_recorded_match()
+        await self.play(self.next_match())
+        self.assertEqual(self.client._active_match_id, NEXT_MATCH)
+        self.assertEqual(self.events[0], DartEventType.GAME_START)
+        self.assertIn(DartEventType.SINGLE, self.events)
+        # Late messages of the finished match light nothing
+        self.events.clear()
+        await self.play(self.second_half[-3:])
+        self.assertEqual(self.events, [])
 
     async def test_deleted_match_still_ends(self):
         await self.play(self.first_half)

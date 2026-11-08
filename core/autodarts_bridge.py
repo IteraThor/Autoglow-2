@@ -283,6 +283,11 @@ class AutodartsBridgeClient(AutodartsClient):
         sends no match data until the first bull-off dart, and Game Started waits for the first leg."""
         mode = str(lobby.get("bullOffMode") or "")
         match_id = lobby.get("id")
+        if match_id and self._active_match_id not in (None, match_id):
+            # The next match (often a rematch) can start before Autodarts deletes the last one
+            self._leave_match(f"Lobby {match_id} started the next match -> leaving match {self._active_match_id}")
+        if match_id != self._paused_match_id:
+            self._paused_match_id = None
         if not match_id or mode.lower() in ("", "off"):
             return
         if self._active_match_id != match_id:
