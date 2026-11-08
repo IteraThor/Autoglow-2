@@ -6,4 +6,4 @@ Shown as "AutoGlow 2 v<version>". Raise it with every update:
 - first number stays 0 until the public release
 """
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"

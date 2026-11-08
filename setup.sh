@@ -19,14 +19,17 @@ echo "--> Checking system requirements..."
 if [ -f /etc/debian_version ]; then
     echo "--> Detected Debian/Ubuntu system."
     echo "--> Installing required packages (git, python3-venv, python3-dev, build-essential)..."
-    apt update && apt install -y git python3-venv python3-dev build-essential
+    apt update && apt install -y git python3-venv python3-dev build-essential avahi-daemon libnss-mdns
 elif [ -f /etc/fedora-release ]; then
     echo "--> Detected Fedora system."
     echo "--> Installing required packages (git, python3-devel, gcc)..."
-    dnf install -y git python3-devel gcc
+    dnf install -y git python3-devel gcc avahi nss-mdns
 else
     echo "⚠️ WARNING: Unknown Linux distribution. Please ensure git, python3 and python3-venv are installed manually."
 fi
+
+# autoglow.local only resolves on this machine when avahi is running (nss-mdns asks it)
+systemctl enable --now avahi-daemon 2>/dev/null || echo "⚠️ WARNING: Could not start avahi-daemon; http://autoglow.local:8080 may not resolve."
 
 # Determine the original user
 if [ -n "$SUDO_USER" ]; then
