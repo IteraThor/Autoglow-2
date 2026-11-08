@@ -60,6 +60,7 @@ DEFAULT_STATUSES: Dict[str, Dict[str, Any]] = {
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "enabled": False,
+    "show_in_menu": False,  # Settings › Classic mode shows the menu item; hidden means switched off too
     "board_manager_url": "http://localhost:3180",
     "manual_port": "",
     "global_brightness": 255,
@@ -113,7 +114,9 @@ def clean_settings(raw: Any) -> Dict[str, Any]:
     """Fill in defaults and drop anything unexpected."""
     raw = raw if isinstance(raw, dict) else {}
     out = copy.deepcopy(DEFAULT_SETTINGS)
-    out["enabled"] = bool(raw.get("enabled", out["enabled"]))
+    out["show_in_menu"] = bool(raw.get("show_in_menu", out["show_in_menu"]))
+    # Classic mode never runs while its page is hidden from the menu
+    out["enabled"] = bool(raw.get("enabled", out["enabled"])) and out["show_in_menu"]
     out["board_manager_url"] = clean_board_manager_url(raw.get("board_manager_url")) or out["board_manager_url"]
     out["manual_port"] = str(raw.get("manual_port") or "").strip()[:200]
     out["global_brightness"] = _clamp_int(raw.get("global_brightness"), 0, 255, out["global_brightness"])

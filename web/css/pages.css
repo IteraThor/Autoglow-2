@@ -2601,6 +2601,11 @@ input.ui-input.sf-name-input {
 /* -----------------------------------------------------------------------------
  * Classic (features/classic.js): AutoGlow 1, USB only
  * ----------------------------------------------------------------------------- */
+/* The rail items set their own display, so [hidden] needs saying */
+[data-classic-menu][hidden] {
+  display: none;
+}
+
 .classic-head {
   display: flex;
   flex-wrap: wrap;

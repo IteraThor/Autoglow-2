@@ -34,6 +34,7 @@ class TestClassicSettings(unittest.TestCase):
     def test_defaults_are_the_autoglow1_traffic_light(self):
         s = clean_settings({})
         self.assertFalse(s["enabled"])
+        self.assertFalse(s["show_in_menu"])
         self.assertEqual(s["board_manager_url"], "http://localhost:3180")
         self.assertEqual(s["statuses"]["Throw"]["color"], [0, 255, 0])
         self.assertEqual(s["statuses"]["Takeout"]["color"], [255, 255, 0])
@@ -92,13 +93,21 @@ class TestClassicService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ser.lines, [])
 
     async def test_saving_shows_the_new_look_at_once(self):
-        self.service.settings["enabled"] = True
+        self.service.settings.update(enabled=True, show_in_menu=True)
         await self.service.handle_status("Throw")
         settings = clean_settings(self.service.settings)
         settings["statuses"]["Throw"]["color"] = [1, 2, 3]
         await self.service.apply(settings)
         self.assertEqual(self.ser.lines[-1]["seg"]["col"][0], [1, 2, 3])
         self.assertTrue(os.path.exists(self.service.settings_path))  # noqa: ASYNC240
+
+    async def test_hiding_the_menu_switches_classic_off(self):
+        self.assertFalse(clean_settings({"enabled": True})["enabled"])
+        self.assertTrue(clean_settings({"enabled": True, "show_in_menu": True})["enabled"])
+        self.service.settings.update(enabled=True, show_in_menu=True)
+        await self.service.apply({**self.service.settings, "show_in_menu": False})
+        self.assertFalse(self.service.settings["enabled"])
+        self.assertFalse(self.service.running)
 
     async def test_switching_off_closes_the_port(self):
         self.service.settings["enabled"] = True

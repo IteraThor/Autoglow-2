@@ -1,5 +1,6 @@
 // AutoGlow 2 - Classic page: the original AutoGlow 1 (local Board Manager API -> WLED over USB)
 // On/Off applies at once. Everything else is a draft until Save, like the Settings page.
+// The menu item stays hidden until Settings › Classic mode shows it (show_in_menu, also applies at once).
 
 import { api } from '../core/api.js';
 import { h, showFieldError } from '../core/dom.js';
@@ -23,8 +24,9 @@ let saving = false;
 const clone = value => JSON.parse(JSON.stringify(value));
 const isDirty = () => !!saved && JSON.stringify(withoutEnabled(draft)) !== JSON.stringify(withoutEnabled(saved));
 
+// On/Off and the menu switch apply at once, so they are never part of the draft
 function withoutEnabled(settings) {
-  const { enabled, ...rest } = settings || {};
+  const { enabled, show_in_menu, ...rest } = settings || {};
   return rest;
 }
 
@@ -150,7 +152,9 @@ function adopt(data, { keepDraft = false } = {}) {
     renderRows();
   } else {
     draft.enabled = saved.enabled;
+    draft.show_in_menu = saved.show_in_menu;
   }
+  renderMenu();
   renderPorts();
   renderState(data.state);
   refresh();
@@ -183,7 +187,7 @@ async function setPower(on) {
 
 async function save() {
   if (saving || !isDirty()) return true;
-  const { enabled, ...body } = draft;
+  const body = withoutEnabled(draft);
   saving = true;
   refresh();
   try {
@@ -197,6 +201,33 @@ async function save() {
   } finally {
     saving = false;
     refresh();
+  }
+}
+
+// --- menu item (Settings › Classic mode) ---------------------------------------
+
+function renderMenu() {
+  const show = !!saved?.show_in_menu;
+  document.querySelectorAll('[data-classic-menu]').forEach(el => { el.hidden = !show; });
+  document.querySelectorAll('#classicMenuSwitch [data-menu]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String((btn.dataset.menu === 'show') === show));
+    btn.disabled = saving || !saved;
+  });
+  if (!show && saved && appStore.get().route?.pane === PANE) router.navigate('/settings', { replace: true });
+}
+
+async function setMenu(show) {
+  if (!saved || saving || saved.show_in_menu === show) return;
+  saving = true;
+  renderMenu();
+  try {
+    adopt(await api.post('/api/classic', { show_in_menu: show }, { timeout: 15000 }), { keepDraft: true });
+    toast.success(show ? 'Classic is in the menu' : 'Classic is hidden and switched off');
+  } catch (err) {
+    toast.error(err.message);
+  } finally {
+    saving = false;
+    renderMenu();
   }
 }
 
@@ -258,6 +289,9 @@ export function initClassic() {
     refresh();
   });
   $('classicStartup').addEventListener('change', e => { if (!draft) return; draft.startup_animation = e.target.checked; refresh(); });
+  document.querySelectorAll('#classicMenuSwitch [data-menu]').forEach(btn => {
+    btn.addEventListener('click', () => setMenu(btn.dataset.menu === 'show'));
+  });
   $('btnClassicSave').addEventListener('click', save);
   $('btnClassicDiscard').addEventListener('click', discard);
 
@@ -269,4 +303,6 @@ export function initClassic() {
       stopPolling();
     }
   });
+  // Every page needs to know whether the menu shows Classic
+  if (appStore.get().route?.pane !== PANE) load({ keepDraft: true });  // quiet: no toast on other pages
 }

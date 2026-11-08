@@ -52,9 +52,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 11 17 13 22 17 22 7"/></svg>
           <span>Studio</span>
         </a>
-        <span class="rail-divider" role="separator"></span>
-        <span class="rail-group-label" aria-hidden="true">Original</span>
-        <a href="/classic" data-link data-view="classic" class="rail-item">
+        <!-- Classic stays out of the menu until Settings › Classic mode shows it (web/js/features/classic.js) -->
+        <span class="rail-divider" role="separator" data-classic-menu hidden></span>
+        <span class="rail-group-label" aria-hidden="true" data-classic-menu hidden>Original</span>
+        <a href="/classic" data-link data-view="classic" class="rail-item" data-classic-menu hidden>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 2h4v5h-4z"/><rect x="7" y="7" width="10" height="9" rx="1"/><line x1="12" y1="16" x2="12" y2="22"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="10" x2="14" y2="13"/></svg>
           <span>Classic</span>
         </a>
@@ -690,6 +691,16 @@
               <button type="button" class="mode-option" data-offline="hide" aria-pressed="false"><span>Hide</span></button>
               <button type="button" class="mode-option" data-offline="show" aria-pressed="false"><span>Show</span></button>
             </div>
+          </div>
+
+          <!-- Classic mode menu item: applies at once, stored on the server for every browser (web/js/features/classic.js) -->
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Classic mode (AutoGlow 1)</h2></div>
+            <div class="mode-switch pw-mode" id="classicMenuSwitch" role="group" aria-label="Classic mode in the menu">
+              <button type="button" class="mode-option" data-menu="hide" aria-pressed="false"><span>Hide</span></button>
+              <button type="button" class="mode-option" data-menu="show" aria-pressed="false"><span>Show</span></button>
+            </div>
+            <p class="form-hint">Show adds Classic to the menu: one WLED controller on USB that shows the board status. Hiding it also switches Classic mode off.</p>
           </div>
 
           <!-- One save for everything on this page -->
