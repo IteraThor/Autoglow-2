@@ -233,7 +233,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && (msg.type === 'wledList' || msg.type === 'wledPower')) {
     (msg.type === 'wledList' ? wledList() : wledPower(msg.on, msg.ip))
       .then(data => sendResponse({ ok: true, data }))
-      .catch(() => sendResponse({ ok: false }));
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
     return true; // Answered asynchronously
   }
   if (msg && msg.type === 'getStatus') {

@@ -99,14 +99,26 @@ const wledTrigger = wledRoot.querySelector('.trigger');
 const wledMenu = wledRoot.querySelector('.menu');
 const wledListEl = wledRoot.querySelector('.list');
 
+const RELOAD_NOTE = 'The AutoGlow Bridge was updated or restarted. Reload this page (F5).';
+
 function ask(msg) {
   return new Promise((resolve) => {
+    // Extension was reloaded: this tab's script is cut off from it until the page is refreshed
+    if (!chrome.runtime || !chrome.runtime.id) return resolve({ ok: false, reload: true });
     try {
-      chrome.runtime.sendMessage(msg, (res) => resolve(chrome.runtime.lastError ? { ok: false } : res));
+      chrome.runtime.sendMessage(msg, (res) => {
+        const err = chrome.runtime.lastError;
+        resolve(err ? { ok: false, error: err.message } : res || { ok: false, error: 'no answer' });
+      });
     } catch {
-      resolve({ ok: false, reload: true }); // Extension was reloaded: this tab needs a page refresh
+      resolve({ ok: false, reload: true });
     }
   });
+}
+
+function failNote(res, what) {
+  if (res.reload) return RELOAD_NOTE;
+  return `${what} (${res.error || 'unknown error'})`;
 }
 
 function stateOf(d) {
@@ -118,8 +130,9 @@ function stateOf(d) {
 async function loadWled(note) {
   wledListEl.innerHTML = '<div class="msg">Loading…</div>';
   const res = await ask({ type: 'wledList' });
-  if (!res || !res.ok) {
-    wledListEl.innerHTML = `<div class="msg">${res && res.reload ? 'Reload this page to use AutoGlow.' : 'AutoGlow is not reachable.'}</div>`;
+  if (!res.ok) {
+    wledListEl.innerHTML = '<div class="msg err"></div>';
+    wledListEl.firstChild.textContent = failNote(res, 'AutoGlow is not reachable');
     return;
   }
   const devices = res.data;
@@ -165,7 +178,7 @@ async function setPower(btn, on, ip) {
   const res = await ask({ type: 'wledPower', on, ip });
   const word = on ? 'on' : 'off';
   let note = '';
-  if (!res || !res.ok) note = `AutoGlow did not switch it ${word}.`;
+  if (!res.ok) note = failNote(res, `AutoGlow did not switch it ${word}`);
   else if (res.data.status !== 'ok') note = `Sent, but not every controller confirmed it is ${word}.`;
   loadWled(note);
 }
