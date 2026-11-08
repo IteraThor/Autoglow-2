@@ -37,6 +37,8 @@ BAUD_RATE = 115200
 KNOWN_VID_PIDS = [(0x10C4, 0xEA60), (0x1A86, 0x7523), (0x0403, 0x6001), (0x303A, 0x1001)]
 RETRY_SECONDS = 5
 POLL_SECONDS = 1
+# A state poll this recent counts as "connected", even while the event socket is down
+POLL_FRESH_SECONDS = 5
 
 # WLED effect ids offered by AutoGlow 1's settings window
 EFFECTS = {
@@ -101,7 +103,7 @@ def clean_board_manager_url(value: Any) -> Optional[str]:
     if parts.scheme not in ("http", "https") or not parts.hostname:
         return None
     try:
-        parts.port  # raises on a bad port
+        _ = parts.port  # raises on a bad port
     except ValueError:
         return None
     return f"{parts.scheme}://{parts.netloc}"
@@ -227,7 +229,8 @@ class ClassicService:
         self._lock = asyncio.Lock()
         self.port: Optional[str] = None
         self.serial_error: Optional[str] = None
-        self.board_manager_connected = False
+        self._ws_connected = False
+        self._poll_ok_at: Optional[float] = None
         self.board_manager_error: Optional[str] = None
         self.last_status: Optional[str] = None
         self.last_status_at: Optional[float] = None
@@ -254,7 +257,8 @@ class ClassicService:
                 pass
             logger.info("Classic mode (AutoGlow 1) stopped")
         await self._close_serial()
-        self.board_manager_connected = False
+        self._ws_connected = False
+        self._poll_ok_at = None
 
     async def apply(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Save new settings and restart the loop so they take effect."""
@@ -271,6 +275,32 @@ class ClassicService:
         elif self.last_status:
             await self._show(self.last_status)
         return cleaned
+
+    @property
+    def board_manager_connected(self) -> bool:
+        fresh = self._poll_ok_at is not None and time.time() - self._poll_ok_at < POLL_FRESH_SECONDS
+        return self._ws_connected or fresh
+
+    async def check_board_manager(self) -> None:
+        """While the loop is off, look once whether the Board Manager answers, so the page shows the truth."""
+        if self.running:
+            return
+        url = self.settings["board_manager_url"] + "/api/state"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=1.5)) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"HTTP {resp.status}")
+                    status = extract_status(await resp.json(content_type=None))
+        except Exception as e:
+            self._poll_ok_at = None
+            self.board_manager_error = f"Board Manager not reachable at {self.settings['board_manager_url']}"
+            logger.debug(f"Classic mode: Board Manager check failed: {e}")
+            return
+        self._poll_ok_at, self.board_manager_error = time.time(), None
+        key = resolve_status_key(status) if status else None
+        if key and key != self.last_status:
+            self.last_status, self.last_status_at = key, time.time()
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -392,7 +422,7 @@ class ClassicService:
         while True:
             try:
                 async with session.ws_connect(url, heartbeat=30) as ws:
-                    self.board_manager_connected, self.board_manager_error = True, None
+                    self._ws_connected, self.board_manager_error = True, None
                     logger.info(f"Classic mode: connected to the Board Manager at {url}")
                     async for msg in ws:
                         if msg.type != aiohttp.WSMsgType.TEXT:
@@ -411,7 +441,7 @@ class ClassicService:
             except Exception as e:
                 self.board_manager_error = f"Board Manager not reachable at {base}: {e or type(e).__name__}"
                 logger.debug(f"Classic mode: event stream failed: {e}")
-            self.board_manager_connected = False
+            self._ws_connected = False
             await asyncio.sleep(RETRY_SECONDS)
 
     async def _poll_loop(self, session: aiohttp.ClientSession) -> None:
@@ -421,6 +451,7 @@ class ClassicService:
             try:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as resp:
                     if resp.status == 200:
+                        self._poll_ok_at = time.time()
                         status = extract_status(await resp.json(content_type=None))
                         if status:
                             await self.handle_status(status)

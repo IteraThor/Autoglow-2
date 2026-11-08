@@ -2601,26 +2601,111 @@ input.ui-input.sf-name-input {
 /* -----------------------------------------------------------------------------
  * Classic (features/classic.js): AutoGlow 1, USB only
  * ----------------------------------------------------------------------------- */
+.classic-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+}
+
 .classic-state {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-2) var(--space-4);
-  margin: var(--space-4) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   font-size: var(--fs-sm);
+  color: var(--text-primary);
 }
 
-.classic-state dt {
-  color: var(--text-secondary);
-}
-
-.classic-state dd {
+.classic-state li {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  margin: 0;
-  color: var(--text-primary);
   overflow-wrap: anywhere;
+}
+
+.classic-brightness {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.classic-brightness .ui-range {
+  width: 140px;
+}
+
+.classic-brightness output {
+  min-width: 3ch;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.classic-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.classic-row {
+  display: grid;
+  grid-template-columns: auto 1fr minmax(120px, 170px) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-sm);
+}
+
+.classic-row:last-child {
+  border-bottom: 0;
+}
+
+.classic-row-name {
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.classic-row.is-current .classic-row-name {
+  color: var(--accent-primary);
+}
+
+.classic-row.is-current .classic-row-name::after {
+  content: " ● now";
+  font-weight: 400;
+  font-size: var(--fs-xs);
+}
+
+.classic-row.is-skipped .classic-row-name {
+  color: var(--text-muted);
+}
+
+.classic-color {
+  width: 32px;
+  height: 32px;
+  padding: 2px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.classic-color::-webkit-color-swatch-wrapper { padding: 0; }
+.classic-color::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.classic-color::-moz-color-swatch { border: 0; border-radius: 50%; }
+
+.classic-color:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.classic-connection[open] .classic-fields {
+  margin-top: var(--space-4);
 }
 
 .classic-fields {
@@ -2643,48 +2728,14 @@ input.ui-input.sf-name-input {
   accent-color: var(--accent-primary);
 }
 
-.classic-table-wrap {
-  overflow-x: auto;
+@media (max-width: 560px) {
+  .classic-row {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .classic-row .ui-select {
+    grid-column: 2 / 4;
+    grid-row: 2;
+  }
 }
 
-.classic-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-
-.classic-table th,
-.classic-table td {
-  padding: var(--space-2) var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: left;
-  white-space: nowrap;
-}
-
-.classic-table thead th {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.classic-table tbody th {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-
-.classic-table tbody tr.is-current th {
-  color: var(--accent-primary);
-}
-
-.classic-table tbody tr.is-current th::before {
-  content: "● ";
-}
-
-.classic-color {
-  width: 44px;
-  height: 30px;
-  padding: 2px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}

@@ -562,26 +562,42 @@
           <div class="page-head">
             <div>
               <h1 class="page-title">Classic</h1>
-              <p class="page-lead">The original AutoGlow 1: a simple status light for one WLED controller on USB. It listens to the Autodarts Board Manager on this computer, no Wi-Fi, login or Chrome extension needed.</p>
+              <p class="page-lead">AutoGlow 1: one WLED controller on USB shows the Autodarts board status. No Wi-Fi, login or Chrome extension needed.</p>
             </div>
           </div>
 
           <div class="card pw-card">
-            <div class="card-head"><h2 class="card-title">Classic mode</h2></div>
-            <div class="mode-switch pw-mode" id="classicPower" role="group" aria-label="Classic mode">
-              <button type="button" class="mode-option" data-power="on" aria-pressed="false"><span>On</span></button>
-              <button type="button" class="mode-option" data-power="off" aria-pressed="false"><span>Off</span></button>
+            <div class="classic-head">
+              <div class="mode-switch" id="classicPower" role="group" aria-label="Classic mode">
+                <button type="button" class="mode-option" data-power="on" aria-pressed="false"><span>On</span></button>
+                <button type="button" class="mode-option" data-power="off" aria-pressed="false"><span>Off</span></button>
+              </div>
+              <ul class="classic-state" aria-live="polite">
+                <li id="classicBmState" title="Autodarts Board Manager">…</li>
+                <li id="classicUsbState" title="USB controller">…</li>
+              </ul>
             </div>
-            <dl class="classic-state">
-              <dt>USB controller</dt><dd id="classicUsbState">…</dd>
-              <dt>Board Manager</dt><dd id="classicBmState">…</dd>
-              <dt>Board status</dt><dd id="classicLastStatus">—</dd>
-            </dl>
-            <p class="form-hint">Runs next to the Flow Matrix and drives only the USB controller. Do not also add that controller under Setup, or both will set its lights.</p>
+            <p class="form-hint">Drives only the USB controller. Don't also add it under Setup, or both will set its lights.</p>
           </div>
 
           <div class="card pw-card">
-            <div class="card-head"><h2 class="card-title">Connection</h2></div>
+            <div class="card-head">
+              <h2 class="card-title">Status lights</h2>
+              <label class="classic-brightness">
+                <span>Brightness</span>
+                <input type="range" id="classicBrightness" class="ui-range" min="0" max="255" step="1" aria-label="Brightness">
+                <output id="classicBrightnessValue">255</output>
+              </label>
+            </div>
+            <ul class="classic-rows" id="classicStatusRows"></ul>
+          </div>
+
+          <details class="card pw-card pw-pin classic-connection">
+            <summary class="pw-pin-summary">
+              <span class="card-title">Connection</span>
+              <span class="pw-pin-status" id="classicConnSummary"></span>
+              <span class="pw-pin-open">Change…</span>
+            </summary>
             <div class="classic-fields">
               <label class="form-field">
                 <span class="form-label">Board Manager address</span>
@@ -593,27 +609,12 @@
                 <datalist id="classicPortList"></datalist>
                 <small class="form-hint" id="classicPortHint"></small>
               </label>
-              <label class="form-field">
-                <span class="form-label">Brightness <span id="classicBrightnessValue">255</span></span>
-                <input type="range" id="classicBrightness" class="ui-range" min="0" max="255" step="1">
-              </label>
               <label class="classic-inline">
                 <input type="checkbox" id="classicStartup" class="classic-check">
                 <span>Rainbow for 3 seconds when the controller connects</span>
               </label>
             </div>
-          </div>
-
-          <div class="card pw-card">
-            <div class="card-head"><h2 class="card-title">Status lights</h2></div>
-            <div class="classic-table-wrap">
-              <table class="classic-table">
-                <thead><tr><th scope="col">Status</th><th scope="col">On</th><th scope="col">Effect</th><th scope="col">Color</th><th scope="col"><span class="visually-hidden">Test</span></th></tr></thead>
-                <tbody id="classicStatusRows"></tbody>
-              </table>
-            </div>
-            <p class="form-hint">Test shows a look on the controller right away, saved or not.</p>
-          </div>
+          </details>
 
           <div class="settings-savebar" id="classicSaveBar">
             <span class="settings-savebar-note" id="classicSaveNote" aria-live="polite">No unsaved changes</span>

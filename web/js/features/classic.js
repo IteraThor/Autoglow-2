@@ -28,6 +28,8 @@ function withoutEnabled(settings) {
   return rest;
 }
 
+const SKIP = 'skip';  // effect menu value for a status that leaves the lights as they are
+const shortUrl = url => String(url || '').replace(/^https?:\/\//, '');
 const toHex = rgb => '#' + (rgb || [0, 0, 0]).map(c => Number(c).toString(16).padStart(2, '0')).join('');
 const fromHex = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
 
@@ -47,22 +49,22 @@ function setLine(id, tone, text) {
   line.replaceChildren(h('span', { class: 'status-dot', 'data-tone': tone, 'aria-hidden': 'true' }), h('span', {}, text));
 }
 
+// The Board Manager is checked whether Classic mode is on or off; only the USB side sleeps while off.
 function renderState(state) {
   if (!state || !saved) return;
-  if (!saved.enabled) {
-    setLine('classicUsbState', 'pending', 'Off');
-    setLine('classicBmState', 'pending', 'Off');
+  const on = saved.enabled;
+  const bm = shortUrl(saved.board_manager_url);
+  if (state.board_manager_connected) {
+    setLine('classicBmState', 'ok', `Board Manager${state.last_status ? `: ${state.last_status}` : ' found'}`);
   } else {
-    if (!state.pyserial) setLine('classicUsbState', 'error', 'pyserial is not installed. Run setup again.');
-    else if (state.serial_connected) setLine('classicUsbState', 'ok', `Connected on ${state.port}`);
-    else setLine('classicUsbState', 'error', state.serial_error || 'Looking for the ESP32…');
-    if (state.board_manager_connected) setLine('classicBmState', 'ok', `Connected to ${saved.board_manager_url}`);
-    else setLine('classicBmState', 'error', state.board_manager_error || `Connecting to ${saved.board_manager_url}…`);
+    setLine('classicBmState', on ? 'error' : 'warn', `Board Manager not found at ${bm}`);
   }
-  const last = $('classicLastStatus');
-  if (last) last.textContent = state.last_status || '—';
+  if (!on) setLine('classicUsbState', 'pending', 'USB: off');
+  else if (!state.pyserial) setLine('classicUsbState', 'error', 'USB: pyserial is not installed. Run setup again.');
+  else if (state.serial_connected) setLine('classicUsbState', 'ok', `USB: ${state.port}`);
+  else setLine('classicUsbState', 'error', `USB: ${state.serial_error || 'looking for the ESP32…'}`);
   document.querySelectorAll('#classicStatusRows [data-status]').forEach(row => {
-    row.classList.toggle('is-current', saved.enabled && row.dataset.status === state.last_status);
+    row.classList.toggle('is-current', state.board_manager_connected && row.dataset.status === state.last_status);
   });
 }
 
@@ -85,29 +87,43 @@ function renderFields() {
   $('classicBrightness').value = draft.global_brightness;
   $('classicBrightnessValue').textContent = String(draft.global_brightness);
   $('classicStartup').checked = !!draft.startup_animation;
+  renderConnSummary();
 }
 
+function renderConnSummary() {
+  $('classicConnSummary').textContent = `${shortUrl(draft.board_manager_url)} · USB ${draft.manual_port || 'auto-detect'}`;
+}
+
+// One line per status: colour, name, effect ("Leave as is" = the status does not change the lights), Test
 function statusRow(name) {
   const look = draft.statuses[name];
-  const onChange = () => refresh();
-  return h('tr', { dataset: { status: name } },
-    h('th', { scope: 'row' }, name),
-    h('td', {}, h('input', {
-      type: 'checkbox', class: 'classic-check', 'aria-label': `${name} on`, checked: look.enabled,
-      onchange: e => { look.enabled = e.target.checked; onChange(); }
-    })),
-    h('td', {}, h('select', {
+  const color = h('input', {
+    type: 'color', class: 'classic-color', 'aria-label': `${name} color`, value: toHex(look.color),
+    disabled: !look.enabled,
+    oninput: e => { look.color = fromHex(e.target.value); refresh(); }
+  });
+  const row = h('li', { class: 'classic-row', dataset: { status: name } },
+    color,
+    h('span', { class: 'classic-row-name' }, name),
+    h('select', {
       class: 'ui-select', 'aria-label': `${name} effect`,
-      onchange: e => { look.fx = Number(e.target.value); onChange(); }
-    }, effects.map(fx => h('option', { value: fx.id, selected: fx.id === look.fx }, fx.name)))),
-    h('td', {}, h('input', {
-      type: 'color', class: 'classic-color', 'aria-label': `${name} color`, value: toHex(look.color),
-      oninput: e => { look.color = fromHex(e.target.value); onChange(); }
-    })),
-    h('td', {}, h('button', {
-      type: 'button', class: 'ui-btn ui-btn-quiet', onclick: e => test(name, e.currentTarget)
-    }, 'Test'))
+      onchange: e => {
+        look.enabled = e.target.value !== SKIP;
+        if (look.enabled) look.fx = Number(e.target.value);
+        color.disabled = !look.enabled;
+        row.classList.toggle('is-skipped', !look.enabled);
+        refresh();
+      }
+    },
+    h('option', { value: SKIP, selected: !look.enabled }, 'Leave as is'),
+    effects.map(fx => h('option', { value: fx.id, selected: look.enabled && fx.id === look.fx }, fx.name))),
+    h('button', {
+      type: 'button', class: 'ui-btn ui-btn-quiet ui-btn-sm', title: 'Show this look on the controller now, saved or not',
+      onclick: e => test(name, e.currentTarget)
+    }, 'Test')
   );
+  row.classList.toggle('is-skipped', !look.enabled);
+  return row;
 }
 
 function renderRows() {
@@ -233,8 +249,8 @@ export function initClassic() {
   document.querySelectorAll('#classicPower [data-power]').forEach(btn => {
     btn.addEventListener('click', () => setPower(btn.dataset.power === 'on'));
   });
-  $('classicBmUrl').addEventListener('input', e => { if (!draft) return; draft.board_manager_url = e.target.value.trim(); refresh(); });
-  $('classicPort').addEventListener('input', e => { if (!draft) return; draft.manual_port = e.target.value.trim(); refresh(); });
+  $('classicBmUrl').addEventListener('input', e => { if (!draft) return; draft.board_manager_url = e.target.value.trim(); renderConnSummary(); refresh(); });
+  $('classicPort').addEventListener('input', e => { if (!draft) return; draft.manual_port = e.target.value.trim(); renderConnSummary(); refresh(); });
   $('classicBrightness').addEventListener('input', e => {
     if (!draft) return;
     draft.global_brightness = Number(e.target.value);

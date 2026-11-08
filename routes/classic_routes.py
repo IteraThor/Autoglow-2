@@ -38,8 +38,9 @@ def _payload(service: ClassicService, ports) -> dict:
 
 
 async def handle_get_classic(request: web.Request) -> web.Response:
-    ports = await asyncio.to_thread(list_ports)
-    return web.json_response(_payload(get_service(request.app), ports))
+    service = get_service(request.app)
+    ports, _ = await asyncio.gather(asyncio.to_thread(list_ports), service.check_board_manager())
+    return web.json_response(_payload(service, ports))
 
 
 async def handle_post_classic(request: web.Request) -> web.Response:

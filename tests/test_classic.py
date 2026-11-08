@@ -98,7 +98,7 @@ class TestClassicService(unittest.IsolatedAsyncioTestCase):
         settings["statuses"]["Throw"]["color"] = [1, 2, 3]
         await self.service.apply(settings)
         self.assertEqual(self.ser.lines[-1]["seg"]["col"][0], [1, 2, 3])
-        self.assertTrue(os.path.exists(self.service.settings_path))
+        self.assertTrue(os.path.exists(self.service.settings_path))  # noqa: ASYNC240
 
     async def test_switching_off_closes_the_port(self):
         self.service.settings["enabled"] = True
@@ -111,6 +111,25 @@ class TestClassicService(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(ok)
         self.assertEqual(self.ser.lines[-1], {"on": True, "bri": 10, "tt": 0, "seg": {"fx": 9, "col": [[9, 9, 9]]}})
         self.assertEqual(self.service.settings["statuses"]["Error"]["fx"], 1)
+
+    async def test_board_manager_is_checked_while_off(self):
+        board_manager = web.Application()
+        board_manager.router.add_get("/api/state", lambda r: web.json_response({"connected": True, "status": "throw"}))
+        runner = web.AppRunner(board_manager)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = site._server.sockets[0].getsockname()[1]  # pyright: ignore[reportOptionalMemberAccess]
+        try:
+            self.service.settings["board_manager_url"] = f"http://127.0.0.1:{port}"
+            await self.service.check_board_manager()
+            self.assertTrue(self.service.board_manager_connected)
+            self.assertEqual(self.service.last_status, "Throw")
+        finally:
+            await runner.cleanup()
+        await self.service.check_board_manager()
+        self.assertFalse(self.service.board_manager_connected)
+        self.assertIn("not reachable", self.service.board_manager_error)
 
 
 class TestClassicRoutes(AioHTTPTestCase):
@@ -140,7 +159,7 @@ class TestClassicRoutes(AioHTTPTestCase):
         resp = await self.client.post("/api/classic", json={"global_brightness": 42})
         self.assertEqual(resp.status, 200)
         self.assertEqual((await resp.json())["settings"]["global_brightness"], 42)
-        with open(os.path.join(self.temp_dir.name, "classic.json")) as f:
+        with open(os.path.join(self.temp_dir.name, "classic.json")) as f:  # noqa: ASYNC230
             self.assertEqual(json.load(f)["global_brightness"], 42)
 
     async def test_bad_board_manager_url_is_a_field_error(self):
