@@ -124,7 +124,9 @@ async def handle_test_power_off(request: web.Request) -> web.Response:
     if ip and ip not in engine.drivers:
         return _unknown_controller(ip)
     drivers = [engine.drivers[ip]] if ip else list(engine.drivers.values())
-    if not ip:
+    if ip:
+        engine.off_ips.add(ip)
+    else:
         engine.is_board_off = True
         engine.is_board_dimmed = True
         engine.current_illumination = 0
@@ -182,6 +184,7 @@ async def handle_test_wake(request: web.Request) -> web.Response:
         results.append(res)
 
     if ip:
+        engine.off_ips.discard(ip)
         # Restore Idle Preset 1 on this controller only; engine.wake_up() would touch every controller
         await drivers[0].transition_to_http_mode(restore_preset_id=1)
     else:

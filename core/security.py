@@ -44,8 +44,8 @@ PUBLIC_API_PATHS = {"/api/auth/status", "/api/auth/login"}
 # The Chrome extension relays Autodarts game data here. It cannot hold a PIN session, so it is
 # authorised separately: only Chrome on the AutoGlow computer itself may connect.
 BRIDGE_WS_PATH = "/ws/autodarts-bridge"
-# The extension's WLED menu on play.autodarts.com switches controllers off; same rule as the bridge
-EXTENSION_POST_PATHS = {"/api/power/test_off"}
+# The extension's WLED menu on play.autodarts.com switches controllers off and on; same rule as the bridge
+EXTENSION_POST_PATHS = {"/api/power/test_off", "/api/power/test_wake"}
 
 _login_failures: Dict[str, list] = {}
 

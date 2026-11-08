@@ -109,6 +109,8 @@ class AutoGlowEngine:
         self.last_activity_time = time.time()
         self.is_board_dimmed = False
         self.is_board_off = False
+        # Controllers switched off one at a time (bridge WLED menu); the next wake turns them back on
+        self.off_ips: Set[str] = set()
         self.current_illumination = self.device_config.default_pwm_brightness if self.device_config else 200
         self.last_event_name: str = "Standby"
         self.previous_event_name: str = "—"
@@ -361,9 +363,11 @@ class AutoGlowEngine:
 
         # 1. Turn on physical hardware controllers if powered off
         ips = [d.ip for d in self._active_devices()]
-        if was_off:
+        targets = ips if was_off else [ip for ip in ips if ip in self.off_ips]
+        self.off_ips.clear()
+        if targets:
             loop = asyncio.get_running_loop()
-            for ip in ips:
+            for ip in targets:
                 try:
                     payload = {"on": True, "lor": 0}
                     if mode == ProtocolMode.IDLE_HTTP:

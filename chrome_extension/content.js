@@ -78,6 +78,8 @@ wledRoot.innerHTML = `
   .off { all: unset; box-sizing: border-box; width: 26px; height: 26px; display: flex; align-items: center;
     justify-content: center; border-radius: 6px; color: #fca5a5; cursor: pointer; flex: none; }
   .off:hover { background: #3a2a2c; color: #f87171; }
+  .off.on { color: #86efac; }
+  .off.on:hover { background: #1f3a2a; color: #4ade80; }
   .off:disabled { color: #4b5563; cursor: default; background: none; }
   .all { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 6px;
     width: 100%; margin-top: 6px; padding: 6px; border-radius: 8px; background: #3a2a2c; color: #fca5a5;
@@ -135,9 +137,11 @@ async function loadWled(note) {
     row.querySelector('.name').textContent = d.name;
     row.querySelector('.name').title = d.ip;
     const btn = row.querySelector('.off');
-    btn.title = `Switch ${d.name} off`;
+    const turnOn = d.on === false;
+    btn.classList.toggle('on', turnOn);
+    btn.title = `Switch ${d.name} ${turnOn ? 'on' : 'off'}`;
     btn.disabled = d.online === false;
-    btn.addEventListener('click', () => powerOff(btn, d.ip));
+    btn.addEventListener('click', () => setPower(btn, turnOn, d.ip));
     wledListEl.append(row);
   }
   if (devices.length > 1) {
@@ -145,7 +149,7 @@ async function loadWled(note) {
     all.className = 'all';
     all.type = 'button';
     all.innerHTML = `${POWER_ICON}<span>All off</span>`;
-    all.addEventListener('click', () => powerOff(all, null));
+    all.addEventListener('click', () => setPower(all, false, null));
     wledListEl.append(all);
   }
   if (note) {
@@ -156,12 +160,13 @@ async function loadWled(note) {
   }
 }
 
-async function powerOff(btn, ip) {
+async function setPower(btn, on, ip) {
   btn.disabled = true;
-  const res = await ask({ type: 'wledOff', ip });
+  const res = await ask({ type: 'wledPower', on, ip });
+  const word = on ? 'on' : 'off';
   let note = '';
-  if (!res || !res.ok) note = 'AutoGlow did not accept the power-off.';
-  else if (res.data.status !== 'ok') note = 'Sent, but not every controller confirmed it is off.';
+  if (!res || !res.ok) note = `AutoGlow did not switch it ${word}.`;
+  else if (res.data.status !== 'ok') note = `Sent, but not every controller confirmed it is ${word}.`;
   loadWled(note);
 }
 

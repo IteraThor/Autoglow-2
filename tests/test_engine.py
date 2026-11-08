@@ -7,7 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 from core.models import (
-    LightingMode,
+    LightingMode, ProtocolMode,
     DeviceConfig, SegmentConfig, ProfileConfig, DartEvent, DartEventType,
     EffectConfig, AnimationType, RGBColor
 )
@@ -129,6 +129,20 @@ class TestAutoGlowEngine(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(engine.current_illumination, engine.app_config.game_mode_spotlight_brightness)
             mock_preview.assert_called_with("127.0.0.1", {"on": True, "lor": 0})
             engine.driver.transition_to_udp_mode.assert_called_with(engine.app_config.game_mode_spotlight_brightness)
+
+    async def test_wake_up_turns_on_a_controller_switched_off_alone(self):
+        """A controller switched off from the bridge WLED menu comes back on with the next game activity."""
+        dev = DeviceConfig(ip="127.0.0.1", rgb_count=45)
+        engine = AutoGlowEngine(dev)
+        engine.driver.set_board_light = AsyncMock(return_value=True)
+        engine.driver.transition_to_udp_mode = AsyncMock(return_value=True)
+        engine.off_ips.add("127.0.0.1")
+
+        with patch("core.wled_driver.WLEDDriver.preview_wled_state") as mock_preview:
+            await engine.wake_up(mode=ProtocolMode.ACTIVE_UDP)
+
+        mock_preview.assert_called_with("127.0.0.1", {"on": True, "lor": 0})
+        self.assertEqual(engine.off_ips, set())
 
     async def test_multi_device_driver_isolation(self):
         """Verify that multiple devices get separate drivers and independent effect dispatching."""

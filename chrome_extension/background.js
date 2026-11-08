@@ -220,9 +220,9 @@ async function wledList() {
     .map(d => ({ name: d.name || d.ip, ip: d.ip, online: d.online, on: d.on }));
 }
 
-function wledOff(ip) {
+function wledPower(on, ip) {
   // No ip: every controller, and AutoGlow treats the lights as switched off (standby)
-  return api('/api/power/test_off', {
+  return api(on ? '/api/power/test_wake' : '/api/power/test_off', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(ip ? { ip } : {})
@@ -230,8 +230,8 @@ function wledOff(ip) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && (msg.type === 'wledList' || msg.type === 'wledOff')) {
-    (msg.type === 'wledList' ? wledList() : wledOff(msg.ip))
+  if (msg && (msg.type === 'wledList' || msg.type === 'wledPower')) {
+    (msg.type === 'wledList' ? wledList() : wledPower(msg.on, msg.ip))
       .then(data => sendResponse({ ok: true, data }))
       .catch(() => sendResponse({ ok: false }));
     return true; // Answered asynchronously
