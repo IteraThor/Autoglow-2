@@ -2729,6 +2729,10 @@ input.ui-input.sf-name-input {
 }
 
 @media (max-width: 560px) {
+  .classic-page .card-head {
+    flex-wrap: wrap;
+  }
+
   .classic-row {
     grid-template-columns: auto 1fr auto;
   }
