@@ -233,7 +233,8 @@ class FlowRuntime:
 
     async def _to_waiting(self) -> None:
         was = self.step
-        self.reset()
+        # The roster stays: a paused match that continues keeps its colours; the next match starts a new one
+        self.reset(keep_roster=True)
         if was != WAITING:
             logger.info("Flow -> waiting lights (idle lighting from Setup)")
         await self.out.to_waiting()

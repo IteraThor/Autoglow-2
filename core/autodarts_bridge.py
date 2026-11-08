@@ -249,8 +249,9 @@ class AutodartsBridgeClient(AutodartsClient):
         await asyncio.sleep(SOURCE_LOST_GRACE_SECONDS)
         if (self._sources and self.tab_attached) or not self._active_match_id:
             return
-        logger.info(f"No Autodarts tab for {SOURCE_LOST_GRACE_SECONDS:.0f}s -> ending match {self._active_match_id} and emitting GAME_IDLE")
-        await self._end_match(self.board_id)
+        logger.info(f"No Autodarts tab for {SOURCE_LOST_GRACE_SECONDS:.0f}s -> pausing match {self._active_match_id} and emitting GAME_IDLE")
+        # Nobody ended the match: when the tab relays it again, it continues
+        await self._end_match(self.board_id, final=False)
 
     def _ingest_lobby(self, topic: str, data: Any) -> Optional[Dict[str, Any]]:
         """A lobby update: its full state (players, settings) or an event such as its deletion.
@@ -315,6 +316,7 @@ class AutodartsBridgeClient(AutodartsClient):
             return
         if _BOARDS_LIST_RE.search(path) and isinstance(body, list):
             self._boards_cache = [b for b in body if isinstance(b, dict)]
+            self._own_board_ids = {str(b["id"]) for b in self._boards_cache if b.get("id")}
             return
 
         board_match = _BOARD_ITEM_RE.search(path)

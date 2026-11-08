@@ -3,6 +3,7 @@ Tests for the Chrome extension bridge that relays Autodarts game data into AutoG
 """
 
 import asyncio
+import json
 import os
 import tempfile
 import unittest
@@ -156,6 +157,90 @@ class TestBridgeIngest(unittest.IsolatedAsyncioTestCase):
             await self.client.ingest(again, {"type": "tab", "attached": True, "url": "https://play.autodarts.com/"})
             await asyncio.sleep(0.1)
         self.assertEqual(self.client._active_match_id, "m1")
+
+
+def _recorded_match():
+    """The online-style PDC match recorded on 2026-11-02 (bull-off, one leg, Match Won), split mid-leg."""
+    path = os.path.join(os.path.dirname(__file__), "fixtures", "pdc_bull_off_match_2026-11-02.json")
+    with open(path, encoding="utf-8") as f:
+        messages = [m for m in json.load(f) if not m["topic"].startswith(RECORDED_OLD_MATCH)]
+    states = [i for i, m in enumerate(messages) if m["topic"] == f"{RECORDED_MATCH}.state"]
+    split = states[len(states) // 2]
+    return messages[:split], messages[split:]
+
+
+RECORDED_MATCH = "01a1997e-c072-7d06-9963-6de07bdd7c6e"
+RECORDED_OLD_MATCH = "01a1997c-cb60"  # deleted before the recording's match started
+RECORDED_BOARD = "11179e9c-be45-4c61-957e-b5f11ee70a5f"
+
+
+class TestMatchKeepsRunning(unittest.IsolatedAsyncioTestCase):
+    """A board stop, the opponent's board or a lost tab must not leave a running match in the waiting lights."""
+
+    async def asyncSetUp(self):
+        self.events = []
+
+        async def on_event(ev):
+            self.events.append(ev.event_type)
+
+        self.client = AutodartsBridgeClient(on_event=on_event)
+        self.source = object()
+        self.client.attach(self.source)
+        await self.client.ingest(self.source, {"type": "tab", "attached": True, "url": f"https://play.autodarts.com/matches/{RECORDED_MATCH}"})
+        self.first_half, self.second_half = _recorded_match()
+
+    async def play(self, messages):
+        for m in messages:
+            await self.client.ingest(self.source, {"type": "ws", "message": m})
+
+    def board_state(self, board_id, status):
+        return _ws("autodarts.boards", f"{board_id}.state", {"connected": True, "event": status, "numThrows": 0, "status": status})
+
+    async def test_stopped_board_keeps_the_match_running(self):
+        await self.play(self.first_half)
+        self.events.clear()
+        await self.client.ingest(self.source, self.board_state(RECORDED_BOARD, "Stopped"))
+        await self.client.ingest(self.source, self.board_state(RECORDED_BOARD, "Throw"))
+        await self.play(self.second_half)
+        self.assertNotIn(DartEventType.GAME_IDLE, self.events)
+        self.assertIn(DartEventType.SCORE_180, self.events)
+        self.assertEqual(self.events[-1], DartEventType.MATCH_WON)
+
+    async def test_opponents_board_is_ignored(self):
+        await self.client.ingest(self.source, {"type": "http", "url": "https://api.autodarts.com/bs/v0/boards",
+                                               "body": [{"id": RECORDED_BOARD, "name": "Linux PC"}]})
+        await self.play(self.first_half)
+        self.events.clear()
+        await self.client.ingest(self.source, self.board_state("opponent-board", "Takeout"))
+        await self.client.ingest(self.source, self.board_state("opponent-board", "Stopped"))
+        self.assertEqual(self.events, [])
+        await self.play(self.second_half)
+        self.assertEqual(self.events[-1], DartEventType.MATCH_WON)
+
+    async def test_match_continues_after_the_tab_was_gone(self):
+        await self.play(self.first_half)
+        with patch.object(autodarts_bridge, "SOURCE_LOST_GRACE_SECONDS", 0.01):
+            self.client.detach(self.source)
+            await asyncio.sleep(0.05)
+        self.assertIsNone(self.client._active_match_id)
+        self.events.clear()
+        again = object()
+        self.client.attach(again)
+        await self.client.ingest(again, {"type": "tab", "attached": True, "url": f"https://play.autodarts.com/matches/{RECORDED_MATCH}"})
+        for m in self.second_half:
+            await self.client.ingest(again, {"type": "ws", "message": m})
+        self.assertEqual(self.client._active_match_id, RECORDED_MATCH)
+        self.assertEqual(self.events[0], DartEventType.THROW, "the current turn's colour comes back")
+        self.assertNotIn(DartEventType.GAME_START, self.events, "no second Game Started")
+        self.assertEqual(self.events[-1], DartEventType.MATCH_WON)
+
+    async def test_deleted_match_still_ends(self):
+        await self.play(self.first_half)
+        self.events.clear()
+        await self.client.ingest(self.source, _ws("autodarts.matches", f"{RECORDED_MATCH}.events",
+                                                  {"body": {}, "event": "delete", "id": RECORDED_MATCH}))
+        await self.play(self.second_half)
+        self.assertEqual(self.events, [DartEventType.GAME_IDLE])
 
 
 class TestBridgeRoutes(AioHTTPTestCase):

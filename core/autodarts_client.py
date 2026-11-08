@@ -131,6 +131,8 @@ class AutodartsClient:
         self._reconnect_delay: float = RECONNECT_MIN_DELAY
         self._match_id: Optional[str] = None
         self._ended_match_ids: Dict[str, None] = {}
+        # A match AutoGlow lost sight of (see _end_match): its next message picks it up again
+        self._paused_match_id: Optional[str] = None
 
         # Tracking state to deduplicate trigger spam
         self._last_180_fired = False
@@ -156,6 +158,8 @@ class AutodartsClient:
         self.bull_off: Optional[Dict[str, Any]] = None
         self.board_states: Dict[str, dict] = {}
         self._boards_cache: List[Dict[str, Any]] = []
+        # The user's own boards (from the board list); in an online match the opponent's board reports too
+        self._own_board_ids: Set[str] = set()
         self.user_name: str = ""
         self.username: str = ""
         self._last_flow_state: Optional[str] = None
@@ -210,6 +214,7 @@ class AutodartsClient:
         boards = await self._async_get_boards(token)
         if boards:
             self._boards_cache = boards
+            self._own_board_ids = {str(b["id"]) for b in boards if b.get("id")}
         return boards
 
     async def fetch_match_details(self, match_id: str) -> Dict[str, Any]:
@@ -464,6 +469,7 @@ class AutodartsClient:
     async def _adopt_match(self, ws, match_id: str, reason: str) -> None:
         """Make match_id the running match: fresh per-match state, and its topics subscribed."""
         self._active_match_id = match_id
+        self._paused_match_id = None
         self._reset_match_state()
         logger.info(reason)
         await self._subscribe_match(ws, match_id)
@@ -474,12 +480,36 @@ class AutodartsClient:
         await self._fetch_and_parse_match(match_id)
         await self._emit_event(DartEvent(event_type=DartEventType.GAME_START, board_id=board_id))
 
-    async def _end_match(self, board_id: Optional[str], flow_state: Optional[str] = None) -> None:
-        """The match is over without a result (aborted, deleted, board idle ...): back to idle."""
+    async def _end_match(self, board_id: Optional[str], flow_state: Optional[str] = None, final: bool = True) -> None:
+        """The match is over without a result (aborted, deleted ...): back to idle.
+        final=False when AutoGlow only lost sight of the match (no Autodarts tab, board left it) and nobody
+        ended it: its state is kept, and its next message continues it (_resume_match)."""
+        match_id = self._active_match_id
         self._active_match_id = None
-        self._reset_match_state()
+        if final:
+            self._paused_match_id = None
+            self._reset_match_state()
+        else:
+            self._ended_match_ids.pop(match_id or "", None)
+            self._paused_match_id = match_id
         self._last_flow_state = flow_state
         await self._emit_event(DartEvent(event_type=DartEventType.GAME_IDLE, board_id=board_id))
+
+    async def _resume_match(self, ws, match_id: str) -> None:
+        """A match ended softly sends again: it is still running, so its lighting comes back."""
+        self._active_match_id = match_id
+        self._paused_match_id = None
+        # The next state sends the current turn's colour again
+        self._last_turn_id = None
+        self._last_flow_state = None
+        logger.info(f"Match {match_id} is still running -> back to the game lighting")
+        await self._subscribe_match(ws, match_id)
+
+    def _is_own_board(self, b_id: str) -> bool:
+        """In an online match the page also shows the opponent's board; only ours drives the lights.
+        While our boards are unknown every board counts."""
+        own = self._own_board_ids | ({self.board_id} if self.board_id else set())
+        return not own or b_id in own
 
     async def _handle_raw_message(self, ws, data: dict):
         channel = data.get("channel")
@@ -493,6 +523,8 @@ class AutodartsClient:
             logger.debug(f"Autodarts WS RAW: channel='{channel}', topic='{topic}', payload={json.dumps(payload)}")
 
         if channel == "autodarts.boards":
+            if not self._is_own_board(topic.split(".")[0]):
+                return
             if topic.endswith(".matches"):
                 await self._on_board_matches(ws, topic.split(".")[0], payload)
             elif topic.endswith(".state"):
@@ -526,11 +558,19 @@ class AutodartsClient:
         is_idle = status_lower in BOARD_IDLE_STATUSES
 
         if match_id and match_id != self._active_match_id:
-            if not is_idle:
+            if not is_idle and match_id == self._paused_match_id:
+                await self._resume_match(ws, match_id)
+            elif not is_idle:
                 await self._start_match(ws, match_id, b_id, f"Active match detected via board.state on {b_id}: {match_id}")
         elif is_idle and self._active_match_id:
-            logger.info(f"Board {b_id} state reported idle/stopped -> clearing match {self._active_match_id} and emitting GAME_IDLE")
-            await self._end_match(b_id, flow_state="idle")
+            if "matchId" in payload and not match_id:
+                # The board names no match any more; should the match go on, its next message continues it
+                logger.info(f"Board {b_id} left match {self._active_match_id} ({status}) -> emitting GAME_IDLE")
+                await self._end_match(b_id, flow_state="idle", final=False)
+            elif self._last_flow_state != "stopped":
+                # A detection restart or camera hiccup, not the end: the match itself says when it is over
+                self._last_flow_state = "stopped"
+                logger.info(f"Board {b_id} reports {status} during match {self._active_match_id} -> keeping the game lighting")
 
         p_name = self._current_player()
         is_takeout = "takeout" in status_lower or "take out" in status_lower
@@ -609,7 +649,9 @@ class AutodartsClient:
         if match_id_from_topic in self._ended_match_ids:
             logger.debug(f"Ignoring message for ended match {match_id_from_topic}")
             return
-        if not self._active_match_id and match_id_from_topic:
+        if not self._active_match_id and match_id_from_topic and match_id_from_topic == self._paused_match_id:
+            await self._resume_match(ws, match_id_from_topic)
+        elif not self._active_match_id and match_id_from_topic:
             # Bridge mode never sees the board's match-start message, so the first match topic starts the match
             await self._adopt_match(ws, match_id_from_topic, f"Match started (first message on match topic): {match_id_from_topic}")
             if time.time() - self._start_announced_at > 120.0:

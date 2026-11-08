@@ -541,6 +541,16 @@ class TestColoursStickToPlayers(FlowTest):
         self.assertEqual(self.out.calls[-1][3].color_primary, self.flow.players[1].color)
         self.assertEqual(self.rt.roster, ["iterathor", "THOR"])
 
+    async def test_paused_match_keeps_colours(self):
+        # The lights went to waiting mid-match (lost tab) and the match continues with player 2's turn
+        self.make()
+        await self.send(ev(T.GAME_START))
+        await self.time.advance(5)
+        await self.send(ev(T.THROW, player_index=0, player_name="A"), ev(T.THROW, player_index=1, player_name="B"))
+        colour_b = self.out.calls[-1][3].color_primary
+        await self.send(ev(T.GAME_IDLE), ev(T.THROW, player_index=1, player_name="B"))
+        self.assertEqual(self.out.calls[-1][3].color_primary, colour_b)
+
     async def test_new_match_starts_a_new_roster(self):
         self.make()
         await self.send(ev(T.GAME_START), ev(T.THROW, player_index=0, player_name="A"))
