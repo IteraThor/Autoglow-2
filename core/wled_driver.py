@@ -17,7 +17,7 @@ import urllib.request
 import re
 from typing import Optional, List, Tuple, Dict, Any, Callable, Union
 
-from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, is_pwm_output
+from core.models import DeviceConfig, EffectConfig, AnimationType, RGBColor, ProtocolMode, _safe_int, is_pwm_output
 from core.effects import render_animation_frame, blend_frames
 from core.effects.flow import blend_flow, normalize_options, normalize_transition_style
 from core.effects.flow.renderers import FLOW_RENDERERS
@@ -155,6 +155,17 @@ def _safe_seg_id(seg: dict) -> int:
         return int(seg.get("id", -1))
     except (TypeError, ValueError):
         return -1
+
+
+def _wiring_key(hw_ins: Optional[list]) -> list:
+    """What a controller's LED outputs are wired as: start, length, data pin and type of each output."""
+    key = []
+    for h in hw_ins or []:
+        if isinstance(h, dict):
+            pin = h.get("pin")
+            pin = pin[0] if isinstance(pin, list) and pin else pin
+            key.append((_safe_int(h.get("start"), 0), _safe_int(h.get("len"), 0), _safe_int(pin, -1), _safe_int(h.get("type"), 22)))
+    return key
 
 
 def sanitize_wled_name(name: str) -> str:
@@ -1072,8 +1083,10 @@ class WLEDDriver:
                 with urllib.request.urlopen(req, timeout=1.0) as resp:
                     pass
 
-            # 3. Ensure configured segments exist on WLED (recovers if WLED power-cycled and reset to single 0..46 segment)
-            if self.config.segments and len(self.config.segments) > 1:
+            # 3. Ensure configured segments exist on WLED (recovers if WLED power-cycled and reset to single 0..46 segment).
+            # Only while the controller is still wired as saved: after the setup guide changed its outputs without an
+            # Apply (or WLED's own page did), the saved segments belong to another layout and would end up as junk zones.
+            if self.config.segments and len(self.config.segments) > 1 and _wiring_key(hw_ins) == _wiring_key(self.config.hw_ins):
                 try:
                     needs_segment_recovery = False
                     with urllib.request.urlopen(f"http://{ip}/json/state", timeout=1.0) as s_resp:

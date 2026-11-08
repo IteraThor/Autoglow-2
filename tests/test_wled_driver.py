@@ -131,6 +131,32 @@ class TestWLEDDriverAndModels(unittest.IsolatedAsyncioTestCase):
         self.assertIn({"id": 1, "stop": 0}, sent_state["seg"])
         self.assertIn({"id": 2, "stop": 0}, sent_state["seg"])
 
+    def _startup_check(self, live_ins):
+        """Runs the startup config check against a controller with these outputs and one segment; returns the posted bodies."""
+        def resp(body):
+            r = MagicMock()
+            r.read.return_value = json.dumps(body).encode()
+            r.__enter__.return_value = r
+            return r
+
+        saved_ins = [{"pin": [16], "type": 22, "start": 0, "len": 45}, {"pin": [17], "type": 22, "start": 45, "len": 45}]
+        dev = DeviceConfig(ip="192.168.1.100", hw_ins=saved_ins, segments=[
+            SegmentConfig(id=0, name="Strip 1", start=0, length=45), SegmentConfig(id=1, name="Strip 2", start=45, length=45)])
+        cfg = {"if": {"live": {"mso": False}}, "hw": {"led": {"ins": live_ins}}}
+        with patch("core.wled_driver.is_host_online", return_value=True), \
+             patch("urllib.request.urlopen", side_effect=[resp(cfg), resp({"seg": [{"id": 0, "start": 0, "stop": 46}]}), resp({})]) as mock_open:
+            WLEDDriver(dev)._sync_ensure_mso()
+        return [json.loads(c[0][0].data) for c in mock_open.call_args_list if getattr(c[0][0], "data", None)]
+
+    def test_startup_restores_segments_when_wiring_is_unchanged(self):
+        posted = self._startup_check([{"pin": [16], "type": 22, "start": 0, "len": 45}, {"pin": [17], "type": 22, "start": 45, "len": 45}])
+        self.assertEqual([s["n"] for s in posted[0]["seg"]], ["Strip 1", "Strip 2"])
+
+    def test_startup_leaves_segments_alone_when_wiring_changed(self):
+        # The setup guide rewired the controller (a light strip on pin 25) but its Apply never arrived
+        posted = self._startup_check([{"pin": [16], "type": 22, "start": 0, "len": 45}, {"pin": [25], "type": 41, "start": 45, "len": 1, "rgbwm": 4}])
+        self.assertEqual(posted, [])
+
     def test_apply_setup_preview_without_outputs_only_sets_state(self):
         r = MagicMock()
         r.read.return_value = b"{}"
