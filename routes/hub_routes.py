@@ -117,6 +117,7 @@ async def handle_status(request: web.Request) -> web.Response:
     eng = _engine_snapshot(engine, cfg)
     return web.json_response({
         "status": "ok",
+        "version": __version__,
         "lighting_mode": eng.get("lighting_mode", cfg.lighting_mode.value),
         "protocol_mode": eng.get("protocol_mode", "http"),
         "power_state": eng.get("power_state", "on"),

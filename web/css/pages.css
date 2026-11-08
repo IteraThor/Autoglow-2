@@ -2568,6 +2568,11 @@ input.ui-input.sf-name-input {
 
 .st-label .form-hint { font-weight: 400; }
 
+.st-value {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .st-switch { flex: 0 0 auto; }
 
 .st-switch .mode-option {

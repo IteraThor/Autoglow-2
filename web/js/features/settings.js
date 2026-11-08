@@ -2,6 +2,7 @@
 // Discard (or leaving the page and choosing Discard) puts everything back to what is saved.
 
 import { confirmLegacyMatrix, setLightingMode } from '../components/mode-switch.js';
+import { api } from '../core/api.js';
 import { appStore } from '../core/store.js';
 import { router } from '../core/router.js';
 import { toast } from '../core/toast.js';
@@ -201,4 +202,8 @@ export function initSettings() {
     refresh();
   });
   refresh();
+
+  api.get('/api/status')
+    .then(s => { $('appVersion').textContent = s.version ? `AutoGlow 2 v${s.version}` : 'Unknown'; })
+    .catch(() => { $('appVersion').textContent = 'Unknown'; });
 }
