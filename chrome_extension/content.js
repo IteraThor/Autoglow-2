@@ -85,6 +85,7 @@ wledRoot.innerHTML = `
   .all:hover { background: #4a2c2f; color: #fecaca; }
   .all:disabled { opacity: .5; cursor: default; }
   .msg { padding: 6px 4px; color: #9aa0a6; }
+  .msg.err { color: #fca5a5; }
 </style>
 <button class="trigger" type="button" title="AutoGlow lights" aria-label="AutoGlow lights" aria-haspopup="true" aria-expanded="false">${BULB_ICON}</button>
 <div class="menu" role="menu" hidden>
@@ -112,7 +113,7 @@ function stateOf(d) {
   return ['on', d.online === null ? 'live' : 'on']; // online null: AutoGlow streams to it right now
 }
 
-async function loadWled() {
+async function loadWled(note) {
   wledListEl.innerHTML = '<div class="msg">Loading…</div>';
   const res = await ask({ type: 'wledList' });
   if (!res || !res.ok) {
@@ -147,12 +148,21 @@ async function loadWled() {
     all.addEventListener('click', () => powerOff(all, null));
     wledListEl.append(all);
   }
+  if (note) {
+    const msg = document.createElement('div');
+    msg.className = 'msg err';
+    msg.textContent = note;
+    wledListEl.append(msg);
+  }
 }
 
 async function powerOff(btn, ip) {
   btn.disabled = true;
-  await ask({ type: 'wledOff', ip });
-  loadWled();
+  const res = await ask({ type: 'wledOff', ip });
+  let note = '';
+  if (!res || !res.ok) note = 'AutoGlow did not accept the power-off.';
+  else if (res.data.status !== 'ok') note = 'Sent, but not every controller confirmed it is off.';
+  loadWled(note);
 }
 
 function placeMenu() {

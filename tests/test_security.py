@@ -95,6 +95,14 @@ class TestSecurityMiddlewareAndRoutes(AioHTTPTestCase):
         self.assertEqual(resp.status, 403)
 
     @unittest_run_loop
+    async def test_extension_may_only_post_power_off(self):
+        ext = {"Origin": "chrome-extension://abcdefghijklmnop"}
+        resp = await self.client.post("/api/power/test_off", json={}, headers=ext)
+        self.assertEqual(resp.status, 200)
+        resp = await self.client.post("/api/protocol/mode", json={"mode": "http"}, headers=ext)
+        self.assertEqual(resp.status, 403)
+
+    @unittest_run_loop
     async def test_pin_lifecycle(self):
         # Enable PIN: the setting browser keeps a session cookie
         resp = await self.client.post("/api/auth/pin", json={"new_pin": "4321"})

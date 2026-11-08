@@ -209,6 +209,7 @@ function status() {
 // -----------------------------------------------------------------------------
 async function api(path, options) {
   const res = await fetch(SERVER_URL + path, options);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 

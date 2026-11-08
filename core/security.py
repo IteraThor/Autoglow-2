@@ -44,6 +44,8 @@ PUBLIC_API_PATHS = {"/api/auth/status", "/api/auth/login"}
 # The Chrome extension relays Autodarts game data here. It cannot hold a PIN session, so it is
 # authorised separately: only Chrome on the AutoGlow computer itself may connect.
 BRIDGE_WS_PATH = "/ws/autodarts-bridge"
+# The extension's WLED menu on play.autodarts.com switches controllers off; same rule as the bridge
+EXTENSION_POST_PATHS = {"/api/power/test_off"}
 
 _login_failures: Dict[str, list] = {}
 
@@ -211,7 +213,8 @@ async def security_middleware(request: web.Request, handler):
 
     # Block cross-site requests that change state or open live sockets (drive-by CSRF from other web pages)
     if is_api and (request.method not in ("GET", "HEAD", "OPTIONS") or path.startswith("/ws/")):
-        if _is_cross_origin(request):
+        from_extension = path in EXTENSION_POST_PATHS and bridge_rejection_reason(request) is None
+        if _is_cross_origin(request) and not from_extension:
             logger.warning(f"Rejected cross-origin {request.method} {path} from Origin {request.headers.get('Origin')}")
             return web.json_response(error_body("FORBIDDEN", "Cross-origin request rejected"), status=403)
 
