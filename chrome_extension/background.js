@@ -203,7 +203,38 @@ function status() {
   };
 }
 
+// -----------------------------------------------------------------------------
+// WLED menu in the play.autodarts.com header (content.js). The https page may not call localhost,
+// so the requests go through here.
+// -----------------------------------------------------------------------------
+async function api(path, options) {
+  const res = await fetch(SERVER_URL + path, options);
+  return res.json();
+}
+
+async function wledList() {
+  const hub = await api('/api/hub/status');
+  return (hub.devices || [])
+    .filter(d => d.enabled && d.ip)
+    .map(d => ({ name: d.name || d.ip, ip: d.ip, online: d.online, on: d.on }));
+}
+
+function wledOff(ip) {
+  // No ip: every controller, and AutoGlow treats the lights as switched off (standby)
+  return api('/api/power/test_off', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ip ? { ip } : {})
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && (msg.type === 'wledList' || msg.type === 'wledOff')) {
+    (msg.type === 'wledList' ? wledList() : wledOff(msg.ip))
+      .then(data => sendResponse({ ok: true, data }))
+      .catch(() => sendResponse({ ok: false }));
+    return true; // Answered asynchronously
+  }
   if (msg && msg.type === 'getStatus') {
     connect();
     sendResponse(status());
