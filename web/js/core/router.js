@@ -20,15 +20,8 @@ export const VIEWS = [
       { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator', mode: 'flow' }
     ]
   },
-  {
-    id: 'studio', label: 'Studio', path: '/studio',
-    subs: [
-      { id: 'broadcast', label: 'Broadcast', pane: 'tab-studio-broadcast' },
-      { id: 'match', label: 'Match', pane: 'tab-studio-match' },
-      { id: 'players', label: 'Players', pane: 'tab-studio-players' },
-      { id: 'cameras', label: 'Cameras', pane: 'tab-studio-cameras' }
-    ]
-  },
+  // One page: setup and the show as a timeline (web/js/features/studio.js); old /studio/<sub> links land here
+  { id: 'studio', label: 'Studio', path: '/studio', pane: 'tab-studio' },
   // The original AutoGlow 1: Board Manager API -> one WLED controller on USB (web/js/features/classic.js)
   { id: 'classic', label: 'Classic', path: '/classic', pane: 'tab-classic' },
   { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }

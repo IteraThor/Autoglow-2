@@ -672,6 +672,10 @@ if (ctx.demo && 'BroadcastChannel' in window) {
       draft = null;
       endShowcase();
       loadSettings().then(() => showDraft(ctx.settings));
+    } else if (data?.type === 'play' && data.scene) {
+      // A scene played only in this browser's demo outputs (Studio test pages), not on the TVs
+      endShowcase();
+      playCue(data.scene);
     } else if (data?.type === 'focus-text') {
       if (data.key) {
         showcaseLabel = data.label || '';

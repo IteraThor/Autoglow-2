@@ -1,133 +1,291 @@
 /**
- * AutoGlow 2 - Studio page (players, cameras, overlay text).
+ * AutoGlow 2 - Studio page: the broadcast as a timeline (web/js/features/studio*.js).
  * The broadcast output has its own stylesheet: web/studio/live.css.
  */
 
-.studio-page { max-width: 1240px; }
-
-.studio-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+.studio-page {
+  --st-ease: cubic-bezier(.2, .9, .3, 1.2);
+  --st-fast: .16s;
+  --st-base: .28s;
+  --st-line: var(--border-subtle);
+  max-width: 1400px;
 }
 
-.studio-grid .ide-panel { margin-bottom: 0; }
-.studio-wide { grid-column: 1 / -1; }
+.stu-icon { display: inline-flex; line-height: 0; }
+.studio-page [hidden], .stu-pop [hidden] { display: none !important; }
 
-.studio-grid .panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+@keyframes stu-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes stu-pop { 0% { transform: scale(.85); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes stu-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(var(--warning-rgb), .55); } 70% { box-shadow: 0 0 0 7px rgba(var(--warning-rgb), 0); } }
+@keyframes stu-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-page *, .studio-page *::before, .studio-page *::after, .stu-pop { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
-.studio-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+/* --- Page layout: top row, the timeline, then preview and the step's panel ------------------------ */
+.stu-page { display: flex; flex-direction: column; gap: 14px; }
+.stu-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stu-spacer { flex: 1; }
+
+.stu-rail { display: flex; align-items: stretch; gap: 10px; }
+.stu-group { display: flex; position: relative; background: var(--bg-panel); border: 1px solid var(--st-line); border-radius: 14px; padding: 4px; scrollbar-width: none; }
+.stu-show { flex: 1; }
+.stu-pill { position: absolute; top: 4px; bottom: 4px; border-radius: 10px; background: var(--accent-dim); border: 1px solid var(--accent-primary); transition: left .42s var(--st-ease), width .42s var(--st-ease), opacity .2s; opacity: 0; pointer-events: none; }
+.stu-group.has-pill .stu-pill { opacity: 1; }
+.stu-stage { position: relative; z-index: 1; flex: 1; min-width: 74px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 8px 8px; border: 0; background: none; cursor: pointer; color: var(--text-secondary); border-radius: 10px; font: inherit; font-size: 12px; white-space: nowrap; transition: color var(--st-fast); }
+.stu-stage:hover { color: var(--text-primary); }
+.stu-stage .stu-icon { transition: transform var(--st-base) var(--st-ease); }
+.stu-stage.is-on { color: var(--accent-bright); }
+.stu-stage.is-on .stu-icon { transform: scale(1.18); }
+.stu-stage:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+/* Little arrows between the show's steps: the order a match goes */
+.stu-show .stu-stage + .stu-stage::before { content: ""; position: absolute; left: -4px; top: 21px; width: 6px; height: 6px; border-top: 1.5px solid var(--text-muted); border-right: 1.5px solid var(--text-muted); transform: rotate(45deg); opacity: .6; }
+.stu-progress { position: absolute; left: 4px; right: 4px; bottom: 1px; height: 2px; border-radius: 2px; background: var(--accent-primary); transform-origin: left; transform: scaleX(0); transition: transform .42s var(--st-ease); }
+
+.stu-body { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.stu-left { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; }
+.stu-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.stu-screen { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--st-line); }
+.stu-screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+/* Cameras have their own pictures: the step gets the whole width */
+.stu-page.is-wide .stu-body { grid-template-columns: minmax(0, 1fr); }
+.stu-page.is-wide .stu-left { display: none; }
+
+.stu-panel { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.stu-panel > * { animation: stu-in .3s ease both; }
+.stu-panel > :nth-child(2) { animation-delay: .05s; }
+.stu-panel > :nth-child(3) { animation-delay: .1s; }
+.stu-panel > :nth-child(4) { animation-delay: .15s; }
+.stu-panel > :nth-child(5) { animation-delay: .2s; }
+.stu-title { display: flex; align-items: center; gap: 10px; }
+.stu-title h2 { margin: 0; font-size: 22px; font-weight: 600; }
+.stu-title small { color: var(--text-muted); font-size: 13px; }
+
+@media (max-width: 900px) {
+  .stu-body { grid-template-columns: minmax(0, 1fr); }
+  .stu-left { position: static; }
+  .stu-rail { flex-direction: column; }
+  .stu-group { overflow-x: auto; }
+  .stu-stage { flex: none; }
 }
 
-.studio-actions a.btn-ide { text-decoration: none; }
+/* --- Controls -------------------------------------------------------------------------------------- */
+.stu-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--st-line, var(--border-subtle)); background: var(--bg-card); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; white-space: nowrap; transition: transform var(--st-fast, .16s), background var(--st-fast, .16s), border-color var(--st-fast, .16s); }
+.stu-btn:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+.stu-btn:active { transform: scale(.96); }
+.stu-btn:disabled { opacity: .6; cursor: default; }
+.stu-btn.is-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #0c1015; font-weight: 600; }
+.stu-iconbtn { width: 34px; height: 34px; justify-content: center; padding: 0; }
+.stu-btn[aria-pressed="true"] { border-color: var(--accent-primary); color: var(--accent-primary); }
+.stu-btn .stu-icon { transition: transform var(--st-base, .28s) var(--st-ease, ease); }
+.stu-play.is-on { border-color: var(--accent-primary); color: var(--accent-bright); }
+.stu-send { border-color: var(--accent-primary); }
+.stu-send-scene { color: var(--text-muted); }
+.stu-chip { border-radius: 999px; padding: 6px 12px; }
+.stu-del { margin-left: auto; color: var(--status-danger); }
+.stu-link { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; padding: 2px 0; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; }
+.stu-link:hover { color: var(--accent-bright); }
+.stu-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-.studio-frame-wrap {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: #000;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+.stu-select, .stu-input { width: 100%; background: var(--bg-input); border: 1px solid var(--st-line); border-radius: 8px; padding: 7px 9px; color: var(--text-primary); font: inherit; font-size: 13px; }
+.stu-select:focus, .stu-input:focus { outline: 0; border-color: var(--accent-primary); }
+
+.stu-card { background: var(--bg-panel); border: 1px solid var(--st-line); border-radius: 14px; padding: 14px; }
+.stu-section { display: flex; flex-direction: column; }
+.stu-h { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin: 0 0 10px; font-weight: 600; }
+.stu-hint { color: var(--text-muted); font-size: 12px; line-height: 1.45; margin: 0; }
+.stu-hint.is-warn { color: var(--status-warning); }
+.stu-empty { color: var(--text-muted); font-size: 13px; margin: 6px 0; line-height: 1.5; }
+
+.stu-seg { display: inline-flex; background: var(--bg-input); border: 1px solid var(--st-line); border-radius: 10px; padding: 3px; position: relative; }
+.stu-seg button { position: relative; z-index: 1; border: 0; background: none; padding: 5px 10px; border-radius: 7px; cursor: pointer; color: var(--text-secondary); font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; transition: color var(--st-fast); }
+.stu-seg button:hover, .stu-seg button.is-on { color: var(--text-primary); }
+.stu-seg-pill { position: absolute; top: 3px; bottom: 3px; border-radius: 7px; background: var(--bg-card-hover); transition: left var(--st-base) var(--st-ease), width var(--st-base) var(--st-ease); }
+
+.stu-switch { position: relative; width: 34px; height: 20px; flex: none; appearance: none; background: var(--bg-input); border: 1px solid var(--st-line); border-radius: 999px; cursor: pointer; transition: background var(--st-fast); margin: 0; }
+.stu-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); transition: transform var(--st-base) var(--st-ease), background var(--st-fast); }
+.stu-switch:checked { background: var(--accent-dim); border-color: var(--accent-primary); }
+.stu-switch:checked::after { transform: translateX(14px); background: var(--accent-primary); }
+.stu-switch-row { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; }
+.stu-switch-row small { color: var(--text-muted); }
+
+/* Save mark: a dot while editing, a spinner while sending, a tick when saved */
+.stu-save { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.stu-save-icon { width: 14px; height: 14px; border-radius: 50%; display: inline-block; position: relative; }
+.stu-save[data-state="saved"] { color: var(--status-success); }
+.stu-save[data-state="saved"] .stu-save-icon { background: var(--status-success); }
+.stu-save[data-state="saved"] .stu-save-icon::after { content: ""; position: absolute; left: 4px; top: 2px; width: 4px; height: 7px; border: solid #0c1015; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.stu-save.is-pop .stu-save-icon { animation: stu-pop .35s var(--st-ease); }
+.stu-save[data-state="dirty"] .stu-save-icon { background: var(--status-warning); transform: scale(.55); }
+.stu-save[data-state="saving"] .stu-save-icon { border: 2px solid var(--text-muted); border-top-color: transparent; animation: stu-spin .7s linear infinite; }
+.stu-save[data-state="error"] { color: var(--status-danger); }
+.stu-save[data-state="error"] .stu-save-icon { background: var(--status-danger); }
+
+/* Readiness dots: a missing one pulses and opens its fix */
+.stu-dots { display: flex; gap: 6px; flex-wrap: wrap; }
+.stu-dot { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 8px; border-radius: 999px; background: var(--bg-card); border: 1px solid var(--st-line); font: inherit; font-size: 12px; color: var(--text-secondary); }
+.stu-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--status-success); flex: none; }
+.stu-dot[data-state="todo"] { color: var(--text-primary); cursor: pointer; }
+.stu-dot[data-state="todo"] i { background: var(--status-warning); animation: stu-pulse 1.8s infinite; }
+.stu-dot[data-state="wait"] i { background: var(--text-muted); }
+
+.stu-pop { position: fixed; z-index: 200; max-width: min(420px, calc(100vw - 16px)); background: var(--bg-modal); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow-pop); font-size: 13px; color: var(--text-primary); animation: stu-in .2s ease; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.stu-tv { display: flex; flex-direction: column; gap: 10px; }
+.stu-tv-url { display: flex; gap: 8px; align-items: center; }
+.stu-tv-url code { flex: 1; font-family: var(--font-mono); color: var(--text-code); background: var(--bg-input); padding: 7px 9px; border-radius: 7px; overflow-wrap: anywhere; }
+
+/* --- Look: swatches and accent colours ---------------------------------------------------------- */
+.stu-look-picker { display: flex; flex-direction: column; gap: 18px; }
+.stu-looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.stu-look { border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; gap: 6px; align-items: stretch; color: var(--text-secondary); font: inherit; font-size: 12px; }
+.stu-sw { display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; aspect-ratio: 16 / 10; border-radius: 9px; padding: 8px; outline: 2px solid transparent; outline-offset: 2px; transition: transform var(--st-fast) var(--st-ease), outline-color var(--st-fast); }
+.stu-sw.is-slant .stu-sw-row { transform: skewX(-12deg); }
+.stu-sw-row { display: flex; align-items: center; gap: 4px; height: 12px; border-radius: 3px; padding: 0 4px; }
+.stu-sw-row i { width: 3px; height: 8px; border-radius: 1px; }
+.stu-sw-row b { flex: 1; height: 3px; border-radius: 2px; background: currentColor; opacity: .7; }
+.stu-look:hover .stu-sw { transform: translateY(-2px) scale(1.03); }
+.stu-look.is-on { color: var(--text-primary); }
+.stu-look.is-on .stu-sw { outline-color: var(--accent-primary); animation: stu-pop .35s var(--st-ease); }
+
+.stu-accents { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stu-accent { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; transition: transform var(--st-fast) var(--st-ease); }
+.stu-accent:hover { transform: scale(1.15); }
+.stu-accent.is-on { border-color: var(--text-primary); transform: scale(1.12); }
+.stu-accent-custom { position: relative; overflow: hidden; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); }
+.stu-accent-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Camera layouts as little pictures */
+.stu-layouts { display: flex; gap: 8px; flex-wrap: wrap; }
+.stu-layout { border: 1px solid var(--st-line); background: var(--bg-input); border-radius: 9px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 5px; align-items: center; font: inherit; font-size: 11px; color: var(--text-secondary); transition: border-color var(--st-fast), transform var(--st-fast); }
+.stu-layout:hover { transform: translateY(-2px); }
+.stu-layout.is-on { border-color: var(--accent-primary); color: var(--text-primary); }
+.stu-layout-pic { width: 56px; height: 32px; position: relative; border-radius: 4px; background: var(--bg-card-hover); overflow: hidden; }
+.stu-layout-pic span { position: absolute; background: var(--text-muted); border-radius: 2px; }
+.stu-layout.is-on .stu-layout-pic span { background: var(--accent-primary); }
+
+/* --- Texts: a folding group per overlay part, an eye per text ----------------------------------- */
+.stu-texts { display: flex; flex-direction: column; gap: 6px; }
+.stu-tgroup { border: 1px solid var(--st-line); border-radius: 10px; background: var(--bg-input); overflow: hidden; }
+.stu-tgroup > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.stu-tgroup > summary::-webkit-details-marker { display: none; }
+.stu-chev { transition: transform var(--st-base) var(--st-ease); color: var(--text-muted); }
+details[open] > summary .stu-chev { transform: rotate(90deg); }
+.stu-tgroup-name { flex: 1; font-weight: 500; }
+.stu-tgroup-n { font-size: 11px; color: var(--text-muted); }
+.stu-tgroup.is-off .stu-trow { opacity: .45; }
+.stu-tgroup.is-off .stu-tgroup-name { color: var(--text-muted); }
+.stu-trows { padding: 2px 12px 12px; display: flex; flex-direction: column; gap: 6px; animation: stu-in var(--st-base) ease; }
+.stu-trow { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 6px; transition: opacity var(--st-fast); }
+.stu-trow input[type="text"] { width: 100%; background: var(--bg-workspace); border: 1px solid var(--st-line); border-radius: 7px; padding: 7px 9px; color: var(--text-primary); font: inherit; font-size: 13px; transition: border-color var(--st-fast); }
+.stu-trow input[type="text"]:focus { outline: 0; border-color: var(--accent-primary); }
+.stu-trow input::placeholder { color: var(--text-muted); }
+.stu-trow.is-hidden input[type="text"] { text-decoration: line-through; opacity: .5; }
+.stu-eye { width: 28px; height: 28px; border-radius: 7px; border: 0; background: none; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.stu-eye:hover { background: var(--bg-card-hover); }
+.stu-trow.is-hidden .stu-eye { color: var(--text-muted); }
+.stu-texts-foot { display: flex; justify-content: flex-end; }
+
+/* --- Players: avatars and the card to edit one --------------------------------------------------- */
+.stu-avatar { --hue: 170; width: 56px; height: 56px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px; color: hsl(var(--hue) 60% 85%); background: hsl(var(--hue) 35% 28%); overflow: hidden; flex: none; }
+.stu-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.stu-avatar.is-small { width: 28px; height: 28px; font-size: 11px; }
+.stu-avatar.is-unknown { background: var(--bg-card-hover); color: var(--text-muted); }
+.stu-players { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 12px; }
+.stu-player { border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; border-radius: 12px; color: var(--text-primary); font: inherit; transition: background var(--st-fast), transform var(--st-fast) var(--st-ease); animation: stu-in var(--st-base) ease both; position: relative; }
+.stu-player:hover { background: var(--bg-card); transform: translateY(-2px); }
+.stu-player-name { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-player-nick { font-size: 11px; color: var(--text-muted); margin-top: -4px; }
+.stu-player.is-drop .stu-avatar { outline: 2px dashed var(--accent-primary); outline-offset: 3px; }
+.stu-player-add .stu-avatar { background: none; border: 2px dashed var(--st-line); color: var(--text-muted); }
+.stu-player-add:hover .stu-avatar { border-color: var(--accent-primary); color: var(--accent-primary); }
+.stu-flag { position: absolute; top: 6px; right: 14px; font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--bg-card-hover); color: var(--text-secondary); }
+
+.stu-pcard { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--st-line); animation: stu-in var(--st-base) ease; }
+.stu-pcard-pics { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.stu-pic-pick { border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-muted); font: inherit; }
+.stu-pic-pick small { font-size: 11px; }
+.stu-pic-pick.is-drop .stu-pic { outline: 2px dashed var(--accent-primary); outline-offset: 3px; }
+.stu-pic.stu-avatar { width: 96px; height: 96px; font-size: 30px; }
+.stu-pic.is-wide { width: 112px; height: 63px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: var(--bg-input); border: 1px dashed var(--st-line); }
+.stu-pic.is-wide img { width: 100%; height: 100%; object-fit: cover; }
+.stu-pcard-name { width: 100%; font: inherit; font-size: 20px; font-weight: 600; background: none; border: 0; border-bottom: 1px solid var(--st-line); color: var(--text-primary); padding: 4px 0; margin-bottom: 10px; }
+.stu-pcard-name:focus { outline: 0; border-color: var(--accent-primary); }
+.stu-pfields { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.stu-pfields label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted); }
+.stu-pfields input, .stu-pfields select { background: var(--bg-input); border: 1px solid var(--st-line); border-radius: 7px; padding: 6px 8px; color: var(--text-primary); font: inherit; font-size: 13px; }
+.stu-pfields input::placeholder { color: var(--text-muted); opacity: .6; }
+.stu-pcard-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 600px) {
+  .stu-pcard { grid-template-columns: minmax(0, 1fr); }
+  .stu-pcard-pics { flex-direction: row; justify-content: center; }
 }
 
-.studio-frame {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
+/* --- Up next: the players picked in Autodarts and who the Studio shows them as -------------------- */
+.stu-match { display: flex; flex-direction: column; gap: 10px; }
+.stu-match-head, .stu-match-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stu-match-rows { display: flex; flex-direction: column; gap: 8px; }
+.stu-match-status { font-size: 12px; color: var(--text-secondary); }
+.stu-match-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1.2fr) auto; align-items: center; gap: 8px; font-size: 13px; animation: stu-in var(--st-base) ease both; }
+.stu-match-row code { font-family: var(--font-mono); color: var(--text-code); background: var(--bg-input); padding: 2px 6px; border-radius: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-match-row > .stu-icon { color: var(--text-muted); }
+.stu-last-data { font-size: 12px; color: var(--text-muted); }
+.stu-last-data.is-warn { color: var(--status-warning); }
+
+.studio-badge { padding: 2px 8px; border-radius: 999px; font-size: var(--fs-xs); white-space: nowrap; border: 1px solid currentColor; }
+.studio-badge.ok { color: var(--status-success); }
+.studio-badge.bad { color: var(--status-danger); }
+
+/* --- Cameras: live picture to frame by hand, tools folded under it ------------------------------- */
+.stu-cameras { display: flex; flex-direction: column; gap: 14px; }
+.stu-cams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.stu-cams > .stu-dart-zoom { grid-column: 1 / -1; }
+.stu-cam { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stu-cam-head { display: flex; align-items: center; gap: 8px; }
+.stu-cam-head strong { font-weight: 600; }
+.stu-cam-head small { color: var(--text-muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-cam-tools { display: flex; gap: 6px; }
+.stu-cam .studio-preview { max-width: none; cursor: grab; touch-action: none; user-select: none; border-radius: 10px; }
+.stu-cam .studio-preview:active { cursor: grabbing; }
+.stu-cam .studio-preview.is-marking { cursor: crosshair; }
+.stu-cam-overlay { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.stu-cam-hint { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: #fff; background: rgba(0, 0, 0, .55); padding: 3px 8px; border-radius: 999px; transition: opacity var(--st-base); }
+.stu-cam .studio-preview:hover .stu-cam-hint, .studio-preview.is-marking .stu-cam-overlay { opacity: 0; }
+.stu-cam-zoom { position: absolute; right: 8px; top: 8px; font-size: 11px; color: #fff; background: rgba(0, 0, 0, .55); padding: 2px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+
+/* A folding tool under a camera: Picture, Straighten */
+.stu-fold { border: 1px solid var(--st-line); border-radius: 10px; background: var(--bg-input); }
+.stu-fold > summary { list-style: none; display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 13px; }
+.stu-fold > summary::-webkit-details-marker { display: none; }
+.stu-fold > summary .stu-icon { align-self: center; }
+.stu-fold > summary small { color: var(--text-muted); font-size: 12px; }
+.stu-fold-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 12px; animation: stu-in var(--st-base) ease; }
+.stu-fold > summary .stu-icon { color: var(--text-muted); transition: transform var(--st-base) var(--st-ease); }
+.stu-fold[open] > summary .stu-icon { transform: rotate(90deg); }
+
+.stu-dart-zoom { display: flex; flex-direction: column; gap: 12px; }
+.studio-dart-zoom-rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; transition: opacity var(--st-fast); }
+.studio-dart-zoom-rows.is-off { opacity: .45; }
+
+.stu-streaming { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.stu-streaming > label { display: flex; flex-direction: column; }
+.stu-streaming .stu-h { margin-bottom: 6px; }
+.stu-streaming-end { margin-left: auto; }
+
+@media (max-width: 900px) {
+  .studio-dart-zoom-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stu-cams { grid-template-columns: minmax(0, 1fr); }
 }
 
-.studio-note {
-  margin: var(--space-3) 0 0;
-  font-size: var(--fs-xs);
-  line-height: 1.5;
-  color: var(--text-secondary);
-}
+.studio-range { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.studio-range input { width: 100%; accent-color: var(--accent-primary); }
+.studio-range-value { color: var(--text-muted); }
 
-.studio-note code {
-  font-family: var(--font-mono);
-  color: var(--text-code);
-}
-
-.studio-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.studio-form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.studio-form label small { color: var(--text-muted); }
-
-.studio-form label.studio-inline {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.studio-form input[type="color"] {
-  width: 56px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: none;
-}
-
-.studio-form label.studio-check,
-.studio-check {
-  flex-direction: row;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-/* --- Cameras --------------------------------------------------------------- */
-.studio-cams {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-
-.studio-cam {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.studio-cam-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: var(--fs-sm);
-}
-
-.studio-cam-head span { color: var(--text-muted); font-size: var(--fs-xs); }
-
+/* The camera picture as on the screens (web/studio/js/framing.js sets the variables) */
 .studio-preview {
   position: relative;
   width: 100%;
-  max-width: 440px;
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
@@ -174,335 +332,18 @@
 .studio-preview.sharp-on > img,
 .studio-preview.sharp-on > video { opacity: 0; }
 
-.studio-preview-note {
-  padding: var(--space-3);
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  text-align: center;
-}
-
-/* --- Players --------------------------------------------------------------- */
-.studio-players-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.studio-players-head .btn-ide[hidden] { display: none; }
-
-.studio-player-form {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: var(--space-4);
-  padding-top: var(--space-4);
-  margin-top: var(--space-4);
-  border-top: 1px solid var(--border-divider);
-}
-
-.studio-player-form[hidden] { display: none; }
-
-.studio-form-title {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--fs-md);
-}
-
-.studio-pic { cursor: pointer; }
-.studio-pic input { display: none; }
-
-.studio-pic-preview {
-  width: 140px;
-  height: 175px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-input);
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-  overflow: hidden;
-}
-
-.studio-pic:hover .studio-pic-preview { border-color: var(--accent-primary); }
-
-.studio-pic-preview img {
+/* Blurred copy of the picture behind it (studio/js/fill.js), as on the screens */
+.studio-preview .cam-fill {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  transform: scale(1.08);
+  filter: brightness(0.5) saturate(1.15);
 }
 
-.studio-players {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-3);
-}
-
-.studio-player {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-3);
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.studio-player > img,
-.studio-player-noimg {
-  grid-row: 1 / 3;
-  width: 56px;
-  height: 70px;
-  object-fit: contain;
-  background: var(--bg-input);
-  border-radius: var(--radius-sm);
-}
-
-.studio-player-noimg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.studio-player-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  font-size: var(--fs-sm);
-}
-
-.studio-player-info strong {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-player-info span { color: var(--text-muted); font-size: var(--fs-xs); }
-
-.studio-country {
-  padding: 0 4px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  color: var(--text-secondary) !important;
-}
-
-.studio-player-actions { display: flex; gap: var(--space-2); }
-
-.studio-empty {
-  font-size: var(--fs-sm);
-  color: var(--text-muted);
-}
-
-/* Stays at the bottom of the window, so Save is next to the controls it saves */
-.studio-savebar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding: var(--space-3) 0;
-  background: var(--bg-workspace);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.studio-dart-zoom-card {
-  grid-column: 1 / -1;
-}
-
-.studio-dart-zoom-card .studio-dart-zoom {
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.studio-about {
-  margin-top: var(--space-4);
-}
-
-.studio-about summary {
-  width: fit-content;
-  color: var(--accent-primary);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-
-.studio-about .studio-note {
-  margin-top: var(--space-2);
-}
-
-@media (max-width: 900px) {
-  .studio-grid,
-  .studio-cams { grid-template-columns: minmax(0, 1fr); }
-  .studio-player-form { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* --- Game data status ------------------------------------------------------- */
-.studio-side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-/* The checklist itself is .ad-steps in pages.css; here it sits in a panel and numbers itself */
-.ad-steps-compact {
-  padding: 0;
-  counter-reset: ad-step;
-}
-
-.ad-steps-compact .ad-step {
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  counter-increment: ad-step;
-}
-
-.ad-steps-compact .ad-step:first-child { padding-top: 0; }
-.ad-steps-compact .ad-step:last-child { padding-bottom: 0; }
-
-.ad-steps-compact .ad-step-mark::before { content: counter(ad-step); }
-
-.ad-steps-compact .ad-step-detail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ad-step-events.is-warn strong { color: var(--status-warning); }
-
-.studio-last-data {
-  margin: var(--space-2) 0 0;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-}
-
-.studio-last-data.is-warn { color: var(--status-warning); }
-
-/* --- Player profile fields and scene buttons ---------------------------------------------- */
-.studio-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
-}
-
-.studio-fields.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-
-.studio-fields label {
-  display: block;
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.studio-fields label > input,
-.studio-fields label > select {
-  display: block;
-  width: 100%;
-  margin-top: var(--space-1);
-}
-
-/* Buttons and fields set their own display, which would otherwise override [hidden] */
-#tab-studio [hidden] { display: none !important; }
-
-.studio-fields label small,
-.studio-subhead small { color: var(--text-muted); }
-
-.studio-subhead {
-  margin-top: var(--space-2);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.studio-cues {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-@media (max-width: 900px) {
-  .studio-fields,
-  .studio-fields.three { grid-template-columns: minmax(0, 1fr); }
-}
-
-.studio-cam-opts {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.studio-cam-opts select { flex: 1; }
-
-/* --- Camera framing ------------------------------------------------------------------------- */
-.studio-framing {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  align-items: end;
-  gap: var(--space-3);
-}
-
-.studio-range {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--fs-xs);
-  color: var(--text-secondary);
-}
-
-.studio-range input { width: 100%; accent-color: var(--accent-primary); }
-
-/* Picture controls of a USB camera (V4L2) */
-.studio-picture {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-}
-
-.studio-picture[hidden] { display: none; }
-.studio-picture summary { cursor: pointer; font-size: var(--fs-sm); color: var(--text-secondary); }
-.studio-picture-body { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); }
-
-.studio-picture-switches {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  align-items: end;
-  gap: var(--space-3);
-}
-
-.studio-picture-switches .studio-range select { width: 100%; }
-
-.studio-picture-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-3);
-}
-
-.studio-picture-row.is-inactive { opacity: 0.45; }
-
-.studio-picture-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.studio-picture-foot small { color: var(--text-muted); font-size: var(--fs-xs); line-height: 1.4; }
+.studio-preview-note { position: relative; z-index: 1; padding: 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
+.studio-preview-msg { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 
 /* The centre half of the preview: what the split view shows of this camera */
 .studio-split-area {
@@ -517,49 +358,10 @@
   pointer-events: none;
 }
 
-/* Straighten: strength slider and the board marking */
-.studio-straighten {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: end;
-  gap: var(--space-3);
-}
-
-.studio-straighten-sharp { grid-column: 1; }
-.studio-straighten-hint { grid-column: 1 / -1; color: var(--text-muted); font-size: var(--fs-xs); line-height: 1.4; }
-.studio-straighten button[hidden] { display: none; }
-.studio-range-value { color: var(--text-muted); }
-
-.studio-preview.is-marking { max-width: none; }
-
-/* Dart zoom: on/off and its four timings */
-.studio-dart-zoom {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.studio-dart-zoom-rows {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.studio-dart-zoom-rows .is-off { opacity: 0.45; }
-
-@media (max-width: 900px) {
-  .studio-dart-zoom-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 .studio-preview.is-marking .studio-split-area { display: none; }
 
-.studio-mark {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  cursor: crosshair;
-}
+/* Straighten: mark the board by clicking four points */
+.studio-mark { position: absolute; inset: 0; z-index: 4; cursor: crosshair; }
 
 .studio-mark-label {
   position: absolute;
@@ -574,7 +376,7 @@
   pointer-events: none;
 }
 
-.studio-mark-cancel { position: absolute; right: 8px; top: 8px; cursor: pointer; }
+.studio-mark-cancel { position: absolute; right: 8px; top: 8px; }
 
 .studio-mark-dot {
   position: absolute;
@@ -592,290 +394,8 @@
   pointer-events: none;
 }
 
-@media (max-width: 900px) {
-  .studio-framing,
-  .studio-straighten { grid-template-columns: minmax(0, 1fr); }
-}
-
-/* --- Player pictures: profile picture and mockup camera photo -------------------------------- */
-.studio-pics {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.studio-pic small {
-  display: block;
-  margin-top: var(--space-1);
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.studio-pic-preview.wide { width: 180px; height: 101px; }
-.studio-pic-preview.wide img { object-fit: cover; }
-.studio-pics .studio-pic-preview:not(.wide) { width: 180px; }
-
-/* --- Match page: how it works, the players picked in Autodarts ---------------------------------- */
-.studio-steps {
-  margin: 0;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-  color: var(--text-secondary);
-}
-
-.studio-steps a { color: var(--accent-bright); }
-.studio-live-match { margin-top: var(--space-4); }
-
-.studio-live-row code {
-  font-family: var(--font-mono);
-  color: var(--text-code);
-  background: var(--bg-input);
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.studio-live-head {
-  margin-bottom: var(--space-3);
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.studio-live-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  font-size: var(--fs-sm);
-}
-
-.studio-live-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.studio-live-arrow { color: var(--text-muted); }
-
-.studio-badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: var(--fs-xs);
-  white-space: nowrap;
-  border: 1px solid currentColor;
-}
-
-.studio-badge.ok { color: var(--status-success); }
-.studio-badge.warn { color: var(--status-warning); }
-.studio-badge.bad { color: var(--status-danger); }
-.studio-note.studio-warn { color: var(--status-warning); }
-
-/* --- Start Autodarts (camera previews, Game Data) --------------------------------------------- */
-.studio-preview-msg {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-
-/* --- Texts panel ------------------------------------------------------------------------------- */
-.studio-texts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* Broadcast page: preview with Overlay and Scenes under it on the left; the texts scroll in their own
-   panel on the right, so the preview stays beside them */
-.studio-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-/* Scene buttons as a toolbar under the preview */
-.studio-cuebar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: var(--space-2);
-}
-
-.studio-cuebar-label {
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-right: 2px;
-}
-
-.studio-cuebar-label:not(:first-child) { margin-left: var(--space-3); }
-.studio-cuebar + .studio-note { margin-top: var(--space-2); }
-.studio-cuebar + .studio-cuebar { margin-top: 6px; }
-.studio-cuebar .btn-ide { padding-inline: 9px; }
-
-/* Overlay settings in two columns */
-.studio-overlay-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
-  align-items: center;
-}
-
-.studio-overlay-checks {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-@media (max-width: 1100px) {
-  .studio-overlay-form { grid-template-columns: minmax(0, 1fr); }
-}
-
-#tab-studio-broadcast .studio-texts-panel {
-  position: sticky;
-  top: var(--space-4);
-  max-height: calc(100vh / var(--ui-scale, 1) - 150px);
-}
-
-#tab-studio-broadcast .studio-texts-panel > .panel-body {
-  overflow-y: auto;
-  min-height: 0;
-}
-
-@media (max-width: 900px) {
-  #tab-studio-broadcast .studio-texts-panel { position: static; max-height: none; }
-}
-
-.studio-text-where {
-  margin: -4px 0 var(--space-2);
-  font-size: var(--fs-xs);
-  color: var(--text-muted);
-}
-
-/* The field whose text the preview is showing */
-.studio-texts-panel label.is-previewed { color: #ffd400; }
-.studio-texts-panel label.is-previewed input { border-color: #ffd400; }
-
-.studio-text-group .studio-subhead { margin: 0; }
-
-/* A folding text group: name, number of texts and its switch on top, where it shows below */
-.studio-text-group {
-  border-bottom: 1px solid var(--border-subtle);
-  padding-bottom: var(--space-3);
-}
-
-.studio-text-group:last-child { border-bottom: 0; }
-
-.studio-text-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 2px var(--space-3);
-  cursor: pointer;
-  list-style: none;
-}
-
-.studio-text-head::-webkit-details-marker { display: none; }
-
-.studio-text-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-}
-
-.studio-text-title::before {
-  content: "▸";
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-  transition: transform 0.15s ease;
-}
-
-.studio-text-group[open] .studio-text-title::before { transform: rotate(90deg); }
-
-.studio-text-count {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-}
-
-.studio-text-head .studio-text-where {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding-left: 16px;
-}
-
-.studio-text-group[open] > .studio-fields { margin-top: var(--space-3); }
-
-/* Output address as a chip with Copy */
-.studio-output-url {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.studio-output-url code {
-  padding: 4px var(--space-2);
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--fs-sm);
-}
-
-.studio-output-url + .studio-note { margin-top: var(--space-2); }
-
-.studio-text-toggle { flex-shrink: 0; cursor: pointer; }
-
-/* Each text field with the box in front of it that shows or hides the text on the screens */
-/* One line per text: box, label, field */
-.studio-text-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.studio-text-row > input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
-}
-
-.studio-fields .studio-text-row > label {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  align-items: center;
-  gap: var(--space-2);
-  line-height: 1.25;
-}
-
-.studio-fields .studio-text-row > label > input { margin-top: 0; }
-
-.studio-text-row.is-hidden-text label { color: var(--text-muted); text-decoration: line-through; }
-.studio-text-row.is-hidden-text label input { opacity: 0.45; }
-.studio-text-toggle.is-show { font-weight: 600; color: var(--text-primary); }
-
-/* A part switched off on the screens: its texts stay editable but step back */
-.studio-text-group.is-off .studio-subhead { color: var(--text-muted); text-decoration: line-through; }
-.studio-text-group.is-off .studio-text-where,
-.studio-text-group.is-off .studio-fields { opacity: 0.45; }
-.studio-text-group .studio-fields { grid-template-columns: minmax(0, 1fr); gap: 6px; }
-
-/* Blurred copy of the picture behind it (studio/js/fill.js), as on the screens */
-.studio-preview .cam-fill {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: scale(1.08);
-  filter: brightness(0.5) saturate(1.15);
-}
-
-.studio-layout-hint { display: block; margin-top: 4px; color: var(--text-muted, #94a3b8); font-size: 12px; font-weight: 400; line-height: 1.4; }
-.studio-layout-hint[hidden] { display: none; }
+/* Picture controls of a USB camera (V4L2) */
+.studio-picture-switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); align-items: end; gap: 12px; }
+.studio-picture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.studio-picture-row.is-inactive { opacity: 0.45; }
+.studio-picture-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
