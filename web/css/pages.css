@@ -2517,15 +2517,68 @@ input.ui-input.sf-name-input {
 }
 
 .pw-page.active {
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+/* Settings: one card per category, one compact row per setting (label left, switch right) */
+.st-group {
+  padding: var(--space-2) var(--space-4);
+}
+
+.st-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--text-muted);
+  font: 600 var(--fs-xs) var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.st-group-note {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.st-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.st-group-title + .st-row,
+.st-group-title + .st-row-details > .st-row { border-top: 0; }
+
+.st-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+.st-label .form-hint { font-weight: 400; }
+
+.st-switch { flex: 0 0 auto; }
+
+.st-switch .mode-option {
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 
 .pw-card .form-hint {
   margin: var(--space-3) 0 0;
-}
-
-.pw-mode {
-  align-self: flex-start;
 }
 
 .pw-pin-summary {
@@ -2535,6 +2588,8 @@ input.ui-input.sf-name-input {
   cursor: pointer;
   list-style: none;
 }
+
+.pw-pin-summary .st-label { flex: 0 1 auto; }
 
 .pw-pin-summary::-webkit-details-marker { display: none; }
 
@@ -2550,12 +2605,14 @@ input.ui-input.sf-name-input {
 
 .pw-pin[open] .pw-pin-open { visibility: hidden; }
 
+.pw-pin > .form-hint { margin: 0; }
+
 .pw-pin-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   align-items: end;
   gap: var(--space-3);
-  margin-top: var(--space-3);
+  margin: var(--space-3) 0 var(--space-2);
 }
 
 .pw-page .settings-savebar-note {
