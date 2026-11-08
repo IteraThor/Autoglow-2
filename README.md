@@ -45,6 +45,14 @@ Your settings, flows and profiles are kept on every update.
   ```
 * **Updated with 2.1's "Upload update ZIP":** restart AutoGlow afterwards. On Linux run `sudo bash setup.sh`, on Windows restart `run_autoglow.bat`.
 
+## Classic mode (AutoGlow 1)
+The original AutoGlow lives on its own page, **Classic** in the menu. It is the simple USB-only status light: it listens to the Autodarts Board Manager on this computer (`http://localhost:3180`) and sends one color per board status (Throw, Takeout, Takeout in progress, Starting, Stopped, Calibrating, Error) to a WLED ESP32 plugged in over USB. No Wi-Fi, Autodarts login or Chrome extension needed.
+
+* Switch it **On**, pick an effect and color per status and press **Save**. **Test** shows a look right away.
+* The ESP32 is found on its own (CP210x, CH340, FTDI, ESP32-S2/S3); enter the port (e.g. `/dev/ttyUSB0` or `COM3`) if it is not.
+* It runs next to the Flow Matrix. Do not also add the USB controller under **Setup**.
+* On Linux, `setup.sh` adds the AutoGlow user to the `dialout` group for USB access; log out and in once (or restart) afterwards. Settings are kept in `classic.json`.
+
 ## Rust LED engine (optional)
 On Linux, `setup.sh` also builds a small Rust engine that renders the effects and sends them to WLED on its own thread. The LEDs then keep a steady 50 FPS even while AutoGlow is busy, for example with the Studio cameras. The effects look exactly the same.
 

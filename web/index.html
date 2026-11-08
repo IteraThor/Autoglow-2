@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="/css/tabs.css?v=2.2-p27">
   <link rel="stylesheet" href="/css/flow-matrix.css?v=2.4-f3">
   <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
-  <link rel="stylesheet" href="/css/pages.css?v=2.2-p25">
+  <link rel="stylesheet" href="/css/pages.css?v=2.2-p26">
   <link rel="stylesheet" href="/css/studio.css?v=2.2-p26">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,6 +51,12 @@
         <a href="/studio" data-link data-view="studio" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 11 17 13 22 17 22 7"/></svg>
           <span>Studio</span>
+        </a>
+        <span class="rail-divider" role="separator"></span>
+        <span class="rail-group-label" aria-hidden="true">Original</span>
+        <a href="/classic" data-link data-view="classic" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 2h4v5h-4z"/><rect x="7" y="7" width="10" height="9" rx="1"/><line x1="12" y1="16" x2="12" y2="22"/><line x1="10" y1="10" x2="10" y2="13"/><line x1="14" y1="10" x2="14" y2="13"/></svg>
+          <span>Classic</span>
         </a>
         <a href="/settings" data-link data-view="settings" class="rail-item rail-item-end">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -551,6 +557,71 @@
         </section>
 
         <!-- TAB 5: SETTINGS (lighting engine, access PIN; standby timers live in the Flow Matrix under Waiting) -->
+        <!-- CLASSIC: the original AutoGlow 1, USB only (web/js/features/classic.js) -->
+        <section id="tab-classic" class="tab-pane pw-page classic-page">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Classic</h1>
+              <p class="page-lead">The original AutoGlow 1: a simple status light for one WLED controller on USB. It listens to the Autodarts Board Manager on this computer, no Wi-Fi, login or Chrome extension needed.</p>
+            </div>
+          </div>
+
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Classic mode</h2></div>
+            <div class="mode-switch pw-mode" id="classicPower" role="group" aria-label="Classic mode">
+              <button type="button" class="mode-option" data-power="on" aria-pressed="false"><span>On</span></button>
+              <button type="button" class="mode-option" data-power="off" aria-pressed="false"><span>Off</span></button>
+            </div>
+            <dl class="classic-state">
+              <dt>USB controller</dt><dd id="classicUsbState">…</dd>
+              <dt>Board Manager</dt><dd id="classicBmState">…</dd>
+              <dt>Board status</dt><dd id="classicLastStatus">—</dd>
+            </dl>
+            <p class="form-hint">Runs next to the Flow Matrix and drives only the USB controller. Do not also add that controller under Setup, or both will set its lights.</p>
+          </div>
+
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Connection</h2></div>
+            <div class="classic-fields">
+              <label class="form-field">
+                <span class="form-label">Board Manager address</span>
+                <input type="text" id="classicBmUrl" class="ui-input" placeholder="http://localhost:3180" autocomplete="off" spellcheck="false">
+              </label>
+              <label class="form-field">
+                <span class="form-label">USB port</span>
+                <input type="text" id="classicPort" class="ui-input" list="classicPortList" placeholder="Auto-detect" autocomplete="off" spellcheck="false">
+                <datalist id="classicPortList"></datalist>
+                <small class="form-hint" id="classicPortHint"></small>
+              </label>
+              <label class="form-field">
+                <span class="form-label">Brightness <span id="classicBrightnessValue">255</span></span>
+                <input type="range" id="classicBrightness" class="ui-range" min="0" max="255" step="1">
+              </label>
+              <label class="classic-inline">
+                <input type="checkbox" id="classicStartup" class="classic-check">
+                <span>Rainbow for 3 seconds when the controller connects</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card pw-card">
+            <div class="card-head"><h2 class="card-title">Status lights</h2></div>
+            <div class="classic-table-wrap">
+              <table class="classic-table">
+                <thead><tr><th scope="col">Status</th><th scope="col">On</th><th scope="col">Effect</th><th scope="col">Color</th><th scope="col"><span class="visually-hidden">Test</span></th></tr></thead>
+                <tbody id="classicStatusRows"></tbody>
+              </table>
+            </div>
+            <p class="form-hint">Test shows a look on the controller right away, saved or not.</p>
+          </div>
+
+          <div class="settings-savebar" id="classicSaveBar">
+            <span class="settings-savebar-note" id="classicSaveNote" aria-live="polite">No unsaved changes</span>
+            <button class="ui-btn" id="btnClassicDiscard" type="button" disabled>Discard</button>
+            <button class="ui-btn ui-btn-primary" id="btnClassicSave" type="button" disabled>Save</button>
+          </div>
+        </section>
+
         <section id="tab-settings" class="tab-pane pw-page">
           <div class="page-head">
             <h1 class="page-title">Settings</h1>
@@ -850,7 +921,7 @@
   </div>
 
   <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
-  <script type="module" src="/js/core/index.js?v=2.2-p25"></script>
+  <script type="module" src="/js/core/index.js?v=2.2-p26"></script>
   <script defer src="/js/auth.js?v=2.2-p25"></script>
   <script defer src="/js/state.js?v=2.2-p25"></script>
   <script defer src="/js/utils.js?v=2.2-p25"></script>

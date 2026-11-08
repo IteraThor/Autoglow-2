@@ -29,6 +29,8 @@ export const VIEWS = [
       { id: 'cameras', label: 'Cameras', pane: 'tab-studio-cameras' }
     ]
   },
+  // The original AutoGlow 1: Board Manager API -> one WLED controller on USB (web/js/features/classic.js)
+  { id: 'classic', label: 'Classic', path: '/classic', pane: 'tab-classic' },
   { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
 ];
 

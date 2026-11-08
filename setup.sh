@@ -45,6 +45,14 @@ for GROUP in video render; do
     fi
 done
 
+# Classic mode (AutoGlow 1) talks to the ESP32 over USB serial (/dev/ttyUSB*, /dev/ttyACM*)
+for GROUP in dialout uucp; do
+    if getent group "$GROUP" >/dev/null 2>&1 && ! id -nG "$ORIGINAL_USER" | grep -qw "$GROUP"; then
+        echo "--> Adding $ORIGINAL_USER to the $GROUP group (Classic mode USB)..."
+        usermod -aG "$GROUP" "$ORIGINAL_USER"
+    fi
+done
+
 # Dynamically determine the project path
 PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 

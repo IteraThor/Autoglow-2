@@ -16,6 +16,7 @@ import { initReadiness } from '../features/readiness.js';
 import { initLightingGuard } from '../features/lighting-guard.js';
 import { initSettings } from '../features/settings.js';
 import { initStudio } from '../features/studio.js';
+import { initClassic } from '../features/classic.js';
 
 Object.assign(window, {
   api,
@@ -37,5 +38,6 @@ initControllers();
 initReadiness();
 initSettings();
 initStudio();
+initClassic();
 initFlowMatrix();
 initLightingGuard();

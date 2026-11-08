@@ -2597,3 +2597,94 @@ input.ui-input.sf-name-input {
   color: var(--text-secondary);
 }
 
+
+/* -----------------------------------------------------------------------------
+ * Classic (features/classic.js): AutoGlow 1, USB only
+ * ----------------------------------------------------------------------------- */
+.classic-state {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0 0;
+  font-size: var(--fs-sm);
+}
+
+.classic-state dt {
+  color: var(--text-secondary);
+}
+
+.classic-state dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.classic-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.classic-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.classic-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+}
+
+.classic-table-wrap {
+  overflow-x: auto;
+}
+
+.classic-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.classic-table th,
+.classic-table td {
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.classic-table thead th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.classic-table tbody th {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.classic-table tbody tr.is-current th {
+  color: var(--accent-primary);
+}
+
+.classic-table tbody tr.is-current th::before {
+  content: "● ";
+}
+
+.classic-color {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}

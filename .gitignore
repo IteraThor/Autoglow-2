@@ -31,6 +31,8 @@ config.json.*
 /presets/
 # Studio players and pictures
 /studio/
+# Classic mode (AutoGlow 1) settings
+/classic.json
 
 # Chrome extension signing key (defines this installation's extension ID)
 chrome_extension.key

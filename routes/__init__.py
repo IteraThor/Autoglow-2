@@ -38,6 +38,7 @@ from routes.telemetry_routes import handle_ws_telemetry
 # )
 from routes.flow_routes import register_flow_routes
 from routes.studio_routes import register_studio_routes
+from routes.classic_routes import register_classic_routes
 from routes.hub_routes import handle_hub_status, handle_status, handle_setup_checklist
 from routes.extension_routes import (
     UPDATE_XML_PATH, CRX_PATH, handle_extension_update_xml, handle_extension_crx
@@ -52,7 +53,7 @@ from routes.auth_routes import (
 SPA_PATHS = [
     "/", "/hub", "/setup", "/setup/controllers", "/setup/connection",
     "/lighting", "/lighting/matrix", "/lighting/flow", "/studio", "/studio/broadcast", "/studio/match",
-    "/studio/players", "/studio/cameras", "/power", "/settings",
+    "/studio/players", "/studio/cameras", "/classic", "/power", "/settings",
     "/index.html", "/home", "/dashboard", "/devices", "/wled-devices", "/autodarts", "/autodarts-account",
     "/matrix", "/event-matrix", "/simulator", "/led-simulator", "/power-timers", "/idle", "/idle-mode",
     "/updates", "/updates-backups", "/backups",
@@ -149,6 +150,9 @@ def register_routes(app: web.Application, web_dir: str):
 
     # Studio: broadcast overlay settings, players and live scoreboard
     register_studio_routes(app)
+
+    # Classic mode: AutoGlow 1 (local Board Manager API -> USB serial)
+    register_classic_routes(app)
 
     async def handle_studio_live(request: web.Request) -> web.FileResponse:
         return web.FileResponse(
