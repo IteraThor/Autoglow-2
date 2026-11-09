@@ -1,0 +1,41 @@
+[package]
+name = "autoglow"
+version = "0.7.0"
+edition = "2021"
+description = "AutoGlow 2: real-time WLED lighting for Autodarts (web server, game engine and LED stream)"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "autoglow"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
+tower-http = { version = "0.6", features = ["fs", "catch-panic"] }
+serde = "1"
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+ureq = { version = "2", default-features = false, features = ["json"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+mdns-sd = "0.13"
+serialport = { version = "4", default-features = false }
+log = "0.4"
+regex = "1"
+rand = "0.8"
+sha2 = "0.10"
+rsa = "0.9"
+base64 = "0.22"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+libc = "0.2"
+socket2 = "0.5"
+bytes = "1"
+pbkdf2 = "0.12"
+hmac = "0.12"
+hex = "0.4"
+
+[profile.release]
+lto = true
+codegen-units = 1

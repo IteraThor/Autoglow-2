@@ -4,8 +4,10 @@ Real-time WLED lighting for Autodarts boards, driven by your live games.
 
 ## Installation
 
+AutoGlow is a Rust program that is built on your computer during setup (a few minutes the first time).
+
 ### Windows
-1. Install **Python 3.10+** from [python.org](https://www.python.org/) and tick **"Add Python to PATH"**.
+1. Install **Rust** from [rustup.rs](https://rustup.rs) (it asks to install the Visual Studio C++ build tools; say yes).
 2. Download the latest [release](https://github.com/IteraThor/Autoglow-2/releases) (or **Code › Download ZIP**) and extract it.
 3. Double-click **`setup.bat`** once, then start AutoGlow with **`run_autoglow.bat`**. Keep its window open.
 4. Open **http://localhost:8080**.
@@ -16,7 +18,7 @@ git clone https://github.com/IteraThor/Autoglow-2.git
 cd Autoglow-2
 sudo bash setup.sh
 ```
-This installs everything, starts AutoGlow as the `autoglow` systemd service and installs the Chrome extension. Open **http://localhost:8080** (or **http://autoglow.local:8080**).
+This installs everything (Rust too, when the system's is too old), builds AutoGlow, starts it as the `autoglow` systemd service and installs the Chrome extension. Open **http://localhost:8080** (or **http://autoglow.local:8080**).
 
 Status: `sudo systemctl status autoglow` · Logs: `journalctl -u autoglow -f`
 
@@ -33,6 +35,8 @@ Your settings, flows and profiles are kept on every update.
 
 * **Linux:** `git pull`, then `sudo bash setup.sh`.
 * **Windows:** close AutoGlow, extract the new ZIP over your folder, run `setup.bat`, then `run_autoglow.bat`.
+
+**Coming from a Python version (v0.6 and older)?** Run setup once after updating (`sudo bash setup.sh` on Linux, `setup.bat` on Windows); it builds the new program and points the service at it. Your settings, flows, profiles and Studio players are kept. The old `venv` folder is no longer used and can be deleted.
 
 **Coming from 2.1?**
 * **Installed with git:** `git pull` refuses to update the first time. Run this once:
@@ -53,14 +57,7 @@ The original AutoGlow lives on its own page, **Classic** in the menu. It is the 
 * It runs next to the Flow Matrix. Do not also add the USB controller under **Setup**.
 * On Linux, `setup.sh` adds the AutoGlow user to the `dialout` group for USB access; log out and in once (or restart) afterwards. Settings are kept in `classic.json`.
 
-## Rust LED engine (optional)
-On Linux, `setup.sh` also builds a small Rust engine that renders the effects and sends them to WLED on its own thread. The LEDs then keep a steady 50 FPS even while AutoGlow is busy, for example with the Studio cameras. The effects look exactly the same.
-
-* It needs Rust, which `setup.sh` installs (`cargo`). If the build fails, AutoGlow uses its Python LED engine and works as before.
-* **Windows:** install Rust from [rustup.rs](https://rustup.rs) before running `setup.bat` to get it, otherwise the Python engine is used.
-* The AutoGlow log shows which engine runs (`LED engine: Rust` or `LED engine: Python`). Set `AUTOGLOW_LED_ENGINE=python` to use the Python engine anyway.
-
 ## Settings
 * **Port:** `8080`, changeable with `AUTOGLOW_PORT`. The extension only connects to 8080.
-* **Config file:** `config.json`, or set `AUTOGLOW_CONFIG`. Logs go to `autoglow.log`.
+* **Config file:** `config.json`, or set `AUTOGLOW_CONFIG`. Logs go to `autoglow.log`; `AUTOGLOW_DEBUG=1` logs more.
 * **Access PIN:** by default anyone on your network can change settings. Set a PIN under **Settings → Access PIN**. Forgot it? Stop AutoGlow, delete `access_pin_hash` from `config.json` and start again.

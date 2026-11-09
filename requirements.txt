@@ -1,6 +1,0 @@
-# Runtime dependencies (bounded to avoid surprise breaking major releases)
-aiohttp>=3.9,<4
-websockets>=13,<18
-zeroconf>=0.130,<1
-# Classic mode (AutoGlow 1): WLED over USB serial
-pyserial>=3.5,<4

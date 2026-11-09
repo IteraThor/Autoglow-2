@@ -61,5 +61,9 @@ old autoglow version/
 /requirements-dev.txt
 /pyproject.toml
 
-# Rust LED engine build output
-/rust_core/target/
+# Rust build output
+/target/
+
+# The built program (setup copies it from target/release)
+/autoglow
+/autoglow.exe

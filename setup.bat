@@ -3,59 +3,32 @@ setlocal
 cd /d "%~dp0"
 title AutoGlow Setup
 echo =============================================
-echo       AutoGlow Setup for Windows            
+echo       AutoGlow Setup for Windows
 echo =============================================
 echo.
 
-:: Check if Python is installed
-python --version >nul 2>&1
+:: AutoGlow is built from source with Rust (https://rustup.rs)
+where cargo >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Python is not installed or not in PATH.
-    echo Please install Python 3.10+ from https://www.python.org/ and check "Add Python to PATH".
-    pause
-    exit /b 1
-)
-python -c "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"
-if %errorlevel% neq 0 (
-    echo [ERROR] AutoGlow needs Python 3.10 or newer. Found:
-    python --version
-    echo Please install a current Python from https://www.python.org/ and run setup.bat again.
+    echo [ERROR] Rust is not installed or not in PATH.
+    echo Please install Rust from https://rustup.rs and run setup.bat again.
     pause
     exit /b 1
 )
 
-:: Create virtual environment
-if not exist "venv\Scripts\activate.bat" (
-    echo --> Creating Python virtual environment...
-    python -m venv venv
-    if %errorlevel% neq 0 (
-        echo [ERROR] Failed to create virtual environment.
-        pause
-        exit /b 1
-    )
-) else (
-    echo --> Virtual environment already exists.
-)
-
-:: Activate venv and install requirements
-echo --> Activating environment and installing requirements...
-call "%~dp0venv\Scripts\activate.bat"
-"%~dp0venv\Scripts\python.exe" -m pip install --upgrade pip setuptools wheel
-"%~dp0venv\Scripts\python.exe" -m pip install -r "%~dp0requirements.txt"
+echo --^> Building AutoGlow (takes a few minutes the first time)...
+cargo build --release
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] Failed to install dependencies from requirements.txt.
+    echo [ERROR] The build failed.
     pause
     exit /b 1
 )
-
-:: Optional Rust LED engine; needs Rust from https://rustup.rs, otherwise the Python engine is used
-echo --> Rust LED engine (optional)...
-"%~dp0venv\Scripts\python.exe" -m core.rust_core_setup
+copy /y "%~dp0target\release\autoglow.exe" "%~dp0autoglow.exe" >nul
 
 echo.
 echo =============================================
-echo       Setup Completed Successfully!          
+echo       Setup Completed Successfully!
 echo =============================================
 echo.
 echo To start AutoGlow:
@@ -70,6 +43,6 @@ echo   3. Play on https://play.autodarts.com - the extension icon shows ON when 
 echo.
 set /p choice="Would you like to start AutoGlow now? (Y/N): "
 if /i "%choice%"=="Y" (
-    echo --> Starting AutoGlow...
-    python "%~dp0server.py"
+    echo --^> Starting AutoGlow...
+    "%~dp0autoglow.exe"
 )
