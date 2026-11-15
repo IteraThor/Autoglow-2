@@ -1,0 +1,2088 @@
+{
+ "bull_off_wdf_2026-11-01": [
+  [
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bull_off_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "LOKI",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bullseye",
+    null,
+    null,
+    50,
+    2,
+    25,
+    "Bull",
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    25,
+    1,
+    25,
+    "25",
+    null
+   ],
+   [
+    "bull_off_won",
+    "LOKI",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "LOKI",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ]
+  ],
+  [
+   "LOKI",
+   "THOR"
+  ]
+ ],
+ "bull_off_pdc_tie_2026-11-01": [
+  [
+   [
+    "takeout_in_progress",
+    null,
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bull_off_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    10,
+    1,
+    10,
+    "S10",
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    10,
+    1,
+    10,
+    "S10",
+    null
+   ],
+   [
+    "bull_off_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bullseye",
+    null,
+    null,
+    50,
+    2,
+    25,
+    "Bull",
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    6,
+    1,
+    6,
+    "S6",
+    null
+   ],
+   [
+    "bull_off_won",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ]
+  ],
+  [
+   "THOR",
+   "iterathor"
+  ]
+ ],
+ "pdc_bull_off_match_2026-11-02": [
+  [
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_idle",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bull_off_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    20,
+    1,
+    20,
+    "S20",
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "bullseye",
+    null,
+    null,
+    50,
+    2,
+    25,
+    "Bull",
+    null
+   ],
+   [
+    "bull_off_won",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    60,
+    3,
+    20,
+    "T20",
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    60,
+    3,
+    20,
+    "T20",
+    null
+   ],
+   [
+    "180",
+    null,
+    null,
+    180,
+    1,
+    null,
+    "180",
+    null
+   ],
+   [
+    "takeout",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    1,
+    1,
+    1,
+    "S1",
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    5,
+    1,
+    5,
+    "S5",
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    20,
+    1,
+    20,
+    "S20",
+    26
+   ],
+   [
+    "takeout",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    60,
+    3,
+    20,
+    "T20",
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    60,
+    3,
+    20,
+    "T20",
+    null
+   ],
+   [
+    "180",
+    null,
+    null,
+    180,
+    1,
+    null,
+    "180",
+    null
+   ],
+   [
+    "takeout",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    1,
+    1,
+    1,
+    "S1",
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    5,
+    1,
+    5,
+    "S5",
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    20,
+    1,
+    20,
+    "S20",
+    26
+   ],
+   [
+    "takeout",
+    "iterathor",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    60,
+    3,
+    20,
+    "T20",
+    null
+   ],
+   [
+    "triple",
+    null,
+    null,
+    57,
+    3,
+    19,
+    "T19",
+    null
+   ],
+   [
+    "double",
+    null,
+    null,
+    24,
+    2,
+    12,
+    "D12",
+    141
+   ],
+   [
+    "match_won",
+    "THOR",
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ]
+  ],
+  [
+   "THOR",
+   "iterathor"
+  ]
+ ],
+ "bull_off_normal_2026-11-01": [
+  [
+   [
+    "bull_off_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    null,
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    10,
+    1,
+    10,
+    "S10",
+    null
+   ],
+   [
+    "throw",
+    "THOR",
+    1,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "single",
+    null,
+    null,
+    10,
+    1,
+    10,
+    "S10",
+    null
+   ],
+   [
+    "bull_off_won",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "game_start",
+    null,
+    null,
+    0,
+    1,
+    null,
+    null,
+    null
+   ],
+   [
+    "throw",
+    "iterathor",
+    0,
+    0,
+    1,
+    null,
+    null,
+    null
+   ]
+  ],
+  [
+   "iterathor",
+   "THOR"
+  ]
+ ],
+ "read_throw": [
+  [
+   20,
+   3,
+   "T20"
+  ],
+  [
+   16,
+   2,
+   "D16"
+  ],
+  [
+   25,
+   2,
+   "Bull"
+  ],
+  [
+   25,
+   1,
+   "25"
+  ],
+  [
+   0,
+   0,
+   "Outside"
+  ],
+  [
+   7,
+   2,
+   "D7"
+  ],
+  [
+   5,
+   2,
+   "D5"
+  ],
+  [
+   17,
+   1,
+   "S17"
+  ],
+  [
+   0,
+   1,
+   "Miss"
+  ]
+ ],
+ "throws": [
+  {
+   "segment": {
+    "name": "T20",
+    "number": 20,
+    "multiplier": 3
+   }
+  },
+  {
+   "segment": "D16"
+  },
+  {
+   "segment": {
+    "name": "Bull"
+   }
+  },
+  {
+   "segment": {
+    "number": 25,
+    "multiplier": 1
+   }
+  },
+  {
+   "segment": "Outside"
+  },
+  {
+   "score": 7,
+   "multiplier": 2
+  },
+  {
+   "segment": {
+    "bed": "double",
+    "number": 5
+   }
+  },
+  {
+   "segment": 17
+  },
+  {}
+ ],
+ "ratio": [
+  [
+   "lokki",
+   "loki",
+   0.8888888888888888
+  ],
+  [
+   "thor",
+   "thorr",
+   0.8888888888888888
+  ],
+  [
+   "henry",
+   "harry",
+   0.6
+  ],
+  [
+   "abc",
+   "xyz",
+   0.0
+  ],
+  [
+   "darts",
+   "dart",
+   0.8888888888888888
+  ]
+ ],
+ "colour": [
+  [
+   [
+    "Thor",
+    "Loki",
+    "Odin"
+   ],
+   0,
+   0
+  ],
+  [
+   [
+    "Thor",
+    "Loki",
+    "Odin"
+   ],
+   1,
+   2
+  ],
+  [
+   [
+    "Thor",
+    "Loki",
+    "Odin"
+   ],
+   2,
+   1
+  ],
+  [
+   [
+    "Thor"
+   ],
+   4,
+   5
+  ]
+ ],
+ "map": [
+  {
+   "studio_id": "aaaaaaaaaaaa",
+   "match": "similar"
+  },
+  {
+   "studio_id": "bbbbbbbbbbbb",
+   "match": "alias"
+  },
+  {
+   "studio_id": "cccccccccccc",
+   "match": "similar"
+  },
+  {
+   "studio_id": "",
+   "match": ""
+  }
+ ],
+ "default_flow": {
+  "name": "Classic",
+  "steps": {
+   "bull_off": {
+    "effect": {
+     "animation": "breathe",
+     "color_primary": [
+      190,
+      190,
+      190
+     ],
+     "color_secondary": [
+      20,
+      20,
+      20
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 0.8,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.6
+    }
+   },
+   "game_start": {
+    "effect": {
+     "animation": "curtain",
+     "color_primary": [
+      0,
+      190,
+      255
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 2.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "sides": "both",
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.5
+    }
+   },
+   "turn": {
+    "effect": {
+     "animation": "solid",
+     "color_primary": [
+      255,
+      255,
+      255
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "player"
+     }
+    },
+    "transition": {
+     "style": "wipe",
+     "duration": 0.6
+    }
+   },
+   "takeout": {
+    "effect": {
+     "animation": "solid",
+     "color_primary": [
+      70,
+      70,
+      70
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.4
+    }
+   },
+   "leg_won": {
+    "effect": {
+     "animation": "curtain",
+     "color_primary": [
+      255,
+      255,
+      255
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 3.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "sides": "both",
+      "colour_from": "player"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.4
+    }
+   },
+   "match_won": {
+    "effect": {
+     "animation": "rainbow",
+     "color_primary": [
+      255,
+      255,
+      255
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 6.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "palette": "soft",
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.8
+    }
+   }
+  },
+  "hits": {
+   "single": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "double": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "triple": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "bullseye": {
+    "animation": "flash",
+    "color_primary": [
+     255,
+     0,
+     30
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "pulses": 1,
+     "colour_from": "custom"
+    }
+   },
+   "miss": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "bust": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "ton": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "ton40": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "180": {
+    "animation": "flash",
+    "color_primary": [
+     255,
+     175,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.5,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "pulses": 2,
+     "colour_from": "custom"
+    }
+   }
+  },
+  "players": [
+   {
+    "color": [
+     0,
+     110,
+     255
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     255,
+     120,
+     0
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     220,
+     0,
+     200
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     0,
+     220,
+     170
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     255,
+     215,
+     0
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     235,
+     235,
+     235
+    ],
+    "name": ""
+   }
+  ],
+  "camera_friendly": true,
+  "hit_locator": false,
+  "idle": {
+   "on": true,
+   "fx": 9,
+   "speed": 128,
+   "intensity": 128,
+   "brightness": 70,
+   "colors": [
+    [
+     0,
+     255,
+     157
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ]
+   ]
+  },
+  "preset": "classic"
+ },
+ "v1": {
+  "name": "My flow",
+  "steps": {
+   "bull_off": {
+    "effect": {
+     "animation": "breathe",
+     "color_primary": [
+      190,
+      190,
+      190
+     ],
+     "color_secondary": [
+      20,
+      20,
+      20
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 0.8,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "crossfade",
+     "duration": 0.6
+    }
+   },
+   "game_start": {
+    "effect": {
+     "animation": "solid",
+     "color_primary": [
+      0,
+      157,
+      255
+     ],
+     "color_secondary": [
+      0,
+      40,
+      80
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 2.5,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "curtain",
+     "duration": 0.8,
+     "accent_color": [
+      0,
+      240,
+      255
+     ]
+    }
+   },
+   "turn": {
+    "effect": {
+     "animation": "solid",
+     "color_primary": [
+      0,
+      255,
+      4
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "wipe",
+     "duration": 0.6
+    }
+   },
+   "takeout": {
+    "effect": {
+     "animation": "solid",
+     "color_primary": [
+      255,
+      255,
+      255
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 0.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "wipe",
+     "duration": 0.6
+    }
+   },
+   "leg_won": {
+    "effect": {
+     "animation": "rainbow",
+     "color_primary": [
+      0,
+      255,
+      0
+     ],
+     "color_secondary": [
+      0,
+      0,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 4.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "palette": "vivid",
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "flash",
+     "duration": 0.5,
+     "accent_color": [
+      0,
+      255,
+      120
+     ]
+    }
+   },
+   "match_won": {
+    "effect": {
+     "animation": "chase",
+     "color_primary": [
+      245,
+      158,
+      11
+     ],
+     "color_secondary": [
+      255,
+      215,
+      0
+     ],
+     "color_tertiary": [
+      0,
+      0,
+      0
+     ],
+     "dynamic_secondary": false,
+     "duration": 6.0,
+     "speed": 1.0,
+     "fps": 50,
+     "reverse": false,
+     "enabled": true,
+     "transition": "instant",
+     "transition_duration": 0.0,
+     "options": {
+      "tail": "short",
+      "comets": 1,
+      "colour_from": "custom"
+     }
+    },
+    "transition": {
+     "style": "flash",
+     "duration": 0.6,
+     "accent_color": [
+      245,
+      158,
+      11
+     ]
+    }
+   }
+  },
+  "hits": {
+   "single": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     200,
+     255
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 0.8,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "double": {
+    "animation": "breathe",
+    "color_primary": [
+     0,
+     255,
+     180
+    ],
+    "color_secondary": [
+     0,
+     40,
+     20
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.2,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "triple": {
+    "animation": "flash",
+    "color_primary": [
+     255,
+     120,
+     0
+    ],
+    "color_secondary": [
+     50,
+     20,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.8,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "pulses": 1,
+     "colour_from": "custom"
+    }
+   },
+   "bullseye": {
+    "animation": "chase",
+    "color_primary": [
+     255,
+     20,
+     40
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 2.2,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "tail": "short",
+     "comets": 1,
+     "colour_from": "custom"
+    }
+   },
+   "miss": {
+    "animation": "solid",
+    "color_primary": [
+     110,
+     118,
+     129
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "bust": {
+    "animation": "solid",
+    "color_primary": [
+     110,
+     118,
+     129
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "ton": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "ton40": {
+    "animation": "solid",
+    "color_primary": [
+     0,
+     255,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 1.0,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": false,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "colour_from": "custom"
+    }
+   },
+   "180": {
+    "animation": "rainbow",
+    "color_primary": [
+     255,
+     200,
+     0
+    ],
+    "color_secondary": [
+     0,
+     0,
+     0
+    ],
+    "color_tertiary": [
+     0,
+     0,
+     0
+    ],
+    "dynamic_secondary": false,
+    "duration": 3.2,
+    "speed": 1.0,
+    "fps": 50,
+    "reverse": false,
+    "enabled": true,
+    "transition": "instant",
+    "transition_duration": 0.0,
+    "options": {
+     "palette": "vivid",
+     "colour_from": "custom"
+    }
+   }
+  },
+  "players": [
+   {
+    "color": [
+     0,
+     255,
+     4
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     255,
+     160,
+     0
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     220,
+     0,
+     200
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     0,
+     220,
+     170
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     255,
+     215,
+     0
+    ],
+    "name": ""
+   },
+   {
+    "color": [
+     235,
+     235,
+     235
+    ],
+    "name": ""
+   }
+  ],
+  "camera_friendly": true,
+  "hit_locator": false,
+  "idle": {
+   "on": true,
+   "fx": 9,
+   "speed": 128,
+   "intensity": 128,
+   "brightness": 100,
+   "colors": [
+    [
+     0,
+     255,
+     157
+    ],
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     0,
+     0,
+     0
+    ]
+   ]
+  }
+ }
+}

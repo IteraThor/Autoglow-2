@@ -616,6 +616,18 @@ img.avatar { object-fit: contain; }
 .sb-title { margin-top: 8px; font-family: var(--font-cond); font-size: 150px; font-weight: 800; line-height: 0.95; text-transform: uppercase; }
 .sb-sub { margin-top: 26px; font-size: 36px; font-weight: 600; color: rgba(255, 255, 255, 0.75); }
 
+/* Club leaderboard slide: one stat panel per table */
+.slide-board .sb-title { font-size: 96px; }
+.lb-cols { display: flex; gap: 28px; margin-top: 44px; align-items: flex-start; }
+.lb-col { width: 470px; display: flex; flex-direction: column; gap: 10px; }
+.lb-col > span { margin-bottom: 6px; }
+.lb-row { display: flex; align-items: center; gap: 16px; font-size: 30px; }
+.lb-row em { width: 28px; font-style: normal; font-weight: 800; color: var(--muted); text-align: right; }
+.lb-row.top em { color: var(--accent); }
+.lb-row .lb-img, .lb-row .avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; flex: none; font-size: 22px; }
+.slide-board .lb-row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.slide-board .lb-col .lb-row strong { font-family: var(--font-cond); font-size: 44px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+
 /* Player card slide */
 .slide-player { align-items: stretch; gap: 64px; }
 

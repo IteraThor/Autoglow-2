@@ -15,7 +15,10 @@
   <link rel="stylesheet" href="/css/flow-matrix.css?v=2.4-f3">
   <!-- After the legacy sheets, so rebuilt pages win over their element selectors (input[type="text"]) -->
   <link rel="stylesheet" href="/css/pages.css?v=2.2-p26">
-  <link rel="stylesheet" href="/css/studio.css?v=2.2-p27">
+  <link rel="stylesheet" href="/css/studio.css?v=2.2-p28">
+  <link rel="stylesheet" href="/css/dashboard.css?v=2">
+  <link rel="stylesheet" href="/css/players.css?v=3">
+  <link rel="stylesheet" href="/css/network.css?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -51,6 +54,16 @@
         <a href="/studio" data-link data-view="studio" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="15" height="14" rx="2"/><polygon points="22 7 17 11 17 13 22 17 22 7"/></svg>
           <span>Studio</span>
+        </a>
+        <a href="/dashboard" data-link data-view="dashboard" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 13v-2M11 13V7M15 13V9"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <span class="rail-divider" role="separator"></span>
+        <span class="rail-group-label" aria-hidden="true">Club</span>
+        <a href="/players" data-link data-view="players" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6"/></svg>
+          <span>Players</span>
         </a>
         <!-- Classic stays out of the menu until Settings › Classic mode shows it (web/js/features/classic.js) -->
         <span class="rail-divider" role="separator" data-classic-menu hidden></span>
@@ -340,6 +353,16 @@
           <div class="stu-page" id="studioPage"></div>
         </section>
 
+        <!-- DASHBOARD: what the Local Tournament TVs show (/tournament/live), built by web/js/features/dashboard.js -->
+        <section id="tab-dashboard" class="tab-pane dashboard-page">
+          <div class="dsh-page" id="dashboardPage"></div>
+        </section>
+
+        <!-- PLAYERS: the club roster, built by web/js/features/players.js -->
+        <section id="tab-players" class="tab-pane pl-page">
+          <div id="playersPage"></div>
+        </section>
+
         <!-- TAB 5: SETTINGS (lighting engine, access PIN; standby timers live in the Flow Matrix under Waiting) -->
         <!-- CLASSIC: the original AutoGlow 1, USB only (web/js/features/classic.js) -->
         <section id="tab-classic" class="tab-pane pw-page classic-page">
@@ -463,6 +486,12 @@
                 <button type="button" class="mode-option" data-offline="show" aria-pressed="false"><span>Show</span></button>
               </div>
             </div>
+          </div>
+
+          <!-- Club & PCs: this PC's name and club role, every AutoGlow on the network (web/js/features/network.js) -->
+          <div class="card st-group">
+            <h2 class="st-group-title">Club &amp; PCs <span class="st-group-note">applies at once</span></h2>
+            <div id="networkSettings"></div>
           </div>
 
           <!-- Security: one line while the PIN is off, the fields fold out -->
@@ -732,14 +761,14 @@
   </div>
 
   <!-- Core UI (ES modules) first; the deferred classic scripts after it run in order and can use window.api etc. -->
-  <script type="module" src="/js/core/index.js?v=2.2-p26"></script>
+  <script type="module" src="/js/core/index.js?v=2.2-p30"></script>
   <script defer src="/js/auth.js?v=2.2-p25"></script>
   <script defer src="/js/state.js?v=2.2-p25"></script>
   <script defer src="/js/utils.js?v=2.2-p25"></script>
   <script defer src="/js/autodarts.js?v=2.2-p25"></script>
   <script defer src="/js/matrix.js?v=2.2-p25"></script>
   <!-- WLED Hardware Simulator (switched off for now): <script defer src="/js/simulator.js?v=2.2-p27"></script> -->
-  <script defer src="/app.js?v=2.2-p25"></script>
+  <script defer src="/app.js?v=2.2-p26"></script>
 
 </body>
 </html>

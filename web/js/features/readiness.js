@@ -41,7 +41,8 @@ function renderReadiness(status, checklist) {
   if (!host) return;
   const missing = missingForEffects(status, checklist);
   const { engine = {}, autodarts = {} } = status;
-  const startMatch = !autodarts.match_active && h('a', { class: 'ui-btn ui-btn-sm header-ready-start', href: AUTODARTS_URL, target: '_blank', rel: 'noopener noreferrer' }, 'Start a match');
+  // '' and not false: replaceChildren would print false as text
+  const startMatch = autodarts.match_active ? '' : h('a', { class: 'ui-btn ui-btn-sm header-ready-start', href: AUTODARTS_URL, target: '_blank', rel: 'noopener noreferrer' }, 'Start a match');
   host.hidden = false;
   host.dataset.tone = missing.length ? 'warn' : 'ok';
   if (missing.length) {

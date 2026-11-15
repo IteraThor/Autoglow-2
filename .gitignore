@@ -33,6 +33,8 @@ config.json.*
 /studio/
 # Classic mode (AutoGlow 1) settings
 /classic.json
+/tournament/
+/club/
 
 # Chrome extension signing key (defines this installation's extension ID)
 chrome_extension.key
@@ -55,11 +57,14 @@ docs/superpowers/
 old autoglow version/
 
 # Development files: kept locally, not published (the repository holds only what runs the app)
-/.github/
 /docs/
 /dev.py
 /requirements-dev.txt
 /pyproject.toml
 
-# Rust LED engine build output
-/rust_core/target/
+# Rust build output
+/target/
+
+# The built program (setup copies it from target/release)
+/autoglow
+/autoglow.exe

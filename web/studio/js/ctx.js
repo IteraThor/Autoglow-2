@@ -69,9 +69,11 @@ export function avatar(player, cls = 'avatar') {
   return img;
 }
 
-// Everything the intro and player cards show about a player; Studio profile first, Autodarts second
+// Everything the intro and player cards show about a player: club stats from the games played
+// here first, then the stats typed into the profile, then Autodarts' own numbers
 export function profile(player) {
   const sp = studioPlayer(player) || {};
+  const cs = sp.club_stats?.games ? sp.club_stats : null;
   const accountAvg = typeof player.account_average === 'number' ? player.account_average.toFixed(1) : '';
   return {
     name: displayName(player),
@@ -83,9 +85,9 @@ export function profile(player) {
     dartWeight: sp.dart_weight || '',
     favouriteDouble: sp.favourite_double || '',
     playingSince: sp.playing_since || '',
-    average: sp.stat_average || accountAvg,
-    oneEighties: sp.stat_180s || '',
-    bestCheckout: sp.stat_best_checkout || ''
+    average: cs?.average ? cs.average.toFixed(1) : sp.stat_average || accountAvg,
+    oneEighties: cs ? String(cs.t180) : sp.stat_180s || '',
+    bestCheckout: cs?.best_checkout ? String(cs.best_checkout) : sp.stat_best_checkout || ''
   };
 }
 

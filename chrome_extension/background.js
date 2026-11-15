@@ -229,7 +229,38 @@ function wledPower(on, ip) {
   });
 }
 
+// Local Tournament page (tournament.js): only AutoGlow's /api/tournament/* endpoints
+async function tournamentApi(path, body) {
+  if (!/^[a-z-]+$/.test(path || '')) throw new Error('Unknown tournament request');
+  const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  const res = await fetch(`${SERVER_URL}/api/tournament/${path}`, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data.error && data.error.message) || data.message || `HTTP ${res.status}`);
+  return data;
+}
+
+// Players page (players.js) and the tournament wizard's roster: read-only /api/club/* views
+async function clubApi(path) {
+  if (!/^[a-z-]+(\?[A-Za-z0-9=&%._-]*)?$/.test(path || '')) throw new Error('Unknown club request');
+  const res = await fetch(`${SERVER_URL}/api/club/${path}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data.error && data.error.message) || data.message || `HTTP ${res.status}`);
+  return data;
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'club') {
+    clubApi(msg.path)
+      .then(data => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true; // Answered asynchronously
+  }
+  if (msg && msg.type === 'tournament') {
+    tournamentApi(msg.path, msg.body)
+      .then(data => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true; // Answered asynchronously
+  }
   if (msg && (msg.type === 'wledList' || msg.type === 'wledPower')) {
     (msg.type === 'wledList' ? wledList() : wledPower(msg.on, msg.ip))
       .then(data => sendResponse({ ok: true, data }))

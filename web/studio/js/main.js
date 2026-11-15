@@ -480,6 +480,7 @@ const SHOWCASE = {
   idle_tagline: { view: 'idle-brand', sel: '.sb-sub' },
   idle_ready: { view: 'idle-brand', sel: '#idleStatus' },
   idle_player_kicker: { view: 'idle-player', sel: '.sp-kicker' },
+  idle_board_kicker: { view: 'idle-board', sel: '.slide-board .sb-kicker' },
   lobby_kicker: { view: 'idle-versus', sel: '.slide-versus .sb-kicker' },
   lobby_status: { view: 'idle-versus', sel: '#idleStatus' },
   fact_from: { view: 'idle-player', sel: '.fact', text: true },

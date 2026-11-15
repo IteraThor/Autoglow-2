@@ -1,9 +1,3 @@
-"""AutoGlow 2 - Single source of truth for the application version.
-
-Shown as "AutoGlow 2 v<version>". Raise it with every update:
-- last number for a bug-fix update
-- middle number for a new-feature update (last number back to 0)
-- first number stays 0 until the public release
-"""
-
-__version__ = "0.6.1"
+# AutoGlow is a Rust program now. SUIT (also its older Python version) recognizes an AutoGlow 2 folder by this
+# file and reads the version from it, so it stays: keep it equal to the version in Cargo.toml (CI checks).
+__version__ = "0.33.1"

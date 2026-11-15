@@ -22,16 +22,21 @@ export const VIEWS = [
   },
   // One page: setup and the show as a timeline (web/js/features/studio.js); old /studio/<sub> links land here
   { id: 'studio', label: 'Studio', path: '/studio', pane: 'tab-studio' },
+  // The Local Tournament TVs: presets, scenes, look (web/js/features/dashboard.js)
+  { id: 'dashboard', label: 'Dashboard', path: '/dashboard', pane: 'tab-dashboard' },
+  // The club roster: members with pictures and profiles (web/js/features/players.js)
+  { id: 'players', label: 'Players', path: '/players', pane: 'tab-players' },
   // The original AutoGlow 1: Board Manager API -> one WLED controller on USB (web/js/features/classic.js)
   { id: 'classic', label: 'Classic', path: '/classic', pane: 'tab-classic' },
   { id: 'settings', label: 'Settings', path: '/settings', pane: 'tab-settings' }
 ];
 
 const ALIASES = {
-  '/': '/lighting/flow', '/index.html': '/lighting/flow', '/hub': '/lighting/flow', '/home': '/lighting/flow', '/dashboard': '/lighting/flow',
+  '/': '/lighting/flow', '/index.html': '/lighting/flow', '/hub': '/lighting/flow', '/home': '/lighting/flow',
   '/devices': '/setup/controllers', '/wled-devices': '/setup/controllers',
   '/autodarts': '/setup/connection', '/autodarts-account': '/setup/connection',
   '/matrix': '/lighting/matrix', '/event-matrix': '/lighting/matrix',
+  '/studio/players': '/players',
   '/simulator': '/lighting/flow', '/led-simulator': '/lighting/flow',
   '/power': '/settings', '/power-timers': '/settings', '/idle': '/settings', '/idle-mode': '/settings',
   '/updates': '/settings', '/updates-backups': '/settings', '/backups': '/settings'

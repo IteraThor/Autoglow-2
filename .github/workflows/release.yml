@@ -1,0 +1,80 @@
+# Every push to main with a new version in Cargo.toml becomes a GitHub release with ready-built Linux
+# programs; install.sh downloads the latest one, so users install and update without compiling.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      exists: ${{ steps.v.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          # SUIT reads the version of an AutoGlow folder from core/version.py
+          if ! grep -qx "__version__ = \"$v\"" core/version.py; then
+            echo "::error file=core/version.py::core/version.py must say __version__ = \"$v\" like Cargo.toml"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "v$v" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+    env:
+      TARGET: ${{ matrix.arch }}-unknown-linux-musl
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
+      CARGO_PROFILE_RELEASE_STRIP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+      - if: matrix.arch == 'aarch64'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+      # musl: one static program that runs on any Linux, whatever its glibc
+      - run: cargo build --release --locked --target "$TARGET"
+      - run: |
+          mkdir pkg
+          cp "target/$TARGET/release/autoglow" pkg/
+          cp -r web defaults chrome_extension install.sh README.md pkg/
+          tar -czf "autoglow-linux-${{ matrix.arch }}.tar.gz" -C pkg .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoglow-linux-${{ matrix.arch }}
+          path: autoglow-linux-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v$V" autoglow-linux-*.tar.gz install.sh \
+            --target "$GITHUB_SHA" --title "AutoGlow 2 v$V" --generate-notes --latest

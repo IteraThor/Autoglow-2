@@ -1,11 +1,9 @@
 // AutoGlow 2 - Studio: the building blocks of the Studio steps. Each builder returns an element bound to
 // the live settings; edits go through change(), which saves them by itself.
 
-import { confirmDialog } from '../core/dialog.js';
 import { h } from '../core/dom.js';
-import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
-import { change, focusText, icon, THEMES, themeSwatch, avatar, PROFILE, savePlayer, deletePlayer, imageUrl } from './studio-core.js';
+import { change, focusText, icon, THEMES, themeSwatch, avatar } from './studio-core.js';
 
 const S = () => core.settings;
 
@@ -167,100 +165,17 @@ export function textsEditor(names, { onLeave = () => focusText(null) } = {}) {
   return root;
 }
 
-// --- Players: avatars, a card to edit, drop a picture on an avatar ---------------------------------
-function dropPicture(el, onFile) {
-  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('is-drop'); });
-  el.addEventListener('dragleave', () => el.classList.remove('is-drop'));
-  el.addEventListener('drop', e => {
-    e.preventDefault();
-    el.classList.remove('is-drop');
-    const f = e.dataTransfer.files?.[0];
-    if (f && /^image\//.test(f.type)) onFile(f);
-  });
-}
-
-// A picture to pick by click or drop; returns { el, file() }
-function picturePicker(cls, current, empty, label, title) {
-  let file = null;
-  const shown = h('span', { class: `stu-pic ${cls}` }, current ? h('img', { src: imageUrl(current), alt: '' }) : empty);
-  const input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true });
-  const show = f => {
-    file = f;
-    shown.replaceChildren(h('img', { src: URL.createObjectURL(f), alt: '' }));
-    shown.animate([{ transform: 'scale(.85)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.3,1.2)' });
-  };
-  input.addEventListener('change', () => input.files[0] && show(input.files[0]));
-  const el = h('button', { type: 'button', class: 'stu-pic-pick', title }, shown, input, h('small', {}, label));
-  el.addEventListener('click', () => input.click());
-  dropPicture(el, show);
-  return { el, file: () => file };
-}
-
+// --- Players: they live on the Players page now; the Studio shows who it knows -------------------------
 export function playersPanel() {
-  const grid = h('div', { class: 'stu-players' });
-  const editor = h('div', {});
-  const root = h('div', { class: 'stu-players-panel' }, grid, editor);
-  const fieldsOf = p => Object.fromEntries([['name', p.name], ...PROFILE.map(([k]) => [k, p[k] || ''])]);
-
-  const renderGrid = () => {
-    grid.replaceChildren(...S().players.map((p, i) => {
-      const b = h('button', { type: 'button', class: 'stu-player', style: `animation-delay:${i * 30}ms`, title: 'Edit, or drop a picture here' },
-        avatar(p), h('span', { class: 'stu-player-name' }, p.name), p.nickname ? h('span', { class: 'stu-player-nick' }, `“${p.nickname}”`) : null,
-        p.country ? h('span', { class: 'stu-flag' }, p.country) : null);
-      b.addEventListener('click', () => openEditor(p));
-      dropPicture(b, async f => {
-        try { await savePlayer(p.id, fieldsOf(p), { image: f }); renderGrid(); toast.success('Picture saved.'); } catch (err) { toast.error(err.message); }
-      });
-      return b;
-    }), (() => {
-      const add = h('button', { type: 'button', class: 'stu-player stu-player-add', title: 'Add player' }, h('span', { class: 'stu-avatar' }, icon('plus', 22)), h('span', { class: 'stu-player-name' }, 'Add'));
-      add.addEventListener('click', () => openEditor(null));
-      return add;
-    })());
-  };
-
-  const openEditor = p => {
-    const picture = picturePicker('stu-avatar', p?.image, icon('camera', 28), 'Picture', 'Click or drop a picture');
-    // Shown by the "Mockup" player camera while this player is at the board
-    const mockup = picturePicker('is-wide', p?.mockup, icon('video', 22), 'Mockup camera', 'Photo the mockup player camera shows while this player is at the board');
-    const name = h('input', { class: 'stu-pcard-name', value: p?.name || '', placeholder: 'Player name', maxlength: 40, 'aria-label': 'Player name' });
-    const inputs = PROFILE.map(([k, label, placeholder, max]) => k === 'hand'
-      ? h('label', {}, label, h('select', { 'data-k': k }, [['', '–'], ['Right', 'Right-handed'], ['Left', 'Left-handed']].map(([v, t]) => h('option', { value: v, selected: (p?.hand || '') === v }, t))))
-      : h('label', {}, label, h('input', { 'data-k': k, value: p?.[k] || '', placeholder, maxlength: max })));
-    const save = h('button', { type: 'button', class: 'stu-btn is-primary' }, icon('check', 16), p ? 'Save' : 'Add');
-    const close = h('button', { type: 'button', class: 'stu-btn' }, 'Close');
-    const del = p ? h('button', { type: 'button', class: 'stu-btn stu-iconbtn stu-del', title: `Delete ${p.name}`, 'aria-label': `Delete ${p.name}` }, icon('trash', 16)) : null;
-    save.addEventListener('click', async () => {
-      if (!name.value.trim()) { name.focus(); name.animate([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: 220 }); return; }
-      const fields = { name: name.value };
-      editor.querySelectorAll('[data-k]').forEach(i => { fields[i.dataset.k] = i.value; });
-      save.disabled = true;
-      try {
-        await savePlayer(p?.id, fields, { image: picture.file(), mockup: mockup.file() });
-        editor.replaceChildren();
-        renderGrid();
-        toast.success(p ? 'Player saved.' : 'Player added.');
-      } catch (err) {
-        toast.error(err.message);
-      } finally {
-        save.disabled = false;
-      }
-    });
-    close.addEventListener('click', () => editor.replaceChildren());
-    del?.addEventListener('click', async () => {
-      const ok = await confirmDialog({ title: `Delete ${p.name}?`, body: 'The player and their pictures are removed from the Studio.', confirmLabel: 'Delete', danger: true });
-      if (!ok) return;
-      try { await deletePlayer(p.id); editor.replaceChildren(); renderGrid(); } catch (err) { toast.error(err.message); }
-    });
-    editor.replaceChildren(h('div', { class: 'stu-pcard' },
-      h('div', { class: 'stu-pcard-pics' }, picture.el, mockup.el),
-      h('div', { class: 'stu-pcard-main' }, name, h('div', { class: 'stu-pfields' }, inputs), h('div', { class: 'stu-pcard-actions' }, save, close, del))));
-    name.focus({ preventScroll: true });
-    editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  };
-
-  renderGrid();
-  return root;
+  const ps = S().players;
+  const go = h('button', { type: 'button', class: 'stu-btn is-primary' }, icon('users', 16), 'Edit on the Players page');
+  go.addEventListener('click', () => window.router.navigate('/players'));
+  return h('div', { class: 'stu-players-panel' },
+    ps.length
+      ? h('div', { class: 'stu-players' }, ...ps.slice(0, 12).map(p => h('span', { class: 'stu-player' }, avatar(p), h('span', { class: 'stu-player-name' }, p.name))))
+      : h('p', { class: 'stu-hint' }, 'No players yet.'),
+    h('p', { class: 'stu-hint' }, `${ps.length} player${ps.length === 1 ? '' : 's'}. Pictures, nicknames and profiles are edited on the Players page; the screens show them when the Autodarts name matches.`),
+    go);
 }
 
 // --- Readiness dots; a missing one pulses and opens its fix ----------------------------------------

@@ -16,6 +16,9 @@ import { initReadiness } from '../features/readiness.js';
 import { initLightingGuard } from '../features/lighting-guard.js';
 import { initSettings } from '../features/settings.js';
 import { initStudio } from '../features/studio.js';
+import { initDashboard } from '../features/dashboard.js';
+import { initPlayers } from '../features/players.js';
+import { initNetwork } from '../features/network.js';
 import { initClassic } from '../features/classic.js';
 
 Object.assign(window, {
@@ -38,6 +41,9 @@ initControllers();
 initReadiness();
 initSettings();
 initStudio();
+initDashboard();
+initPlayers();
+initNetwork();
 initClassic();
 initFlowMatrix();
 initLightingGuard();

@@ -7,6 +7,8 @@ function activatePane(targetId) {
   const studioOpen = !!document.querySelector('.studio-page.active');
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   if (studioOpen && !targetId.startsWith('tab-studio') && window.leaveStudio) window.leaveStudio();
+  const dashboardOpen = !!document.querySelector('.dashboard-page.active');
+  if (dashboardOpen && targetId !== 'tab-dashboard' && window.leaveDashboard) window.leaveDashboard();
 
   const pane = document.getElementById(targetId);
   if (pane) pane.classList.add('active');
@@ -15,6 +17,9 @@ function activatePane(targetId) {
   if (targetId === 'tab-autodarts') renderAutodartsTab();
   if (targetId === 'tab-effects') renderEffectsTable();
   if (targetId.startsWith('tab-studio') && window.renderStudio) window.renderStudio(targetId);
+  if (targetId === 'tab-dashboard' && window.renderDashboard) window.renderDashboard();
+  if (targetId === 'tab-players' && window.renderPlayers) window.renderPlayers();
+  if (targetId === 'tab-settings' && window.renderNetwork) window.renderNetwork();
   if (targetId === 'tab-simulator') {
     if (window.renderFlowMatrix) window.renderFlowMatrix();
     if (window.renderSimulatorTab) renderSimulatorTab();

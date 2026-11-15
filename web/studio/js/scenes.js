@@ -95,10 +95,48 @@ function versusSlide(a, b, info) {
   return s;
 }
 
-// Two picked players: the pre-match slides; otherwise only the title (other player counts are not handled yet)
+// --- Club leaderboard: the leaders of this year from the club games, between matches -------------
+const BOARD_MS = 60000;
+let board = null;      // /api/club/leaderboards (on a board PC: the club PC's)
+let boardAt = 0;
+
+async function loadBoard() {
+  if (Date.now() - boardAt < BOARD_MS) return;
+  boardAt = Date.now();
+  try {
+    const res = await fetch('/api/club/leaderboards?period=season', { cache: 'no-store' });
+    if (res.ok) board = await res.json();
+  } catch { /* the title slide alone */ }
+}
+
+const hasBoard = () => ['average', 't180', 'best_checkout'].some(k => board?.[k]?.length);
+
+function leaderboardSlide() {
+  const s = el('div', 'slide slide-brand slide-board');
+  s.append(el('div', 'sb-kicker', [t('idle_board_kicker'), new Date().getFullYear()].filter(Boolean).join(' · ')), el('div', 'sb-title', eventTitle()));
+  const cols = el('div', 'lb-cols');
+  for (const [key, label, show] of [['average', t('stat_average'), v => fmtAvg(v)], ['t180', t('stat_180s'), v => String(v)], ['best_checkout', t('stat_best_checkout'), v => String(v)]]) {
+    const rows = (board?.[key] || []).slice(0, 5);
+    if (!rows.length || !label) continue;
+    const col = el('div', 'sp-stat lb-col');
+    col.append(el('span', null, label));
+    for (const [i, r] of rows.entries()) {
+      const row = el('div', `lb-row${i === 0 ? ' top' : ''}`);
+      row.append(el('em', null, String(i + 1)), avatar({ name: r.name, studio_id: r.member }, 'lb-img'), el('b', null, r.name || ''), el('strong', null, show(r.value)));
+      col.append(row);
+    }
+    cols.append(col);
+  }
+  s.append(cols);
+  return s;
+}
+
+// Two picked players: the pre-match slides; otherwise the title and the club leaderboard (other
+// player counts are not handled yet)
 function idleSlides() {
   const players = lobby?.players || [];
-  if (players.length !== 2) return [brandSlide];
+  loadBoard();
+  if (players.length !== 2) return hasBoard() ? [brandSlide, leaderboardSlide] : [brandSlide];
   const [a, b] = players;
   return [() => versusSlide(a, b, lobby), () => playerSlide(a), () => playerSlide(b)];
 }
@@ -146,10 +184,18 @@ export function startIdle() {
 export function showIdleSlide(kind, sample) {
   stopIdle();
   const players = sample?.players?.length >= 2 ? sample.players : studioPlayersAsPlayers();
-  const make = kind === 'player' && players.length ? () => playerSlide(players[0])
+  const make = kind === 'board' ? leaderboardSlide
+    : kind === 'player' && players.length ? () => playerSlide(players[0])
     : kind === 'versus' && players.length >= 2 ? () => versusSlide(players[0], players[1], sample)
       : brandSlide;
   $('idleSlides').replaceChildren(make());
+  // The leaderboard may still be loading: draw it again once it's there
+  if (kind === 'board') {
+    loadBoard().then(() => {
+      const host = $('idleSlides');
+      if (host.querySelector('.slide-board')) host.replaceChildren(leaderboardSlide());
+    });
+  }
   tickClock();
 }
 

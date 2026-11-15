@@ -137,6 +137,8 @@ export async function startAutodarts() {
 
 // --- Icons (inline, stroke style like the app menu) ------------------------------------------------
 const PATHS = {
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
   users: '<circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1"/><path d="M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6"/>',
   swords: '<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M9.5 6.5 14 2h3v3l-4.5 4.5M5 14l4 4M7 17l-3 3M3 19l2 2"/>',
@@ -197,7 +199,7 @@ export const PROFILE = [
   ['alias', 'Autodarts name', 'If different', 40], ['nickname', 'Nickname', 'The Power', 40], ['country', 'Country', 'NED', 3],
   ['club', 'Club', '', 60], ['hometown', 'Hometown', '', 60], ['hand', 'Throws', '', 0],
   ['dart_weight', 'Dart weight (g)', '23', 10], ['favourite_double', 'Favourite double', 'D16', 10], ['playing_since', 'Playing since', '2015', 10],
-  ['stat_average', 'Average', '85.4', 10], ['stat_180s', '180s', '42', 10], ['stat_best_checkout', 'Best checkout', '161', 10]
+  ['stat_average', 'Average (before AutoGlow)', '85.4', 10], ['stat_180s', '180s (before AutoGlow)', '42', 10], ['stat_best_checkout', 'Best checkout (before AutoGlow)', '161', 10]
 ];
 
 export async function savePlayer(id, fields, files = {}) {
