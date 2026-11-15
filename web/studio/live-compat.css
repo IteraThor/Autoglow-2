@@ -1,0 +1,30 @@
+/* Browsers before Chrome 84 (LG webOS 6 and older, older Tizen) ignore `gap` on flex layouts. live.html
+   adds .no-flex-gap to <html> when that is the case; these rules then space the children with margins.
+   Grid gaps (.sp-facts, .lc-grid) work everywhere. Keep this list in step with the flex `gap` values in
+   live.css and looks.css. */
+/* Columns: spacing downwards */
+.no-flex-gap .mockup-card > * + * { margin-top: 18px; }
+.no-flex-gap .cam-empty > * + * { margin-top: 12px; }
+.no-flex-gap .dock > * + * { margin-top: 8px; }
+.no-flex-gap .lb-col > * + * { margin-top: 10px; }
+.no-flex-gap .fact > * + * { margin-top: 2px; }
+.no-flex-gap .sr-side > * + * { margin-top: 10px; }
+.no-flex-gap .intro-top > * + * { margin-top: 4px; }
+.no-flex-gap .intro-stats > * + * { margin-top: 8px; }
+.no-flex-gap .is-label > * + * { margin-top: 6px; }
+.no-flex-gap .bo-panel > * + * { margin-top: 10px; }
+/* Rows: spacing sideways */
+.no-flex-gap .board-name > * + * { margin-left: 12px; }
+.no-flex-gap .visit > * + * { margin-left: 6px; }
+.no-flex-gap[data-theme="glass"] .visit > * + * { margin-left: 10px; }
+.no-flex-gap .visit .checkout > * + * { margin-left: 12px; }
+.no-flex-gap .lb-cols > * + * { margin-left: 28px; }
+.no-flex-gap .lb-row > * + * { margin-left: 16px; }
+.no-flex-gap .slide-player > * + * { margin-left: 64px; }
+.no-flex-gap .sp-stats > * + * { margin-left: 18px; }
+.no-flex-gap .sr-row > * + * { margin-left: 70px; }
+.no-flex-gap .is-bar > * + * { margin-left: 4px; }
+.no-flex-gap .bo-row > * + * { margin-left: 20px; }
+.no-flex-gap .bo-history div > * + * { margin-left: 16px; }
+.no-flex-gap .lc-who > * + * { margin-left: 20px; }
+.no-flex-gap[data-theme="arena"] .sb-kicker > * + *, .no-flex-gap[data-theme="arena"] .sp-kicker > * + *, .no-flex-gap[data-theme="arena"] .intro-club > * + *, .no-flex-gap[data-theme="arena"] .mc-kicker > * + * { margin-left: 22px; }

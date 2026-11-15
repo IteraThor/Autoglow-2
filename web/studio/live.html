@@ -8,8 +8,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&family=Barlow:wght@500;600;700&family=Oswald:wght@500;600;700&family=Bebas+Neue&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@600;700;800&family=Saira+Condensed:wght@600;700;800&family=Outfit:wght@200;300;400;500;600&family=Kalam:wght@400;700&family=Cabin+Sketch:wght@400;700&family=Archivo:wght@500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/studio/live.css?v=6">
-  <link rel="stylesheet" href="/studio/looks.css?v=2">
+  <link rel="stylesheet" href="/studio/live.css?v=7">
+  <link rel="stylesheet" href="/studio/looks.css?v=3">
+  <link rel="stylesheet" href="/studio/live-compat.css?v=1">
+  <script>
+    // Old TV browsers (before Chrome 84) ignore gap on flex layouts: live-compat.css spaces them with margins
+    window.addEventListener('error', function (e) { window.__err = e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : ''); });
+    (function () {
+      try {
+        var d = document.createElement('div');
+        d.style.cssText = 'display:flex;flex-direction:column;row-gap:1px;position:absolute';
+        d.appendChild(document.createElement('div')); d.appendChild(document.createElement('div'));
+        document.documentElement.appendChild(d);
+        if (d.scrollHeight !== 1) document.documentElement.className += ' no-flex-gap';
+        document.documentElement.removeChild(d);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <!-- Everything is laid out on a 1920x1080 stage that js/main.js scales to the window -->
@@ -70,6 +85,17 @@
   </div>
 
   <div class="hint" id="hint">Double-click for fullscreen</div>
-  <script type="module" src="/studio/js/main.js?v=4"></script>
+  <!-- One plain script built for old TV browsers (Chrome 56+); build-tv.sh makes it from js/main.js -->
+  <script src="/studio/js/main.bundle.js?v=1"></script>
+  <script>
+    // If the script did not start, say so on the screen instead of a blank background
+    setTimeout(function () {
+      if (window.__started) return;
+      var v = /Chrom(?:e|ium)\/(\d+)/.exec(navigator.userAgent), d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:0;right:0;top:0;padding:2em 3em;font:600 28px sans-serif;color:#fff;background:#b91c1c;z-index:99;text-transform:none';
+      d.innerHTML = 'The Studio did not start on this TV.<br><small style="font-size:18px;font-weight:500">Browser: Chrome ' + (v ? v[1] : '?') + ' · script started: ' + (window.__started ? 'yes' : 'no') + ' · ' + (window.__err || 'no error reported') + '</small>';
+      document.body.appendChild(d);
+    }, 10000);
+  </script>
 </body>
 </html>

@@ -8,7 +8,8 @@
 
 export const MEDIA_SELECTOR = ':scope > img, :scope > video, :scope > canvas.cam-live';
 
-const workerUrl = new URL('./camera-worker.js', import.meta.url);
+// The worker is built for old TV browsers too (build-tv.sh)
+const workerUrl = '/studio/js/camera-worker.bundle.js';
 
 // Frames are VideoFrames (H.264) or ImageBitmaps (MJPEG)
 const frameW = f => f.displayWidth ?? f.width;

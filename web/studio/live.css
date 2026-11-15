@@ -5,8 +5,10 @@
    The "autodarts" look: dark slate panels like play.autodarts.com. The other looks are in looks.css. */
 :root {
   --accent: #3b82f6;
+  --accent-rgb: 59, 130, 246;
   --accent-dark: #2c61b8;
   --active: #ef4444;
+  --active-rgb: 239, 68, 68;
   --gold: #f5b301;
   --panel: rgba(17, 22, 34, 0.94);
   --panel-2: rgba(30, 37, 54, 0.96);
@@ -54,7 +56,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 /* --- Idle background ------------------------------------------------------------------------- */
 .bg-blur {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   opacity: 0;
@@ -64,7 +66,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 
 .bg-shade {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background: linear-gradient(180deg, rgba(5, 8, 14, 0.55), rgba(5, 8, 14, 0.85));
   opacity: 0;
   transition: opacity 0.8s;
@@ -76,7 +78,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 /* --- Cameras and layouts --------------------------------------------------------------------- */
 .cams {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   /* Own stacking context: the picture-in-picture z-index must not lift a camera above the overlays */
   z-index: 0;
   opacity: 0;
@@ -160,7 +162,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 /* Blurred copy of the picture behind it (js/fill.js): no empty bars when the picture does not cover the frame */
 .cam-fill {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   transform: scale(1.08);
@@ -172,7 +174,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 
 .mockup-card {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -205,7 +207,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 
 .cam-empty {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -251,7 +253,7 @@ body[data-chroma="green"] .stage { background: #00b140; }
 .live-layer,
 .idle-layer {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   opacity: 0;
   transition: opacity 0.5s;
   pointer-events: none;
@@ -592,7 +594,7 @@ img.avatar { object-fit: contain; }
 
 .slide {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
   animation: slide-in 0.8s var(--ease) both;
 }
@@ -639,7 +641,7 @@ img.avatar { object-fit: contain; }
   justify-content: center;
   /* A soft glow, not a panel: transparent pictures float over the idle background */
   background: radial-gradient(ellipse at 50% 60%, rgba(59, 130, 246, 0.35), transparent 65%);
-  background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--accent) 40%, transparent), transparent 65%);
+  background: radial-gradient(ellipse at 50% 60%, rgba(var(--accent-rgb), 0.4), transparent 65%);
 }
 
 .sp-pic img { width: 100%; height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 24px 40px rgba(0, 0, 0, 0.55)); }
@@ -679,10 +681,11 @@ img.avatar { object-fit: contain; }
 /* --- Versus intro --------------------------------------------------------------------------------- */
 .intro {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   background:
     linear-gradient(105deg, transparent 47%, rgba(255, 255, 255, 0.06) 47.2%, transparent 52%),
-    radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--accent) 35%, #0b0f18) 0%, #070a10 70%);
+    radial-gradient(ellipse at 50% 40%, rgba(var(--accent-rgb), 0.35) 0%, #070a10 70%),
+    #0b0f18;
   overflow: hidden;
 }
 
@@ -718,7 +721,7 @@ img.avatar { object-fit: contain; }
 .intro-side { position: absolute; top: 150px; bottom: 0; width: 820px; }
 .intro-side.left { left: 0; }
 .intro-side.right { right: 0; }
-.intro-pic { position: absolute; inset: 0 60px 0 60px; display: flex; align-items: flex-end; justify-content: center; }
+.intro-pic { position: absolute; top: 0; right: 60px; bottom: 0; left: 60px; display: flex; align-items: flex-end; justify-content: center; }
 .intro-pic img { max-width: 100%; height: 900px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 30px 50px rgba(0, 0, 0, 0.6)); }
 .intro-pic .avatar { width: 380px; height: 380px; margin-bottom: 330px; border-radius: 50%; font-size: 160px; }
 
@@ -801,7 +804,7 @@ img.avatar { object-fit: contain; }
 /* --- Bull-off (js/bulloff.js) -------------------------------------------------------------------- */
 .bull-off {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   opacity: 0;
   transition: opacity 0.5s;
   pointer-events: none;
@@ -1080,7 +1083,7 @@ img.avatar { object-fit: contain; }
 /* --- Stinger ---------------------------------------------------------------------------------------- */
 .stinger {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   pointer-events: none;
   z-index: 20;
   visibility: hidden;

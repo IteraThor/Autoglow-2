@@ -4,6 +4,7 @@
 //   -> leg summary -> ... -> match end (winner + stats) -> idle
 // Scenes can also be cued from AutoGlow › Studio. URL options: ?demo=1 scripted match, ?chroma=green.
 
+import './tv-compat.js';
 import { ctx, displayName, t, tn, el } from './ctx.js';
 import { initCameras, applyCameras, setLayout, setBlur, setMockupPlayer } from './cameras.js';
 import { onDarts, outputDelay } from './darts.js';
@@ -458,6 +459,9 @@ function applySettings(settings) {
   const root = document.documentElement;
   root.style.setProperty('--accent', accent);
   root.style.setProperty('--accent-dark', shade(accent, -0.25));
+  // The same colour as "r, g, b" for see-through uses (old TV browsers have no color-mix)
+  const hex = /^#?([0-9a-f]{6})$/i.exec(accent);
+  if (hex) root.style.setProperty('--accent-rgb', [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16)).join(', '));
   root.dataset.theme = settings.theme || 'autodarts';
   // Logo wording (Texts) and whether any graphics are shown at all
   document.querySelectorAll('.brand').forEach(brand => {
