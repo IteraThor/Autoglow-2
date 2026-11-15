@@ -1,0 +1,46 @@
+/* Browsers before Chrome 84 (LG webOS 6 and older, older Tizen) ignore `gap` on flex layouts. The page
+   adds .no-flex-gap to <html> when that is the case (tournament.html); these rules then space the
+   children with margins instead. Grid gaps work everywhere and are not touched. Keep this list in step
+   with the flex `gap` values in tournament.css and tournament-looks.css. */
+
+/* Row layouts: space between neighbours, sideways */
+.no-flex-gap .hd > * + * { margin-left: 3.6rem; }
+.no-flex-gap[data-theme="flap"] .hd > * + * { margin-left: 4.4rem; }
+.no-flex-gap .hd-prog > div:first-child > * + * { margin-left: .8rem; }
+.no-flex-gap .pips > * + * { margin-left: .5rem; }
+.no-flex-gap h2 > * + * { margin-left: 1.2rem; }
+.no-flex-gap .mh > * + *, .no-flex-gap .pr > * + *, .no-flex-gap .pl > * + *, .no-flex-gap .nx > * + *, .no-flex-gap .lr > * + *, .no-flex-gap .lb-pl > * + * { margin-left: 1.6rem; }
+.no-flex-gap .lgs > * + *, .no-flex-gap .stt b > * + * { margin-left: 1rem; }
+.no-flex-gap .sc-top > * + * { margin-left: 2.4rem; }
+.no-flex-gap .sc-tabs > * + * { margin-left: .8rem; }
+.no-flex-gap[data-theme="flap"] .sc-tabs > * + * { margin-left: 2.4rem; }
+.no-flex-gap .bp > * + * { margin-left: calc(var(--bh) * .16); }
+.no-flex-gap .tr .nm > * + * { margin-left: calc(var(--e) * .5); }
+.no-flex-gap .rs-r > * + * { margin-left: calc(var(--u) * 2); }
+.no-flex-gap .rs-p > * + * { margin-left: calc(var(--u) * 1.6); }
+.no-flex-gap .rs-s > * + * { margin-left: calc(var(--u) * 1); }
+.no-flex-gap .ld-t > * + * { margin-left: calc(var(--u) * 2.4); }
+.no-flex-gap .lb-p.m .lb-pl > * + * { margin-left: 1.2rem; }
+.no-flex-gap .lb-p.s .lb-pl > * + * { margin-left: 1rem; }
+.no-flex-gap .lb-b > * + * { margin-left: 3rem; }
+.no-flex-gap .ch > * + * { margin-left: 8rem; }
+.no-flex-gap .ch-s > * + * { margin-left: 2rem; }
+.no-flex-gap .tk-i > * + * { margin-left: 1.4rem; }
+.no-flex-gap[data-theme="flap"] .num[data-pad] > * + * { margin-left: .07em; }
+.no-flex-gap[data-theme="poster"] .ct-f > * + * { margin-left: 1.2rem; }
+/* The champion's road wraps, so every pill gets its own margin */
+.no-flex-gap .ch-road > * { margin: 0 1.2rem 1.2rem 0; }
+
+/* Column layouts: spacing downwards */
+.no-flex-gap .bds > * + * { margin-top: 1.6rem; }
+.no-flex-gap [data-layout="overview"][data-n="4"] .bds > * + * { margin-top: 1.2rem; }
+.no-flex-gap [data-layout="boards"] .bds > * + * { margin-top: 1rem; }
+.no-flex-gap .nxs > * + * { margin-top: .8rem; }
+.no-flex-gap .lv > * + * { margin-top: 1.6rem; }
+.no-flex-gap .ld > * + * { margin-top: calc(var(--u) * 2); }
+.no-flex-gap [data-layout="boards"] .mn > * + * { margin-top: 2.4rem; }
+.no-flex-gap [data-layout="wall"] .mn > * + *, .no-flex-gap [data-layout="single"] .mn > * + * { margin-top: 2rem; }
+
+/* The boards that are a grid (they space themselves with their grid gap) */
+.no-flex-gap [data-n="5"] .lv .bds > *, .no-flex-gap [data-n="6"] .lv .bds > *, .no-flex-gap [data-n="7"] .lv .bds > *, .no-flex-gap [data-n="8"] .lv .bds > *, .no-flex-gap [data-n="9"] .lv .bds > *,
+.no-flex-gap [data-layout="boards"] .bds:not(.rows) > *, .no-flex-gap [data-layout="wall"] .bds > * { margin: 0; }

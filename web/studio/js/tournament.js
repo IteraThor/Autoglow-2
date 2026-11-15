@@ -5,6 +5,7 @@
 // pictures and nicknames. Parts: tournament-model.js (the data), tournament-scenes.js (the HTML),
 // tournament-dom.js (changing the page with animations).
 
+import './tv-compat.js';
 import { derive, esc } from './tournament-model.js';
 import { patch, reset, swap, syncNums, flyWinners } from './tournament-dom.js';
 import * as S from './tournament-scenes.js';
