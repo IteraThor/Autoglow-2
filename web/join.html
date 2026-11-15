@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join the club</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--fg:#f2f4f8;--mute:#9aa3b2;--acc:#2ecc71;--err:#ff6b6b}
+@media(prefers-color-scheme:light){:root{--bg:#f2f4f8;--card:#fff;--fg:#14171c;--mute:#5b6472}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 system-ui,sans-serif;display:grid;place-items:start center;min-height:100vh;padding:16px}
+main{width:100%;max-width:420px;background:var(--card);border-radius:16px;padding:22px}
+h1{margin:0 0 4px;font-size:24px}p{color:var(--mute);margin:0 0 18px}
+label{display:block;font-size:14px;color:var(--mute);margin:14px 0 4px}
+input[type=text]{width:100%;padding:12px;font-size:17px;border-radius:10px;border:1px solid #8884;background:transparent;color:var(--fg)}
+.pic{display:flex;align-items:center;gap:14px;margin-top:6px}.pic img,.pic span{width:72px;height:72px;border-radius:50%;object-fit:cover;background:#8883;display:grid;place-items:center;font-size:30px}
+.pic label{margin:0;padding:10px 14px;border:1px solid #8886;border-radius:10px;color:var(--fg);cursor:pointer}
+button{margin-top:22px;width:100%;padding:14px;font-size:18px;font-weight:600;border:0;border-radius:12px;background:var(--acc);color:#04210f}
+button:disabled{opacity:.5}.msg{margin-top:14px;min-height:1.4em}.err{color:var(--err)}
+.done{text-align:center}.done b{font-size:26px;display:block;margin:8px 0}
+</style></head><body><main>
+<form id="f"><h1>Join the club</h1><p>Add yourself to the player list. It only takes a moment.</p>
+<label for="name">Your name *</label><input id="name" name="name" type="text" maxlength="40" required autocomplete="name">
+<label for="nickname">Nickname (optional)</label><input id="nickname" name="nickname" type="text" maxlength="40">
+<label>Picture (optional)</label>
+<div class="pic"><span id="prev">🙂</span><label>Take or choose a photo<input id="image" name="image" type="file" accept="image/*" hidden></label></div>
+<button id="go">Join</button><div class="msg err" id="msg"></div></form>
+<div class="done" id="done" hidden><div style="font-size:56px">✅</div><b id="who"></b><p>You are on the list. See you at the board!</p></div>
+</main><script>
+const $=id=>document.getElementById(id);
+// Shrink the photo first: phone pictures are many MB
+async function small(file){
+  try{const bmp=await createImageBitmap(file),k=Math.min(1,800/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');
+    c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(r,'image/jpeg',.85))||file}catch{return file}}
+$('image').onchange=e=>{const f=e.target.files[0];if(f)$('prev').replaceChildren(Object.assign(new Image(),{src:URL.createObjectURL(f)}))};
+$('f').onsubmit=async e=>{e.preventDefault();$('go').disabled=true;$('msg').textContent='';
+  try{const fd=new FormData($('f')),f=$('image').files[0];fd.delete('image');if(f)fd.append('image',await small(f),'me.jpg');
+    const r=await fetch('/api/join',{method:'POST',body:fd}),j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error?.message||j.message||'Could not save, try again');
+    $('who').textContent=$('name').value.trim();$('f').hidden=true;$('done').hidden=false}
+  catch(x){$('msg').textContent=x.message;$('go').disabled=false}};
+</script></body></html>

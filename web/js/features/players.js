@@ -4,7 +4,7 @@
 // club client the roster is a copy of the club host's and the stats are the club host's.
 
 import { api } from '../core/api.js';
-import { confirmDialog } from '../core/dialog.js';
+import { choiceDialog, confirmDialog } from '../core/dialog.js';
 import { esc, h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
@@ -50,6 +50,17 @@ function picturePicker(cls, current, empty, label, title) {
   el.addEventListener('click', () => input.click());
   dropPicture(el, show);
   return { el, file: () => file };
+}
+
+// A QR code to scan with a phone: opens the page where a player adds themselves
+async function showJoinQr() {
+  try {
+    const r = await api('/api/club/join-qr');
+    const box = h('div', { style: 'text-align:center' }, h('div', { style: 'background:#fff;border-radius:12px;padding:8px;width:min(260px,70vw);margin:0 auto' }), h('p', {}, 'Scan with your phone on the club WiFi and add yourself as a player.'));
+    box.firstChild.innerHTML = r.svg;
+    box.firstChild.firstElementChild.style.cssText = 'width:100%;height:auto;display:block';
+    await choiceDialog({ title: 'Join the club', body: box, choices: [{ value: true, label: 'Okay', primary: true }] });
+  } catch (e) { toast(e.message || 'Could not make the QR code', 'error'); }
 }
 
 const fieldsOf = p => Object.fromEntries([['name', p.name], ...PROFILE.map(([k]) => [k, p[k] || ''])]);
@@ -204,8 +215,9 @@ function membersView() {
     [['name', 'Name'], ['average', 'Average'], ['games', 'Games'], ['last', 'Last played']].map(([v, t]) => h('option', { value: v, selected: (view.sort || 'name') === v }, `Sort: ${t}`)));
   const add = club.can_edit ? h('button', { type: 'button', class: 'pl-card pl-add', onclick: () => open(null, true) }, h('span', { class: 'stu-avatar' }, icon('plus', 22)), h('span', { class: 'pl-card-name' }, 'New member')) : null;
   const demoBtn = club.can_edit ? h('button', { type: 'button', class: 'stu-btn', onclick: toggleDemo }, roster().some(isDemo) ? 'Remove demo players' : 'Add demo players') : null;
+  const qrBtn = h('button', { type: 'button', class: 'stu-btn', title: 'Players scan this with their phone to add themselves', onclick: showJoinQr }, 'Join QR code');
   return h('div', {},
-    h('div', { class: 'pl-tools' }, search, sort, demoBtn, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
+    h('div', { class: 'pl-tools' }, search, sort, qrBtn, demoBtn, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
     h('div', { class: 'pl-grid' }, ...list.map(card), q ? null : add),
     list.length || !q ? null : h('p', { class: 'pl-empty' }, `Nobody matches “${view.query}”.`),
     h('p', { class: 'pl-note' }, icon('info', 16), h('span', {},

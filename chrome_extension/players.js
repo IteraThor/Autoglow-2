@@ -50,6 +50,11 @@
   .form svg{width:100%;height:auto;display:block}.form .ln{fill:none;stroke:var(--blue2);stroke-width:2;stroke-linejoin:round}
   .form .dt{fill:var(--card);stroke:var(--blue2);stroke-width:2}.form .dt.w{fill:var(--blue2)}.form .gl{stroke:var(--line)}.form text{fill:var(--muted);font-size:11px}
   td a{color:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:#ffffff40}td a:hover{color:#fff}
+  /* The table with a QR card beside it (above it in portrait or on a narrow screen) */
+  .pl-wrap{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:16px;align-items:start}
+  .qrc{text-align:center;position:sticky;top:12px}.qrc h3{margin:0 0 2px}.qrc .small{display:block}
+  .qrbox{background:#fff;border-radius:10px;padding:6px;margin:10px auto 0;width:100%;max-width:200px}.qrbox svg{display:block;width:100%;height:auto}
+  @media (max-width:1000px),(orientation:portrait){.pl-wrap{grid-template-columns:1fr}.qrc{position:static;display:flex;gap:14px;align-items:center;text-align:left;order:-1}.qrbox{width:120px;flex:none;margin:0}}
   `;
 
   // ---------------------------------------------------------------------------
@@ -134,26 +139,33 @@
     ['t180', '180s', String, 'count'], ['best_checkout', 'Best checkout', String, 'count'], ['best_leg', 'Best leg', v => `${v} darts`, 'low'],
     ['games', 'Games', String, 'count'], ['win_pct', 'Win %', v => `${Math.round(v)}%`, 'rate']];
   let data = null; // { period, members, lb }
+  let joinQr = null; // the QR svg for players to add themselves
 
   async function render() {
     const mine = ++seq;
     const club = state && state.role === 'board' ? `the club host ${esc(state.club_name || state.address)}` : esc((state && state.node_name) || 'this PC');
     const head = `<div class="ph"><div><h1>Local Players</h1><div class="sub">Stats from every local game, kept by ${club}. Members are edited in AutoGlow.</div></div>
       <div class="r">${subtabs(PERIODS, view.period, 'period')}</div></div>`;
-    if (!view.member && data && data.period === view.period) { pg.innerHTML = head + tablePage(); return; }
+    if (!view.member && data && data.period === view.period) { pg.innerHTML = head + listPage(); return; }
     if (!pg.innerHTML) pg.innerHTML = head + '<div class="card muted">Loading…</div>';
     let body;
     try {
       if (view.member) body = await memberPage(view.member);
       else {
-        const [m, lb] = await Promise.all([api('members'), api(`leaderboards?period=${view.period}`)]);
+        const [m, lb, qr] = await Promise.all([api('members'), api(`leaderboards?period=${view.period}`), api('join-qr').catch(() => null)]);
         data = { period: view.period, members: m.players || [], lb };
-        body = tablePage();
+        joinQr = qr;
+        body = listPage();
       }
     } catch (e) {
       body = `<div class="err">${esc(e.message)}</div>`;
     }
     if (mine === seq) pg.innerHTML = head + body;
+  }
+
+  function listPage() {
+    const qr = joinQr ? `<aside class="card qrc"><div><h3>Join the club</h3><span class="muted small">Scan with a phone on the club WiFi to add yourself as a player.</span></div><div class="qrbox" role="img" aria-label="QR code to join">${joinQr.svg}</div></aside>` : '';
+    return `<div class="pl-wrap"><div>${tablePage()}</div>${qr}</div>`;
   }
 
   function tablePage() {

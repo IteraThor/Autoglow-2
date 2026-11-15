@@ -1,6 +1,6 @@
 [package]
 name = "autoglow"
-version = "0.34.0"
+version = "0.35.0"
 edition = "2021"
 description = "AutoGlow 2: real-time WLED lighting for Autodarts (web server, game engine and LED stream)"
 license = "MIT"
@@ -35,6 +35,7 @@ bytes = "1"
 pbkdf2 = "0.12"
 hmac = "0.12"
 hex = "0.4"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 
 [profile.release]
 lto = true
