@@ -1,5 +1,6 @@
 # Every push to main with a new version in Cargo.toml becomes a GitHub release with ready-built Linux
-# programs; install.sh downloads the latest one, so users install and update without compiling.
+# programs and a Windows autoglow.exe; install.sh downloads the latest Linux one, so users install and
+# update without compiling. A release made before the Windows build gets its Windows zip added on the next run.
 name: Release
 
 on:
@@ -16,6 +17,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       exists: ${{ steps.v.outputs.exists }}
+      has_windows: ${{ steps.v.outputs.has_windows }}
     steps:
       - uses: actions/checkout@v4
       - id: v
@@ -29,7 +31,12 @@ jobs:
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
-          if gh release view "v$v" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; fi
+          if gh release view "v$v" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            if gh release view "v$v" --json assets -q '.assets[].name' | grep -qx 'autoglow-windows-x86_64.zip'; then
+              echo "has_windows=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
 
   build:
     needs: version
@@ -64,8 +71,54 @@ jobs:
           name: autoglow-linux-${{ matrix.arch }}
           path: autoglow-linux-${{ matrix.arch }}.tar.gz
 
+  build-windows:
+    needs: version
+    if: needs.version.outputs.has_windows != 'true'
+    runs-on: windows-latest
+    env:
+      CARGO_PROFILE_RELEASE_STRIP: "true"
+      # Static C runtime: autoglow.exe runs without the Visual C++ Redistributable
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-x86_64
+      - run: cargo build --release --locked --target x86_64-pc-windows-msvc
+      - shell: pwsh
+        run: |
+          New-Item -ItemType Directory pkg | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/autoglow.exe pkg/
+          Copy-Item -Recurse web, defaults, chrome_extension pkg/
+          Copy-Item run_autoglow.bat, README.md pkg/
+          Compress-Archive -Path pkg/* -DestinationPath autoglow-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoglow-windows-x86_64
+          path: autoglow-windows-x86_64.zip
+
+  # A release that already exists without the Windows zip (made before the Windows build) gets it added
+  attach-windows:
+    needs: [version, build-windows]
+    if: needs.version.outputs.exists == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: autoglow-windows-x86_64
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
+        run: gh release upload "v$V" autoglow-windows-x86_64.zip --clobber
+
   release:
-    needs: [version, build]
+    needs: [version, build, build-windows]
+    # A failed Windows build does not hold back the Linux release; it is added on a later run
+    if: always() && needs.version.outputs.exists != 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,5 +129,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ needs.version.outputs.version }}
         run: |
-          gh release create "v$V" autoglow-linux-*.tar.gz install.sh \
+          shopt -s nullglob
+          gh release create "v$V" autoglow-linux-*.tar.gz autoglow-windows-*.zip install.sh \
             --target "$GITHUB_SHA" --title "AutoGlow 2 v$V" --generate-notes --latest

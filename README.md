@@ -13,6 +13,11 @@ Works on Debian/Ubuntu, Raspberry Pi OS (64-bit), Fedora and other Linux with sy
 
 Status: `sudo systemctl status autoglow` · Logs: `journalctl -u autoglow -f`
 
+## Install (Windows)
+Download **autoglow-windows-x86_64.zip** from the [latest release](https://github.com/IteraThor/Autoglow-2/releases/latest), extract it to a folder of your choice and double-click **run_autoglow.bat** (or `autoglow.exe`). Then open **http://localhost:8080**. Nothing needs to be installed or compiled. To update, extract the new zip over the same folder; your settings are kept.
+
+For the Chrome extension, open `chrome://extensions`, switch on **Developer mode**, click **Load unpacked** and select the `chrome_extension` folder inside the AutoGlow folder.
+
 ## Chrome extension (AutoGlow Bridge)
 AutoGlow receives live game events from the **AutoGlow Bridge** extension while you play on **https://play.autodarts.com**. Chrome must run on the **same computer** as AutoGlow and stay open with a play.autodarts.com tab.
 
