@@ -163,6 +163,33 @@ function card(p, i) {
 
 const SORTS = { name: (a, b) => a.name.localeCompare(b.name), average: (a, b) => (sums[b.id]?.average || 0) - (sums[a.id]?.average || 0), games: (a, b) => (sums[b.id]?.games || 0) - (sums[a.id]?.games || 0), last: (a, b) => (sums[b.id]?.last_at || 0) - (sums[a.id]?.last_at || 0) };
 
+// --- Demo players: a fixed Norse set to try features with; one button adds them, the same button removes them
+const DEMO = [
+  ['Odin Borson', 'The Allfather', 'Asgard Darts Club', 'Asgard', 'Right', '24', 'D16', '2009', '79.4', '71', '164'],
+  ['Freya Njordsdottir', 'Queen of Vanaheim', 'Vanaheim Valkyries', 'Vanaheim', 'Right', '21', 'D18', '2016', '74.8', '38', '141'],
+  ['Heimdall', 'The Watchman', 'Bifrost Bullseyes', 'Himinbjorg', 'Right', '23', 'D12', '2013', '72.1', '22', '130'],
+  ['Sif Golden-Hair', 'Goldilocks', 'Asgard Darts Club', 'Asgard', 'Left', '20', 'D10', '2018', '66.5', '9', '108'],
+  ['Tyr One-Hand', 'God of Single Combat', 'Midgard Marksmen', 'Midgard', 'Left', '25', 'D8', '2012', '70.3', '17', '120'],
+  ['Hela Lokisdottir', 'Queen of Hel', 'Jotunheim Tricksters', 'Helheim', 'Right', '19', 'D6', '2015', '77.2', '41', '150']
+];
+const isDemo = p => DEMO.some(d => d[0] === p.name);
+
+async function toggleDemo() {
+  const present = roster().filter(isDemo);
+  try {
+    if (present.length) {
+      for (const p of present) await deletePlayer(p.id);
+    } else {
+      for (const d of DEMO) {
+        await savePlayer(null, { name: d[0], ...Object.fromEntries(['nickname', 'club', 'hometown', 'hand', 'dart_weight', 'favourite_double', 'playing_since', 'stat_average', 'stat_180s', 'stat_best_checkout'].map((k, i) => [k, d[i + 1]])) });
+      }
+    }
+    await refresh();
+    render();
+    toast.success(present.length ? 'Demo players removed.' : 'Demo players added.');
+  } catch (err) { toast.error(err.message); }
+}
+
 function membersView() {
   const q = view.query.trim().toLowerCase();
   const list = roster()
@@ -176,8 +203,9 @@ function membersView() {
   const sort = h('select', { class: 'pl-sort', 'aria-label': 'Sort by', onchange: e => { view.sort = e.target.value; render(); } },
     [['name', 'Name'], ['average', 'Average'], ['games', 'Games'], ['last', 'Last played']].map(([v, t]) => h('option', { value: v, selected: (view.sort || 'name') === v }, `Sort: ${t}`)));
   const add = club.can_edit ? h('button', { type: 'button', class: 'pl-card pl-add', onclick: () => open(null, true) }, h('span', { class: 'stu-avatar' }, icon('plus', 22)), h('span', { class: 'pl-card-name' }, 'New member')) : null;
+  const demoBtn = club.can_edit ? h('button', { type: 'button', class: 'stu-btn', onclick: toggleDemo }, roster().some(isDemo) ? 'Remove demo players' : 'Add demo players') : null;
   return h('div', {},
-    h('div', { class: 'pl-tools' }, search, sort, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
+    h('div', { class: 'pl-tools' }, search, sort, demoBtn, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
     h('div', { class: 'pl-grid' }, ...list.map(card), q ? null : add),
     list.length || !q ? null : h('p', { class: 'pl-empty' }, `Nobody matches “${view.query}”.`),
     h('p', { class: 'pl-note' }, icon('info', 16), h('span', {},
