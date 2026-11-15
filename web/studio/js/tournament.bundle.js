@@ -32,6 +32,7 @@
   };
 
   // js/tv-compat.js
+  window.__started = 1;
   if (!Array.prototype.flatMap) {
     Object.defineProperty(Array.prototype, "flatMap", {
       configurable: true,
@@ -46,6 +47,15 @@
       const o = {};
       for (const [k, v] of it) o[k] = v;
       return o;
+    };
+  }
+  if (!Element.prototype.replaceChildren) {
+    Element.prototype.replaceChildren = function() {
+      while (this.firstChild) this.removeChild(this.firstChild);
+      for (let i = 0; i < arguments.length; i++) {
+        const n = arguments[i];
+        this.appendChild(typeof n === "string" ? document.createTextNode(n) : n);
+      }
     };
   }
 
