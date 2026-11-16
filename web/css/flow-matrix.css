@@ -153,6 +153,23 @@
   font-size: var(--fs-sm);
 }
 
+/* Unsaved changes: inline at the far right of the header row, not a floating bar.
+   Hidden keeps its space (visibility), so the header never changes size when it appears. */
+.savebar.fm-savebar {
+  position: static;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.savebar.fm-savebar[hidden] {
+  display: flex;
+  visibility: hidden;
+}
+
+.fm-savebar .savebar-note { margin-right: var(--space-2); }
+
 /* Copy and Presets, each opening a small menu under the buttons */
 .fm-head-actions {
   position: relative;
@@ -655,6 +672,12 @@ input.ui-input.fm-player-name {
     top: var(--space-4);
     max-height: calc(100vh / var(--ui-scale, 1) - 2 * var(--space-4));
     overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* Always four looks per row; auto-fill flipped to three when the scrollbar appeared */
+  .fm-layout-vertical .fm-effects {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

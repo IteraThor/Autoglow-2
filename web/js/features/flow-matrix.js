@@ -491,6 +491,7 @@ function select(sel) {
   render();
   if (sel?.kind === 'step' || sel?.kind === 'hit') playOnClick(sel.kind, sel.id)();
   else if (sel?.kind === 'transition') playOnClick('step', sel.id)();
+  else if (sel?.kind === 'waiting') previewIdle();
 }
 
 function isSelected(kind, id) {
@@ -529,11 +530,11 @@ const LAYOUTS = {
   vertical: (() => {
     const W = 196, H = 66, cx = 170;
     return {
-      width: 930, height: 1080,
+      width: 790, height: 1080,
       nodes: {
         waiting: { x: cx, y: 30, w: W, h: H },
         timeout: { x: cx + 346, y: 40, w: 124, h: 46 },
-        auto_off: { x: cx + 620, y: 40, w: 124, h: 46 },
+        auto_off: { x: cx + 346, y: 160, w: 124, h: 46 },
         bull_off: { x: cx, y: 165, w: W, h: H },
         game_start: { x: cx, y: 300, w: W, h: H },
         p1: { x: cx, y: 500, w: W, h: H },
@@ -580,7 +581,7 @@ const EDGES = {
     { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', label: 'next leg', out: 60 },
     { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70 },
     { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
-    { from: ['timeout', 'r'], to: ['auto_off', 'l'], standby: 'off' }
+    { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
   ]
 };
 
@@ -959,7 +960,7 @@ function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false
     }));
   }
 
-  const more = h('details', { class: 'fm-more' }, h('summary', {}, 'More'),
+  const more = h('details', { class: 'fm-more', open: moreOpen, ontoggle: e => { moreOpen = e.target.open; } }, h('summary', {}, 'More'),
     rangeField('Brightness', {
       min: 10, max: 100, step: 5, value: effect.brightness ?? 100, format: v => `${v} %`,
       onset: (v, done) => setEffect(e => { e.brightness = v >= 100 ? null : v; }, done)
@@ -969,6 +970,8 @@ function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false
   parts.push(more);
   return parts;
 }
+
+let moreOpen = false; // keeps the "More" section open across re-renders
 
 function transitionEditor(id) {
   const tr = page.draft.steps[id].transition;
@@ -984,7 +987,7 @@ function transitionEditor(id) {
     }),
     (tr.style === 'wipe' || tr.style === 'curtain' || tr.style === 'sweep') && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
       segmented([false, true], !!tr.reverse, v => setTr(x => { if (v) x.reverse = true; else delete x.reverse; }), directionLabels(tr.style === 'curtain'))),
-    (tr.style === 'flash' || tr.style === 'sweep') && h('details', { class: 'fm-more' }, h('summary', {}, 'More'),
+    (tr.style === 'flash' || tr.style === 'sweep') && h('details', { class: 'fm-more', open: moreOpen, ontoggle: e => { moreOpen = e.target.open; } }, h('summary', {}, 'More'),
       colourField(tr.style === 'sweep' ? 'Light colour' : 'Flash colour', tr.accent_color || [255, 255, 255], (c, done) => setTr(x => { x.accent_color = c; }, done)))
   ];
 }
@@ -1428,7 +1431,11 @@ function editorHead() {
         menuBtn('copy', 'Copy'), menuBtn('presets', 'Presets'),
         page.menu && h('div', { class: 'fm-menu', role: 'dialog', 'aria-label': page.menu.kind === 'copy' ? 'Copy' : 'Presets' },
           ...(page.menu.kind === 'copy' ? copyMenu() : presetsMenu())))),
-    h('div', { class: 'fm-top-end' }, statusLine()));
+    h('div', { class: 'fm-top-end' }, statusLine(),
+      h('div', { class: 'savebar fm-savebar', id: 'fmSavebar', hidden: !isDirty() },
+        h('span', { class: 'savebar-note' }, 'Unsaved changes'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: discard }, 'Discard'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: save }, 'Save'))));
 }
 
 function statusLine() {
@@ -1458,11 +1465,7 @@ function render() {
   const scroll = document.getElementById('fmInspector')?.scrollTop || 0;
   root.replaceChildren(
     editorHead(),
-    h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
-    h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
-      h('span', { class: 'savebar-note' }, 'Unsaved changes'),
-      h('button', { type: 'button', class: 'ui-btn', onclick: discard }, 'Discard'),
-      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: save }, 'Save')));
+    h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()));
   const insp = document.getElementById('fmInspector');
   if (insp) insp.scrollTop = scroll;
   if (page.menu?.naming) root.querySelector('.fm-menu input[name="name"]')?.focus();
