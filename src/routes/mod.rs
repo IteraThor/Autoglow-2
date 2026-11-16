@@ -142,6 +142,7 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/wled/update", post(wled_routes::wled_update))
         .route("/api/wled/preset", get(wled_routes::get_wled_preset).post(wled_routes::save_wled_preset))
         .route("/api/wled/segment-name", post(wled_routes::rename_segment))
+        .route("/api/wled/segment-shape", post(wled_routes::segment_shape))
         .route("/api/wled/game-brightness", post(wled_routes::game_brightness))
         .route("/api/wled/effects", get(wled_routes::get_wled_effects))
         .route("/api/wled/preview", post(wled_routes::preview_wled_state))

@@ -171,6 +171,33 @@ async function renameSegment(seg, input) {
   }
 }
 
+// Loop (the ends meet) or line (two ends): looks and transitions are drawn to fit. AutoGlow's own setting, saved on
+// its own like the name: no LED rewrite. Only for segments AutoGlow has saved.
+function shapeToggle(seg) {
+  const saved = (page.dev.segments || []).find(s => s.id === seg.id);
+  if (!saved) return null;
+  const line = saved.shape === 'line';
+  const btn = h('button', {
+    type: 'button', class: 'wz-shape', dataset: { shape: line ? 'line' : 'loop' },
+    'aria-label': `Shape of ${seg.name}: ${line ? 'line' : 'loop'}. Click to change.`,
+    title: line
+      ? 'Line: the strip has two ends. Lights bounce at the ends and curtains open from the middle. Click if its ends meet.'
+      : 'Loop: the ends of the strip meet, so lights run round and round. Click if the strip is a straight line.',
+    onclick: async () => {
+      btn.disabled = true;
+      try {
+        await api.post('/api/wled/segment-shape', { ip: page.ip, segment_id: seg.id, shape: line ? 'loop' : 'line' });
+        await window.loadConfig?.();
+        if (page) page.dev = devices().find(d => d.ip === page.ip) || page.dev;
+      } catch (err) {
+        toast.error(err);
+      }
+      if (page) renderLeds(page.bodies.leds);
+    }
+  }, line ? 'Line' : 'Loop');
+  return btn;
+}
+
 // Read-only view of the layout, drawn as wiring: the controller, a wire per GPIO pin, and each strip with its zones
 // as blocks sized by their LED count. The guided setup is the normal way to change it; the editor is for experts.
 const LED_CELLS_MAX = 60; // LED cells drawn per strip; longer strips are drawn scaled down
@@ -205,7 +232,8 @@ function zoneBlock(seg, index, whole, scale, tone) {
     : h('div', { class: 'wz-zone', dataset: { tone: String(tone % 8) } },
       h('div', { class: 'wz-zone-head' },
         h('span', { class: 'wz-zone-tag', title: `Zone ${index + 1}` }, String(index + 1)),
-        segmentNameInput(seg)),
+        segmentNameInput(seg),
+        shapeToggle(seg)),
       leds,
       h('div', { class: 'wz-range', title: `${count} LEDs` }, `${seg.start + 1}–${seg.stop}`));
   // Width follows the zone's LED count
@@ -246,6 +274,7 @@ function stripCard(hw, busIdx, segs, firstTone) {
       ? h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
           segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
+          segs[0] && shapeToggle(segs[0]),
           zones))
       : h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },

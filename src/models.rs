@@ -172,9 +172,9 @@ impl DartEventType {
     }
 }
 
-pub const ANIMATIONS: [&str; 17] = [
+pub const ANIMATIONS: [&str; 22] = [
     "chase", "rainbow", "pastel_rainbow", "flash", "curtain", "heartbeat", "pulse", "solid", "wipe", "breathe", "scan", "comet",
-    "dual_comet", "sparkle", "fire", "radar", "off",
+    "dual_comet", "sparkle", "fire", "radar", "off", "wave", "meteors", "fireworks", "confetti", "ripple",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -399,6 +399,8 @@ pub struct SegmentConfig {
     pub clockwise: bool,
     /// goes all the way around the board, so the hit locator can use it
     pub locator: bool,
+    /// a straight strip with two ends ("shape": "line"); otherwise a loop whose ends meet
+    pub line: bool,
 }
 
 impl SegmentConfig {
@@ -415,6 +417,7 @@ impl SegmentConfig {
             offset: 0,
             clockwise: true,
             locator: true,
+            line: false,
         }
     }
 
@@ -432,6 +435,9 @@ impl SegmentConfig {
         }
         if !self.locator {
             o.insert("locator".into(), json!(false));
+        }
+        if self.line {
+            o.insert("shape".into(), json!("line"));
         }
         if let Some(k) = &self.hw_key {
             if truthy(k) {
@@ -469,6 +475,7 @@ impl SegmentConfig {
             offset: safe_int(off_raw, 0).rem_euclid(length),
             clockwise: d.get("clockwise") != Some(&Value::Bool(false)),
             locator: d.get("locator") != Some(&Value::Bool(false)),
+            line: d.get("shape").and_then(Value::as_str) == Some("line"),
         }
     }
 }

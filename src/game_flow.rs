@@ -67,13 +67,15 @@ pub struct FlowTransition {
     pub style: String,
     pub duration: f64,
     pub accent_color: Option<RGBColor>,
+    /// Wipe and Curtain run the other way round
+    pub reverse: bool,
 }
 
 impl FlowTransition {
     pub fn new(style: &str, duration: f64, accent: Option<RGBColor>) -> FlowTransition {
         let style = normalize_transition_style(Some(&json!(style)));
         let duration = if style == "instant" { 0.0 } else { duration.max(0.0).min(5.0) };
-        FlowTransition { style, duration, accent_color: accent }
+        FlowTransition { style, duration, accent_color: accent, reverse: false }
     }
 
     pub fn to_value(&self) -> Value {
@@ -81,13 +83,16 @@ impl FlowTransition {
         if let Some(a) = self.accent_color {
             o.insert("accent_color".into(), a.to_list());
         }
+        if self.reverse {
+            o.insert("reverse".into(), json!(true));
+        }
         Value::Object(o)
     }
 
     pub fn from_value(d: Option<&Value>) -> FlowTransition {
         let Some(d) = d.and_then(Value::as_object) else { return FlowTransition::new("crossfade", 0.6, None) };
         let acc = non_empty(d.get("accent_color")).map(|a| RGBColor::from_value(Some(a), RGBColor::WHITE));
-        FlowTransition::new(&get_str(d, "style", "crossfade"), safe_float(d.get("duration"), 0.6), acc)
+        FlowTransition { reverse: get_bool(d, "reverse", false), ..FlowTransition::new(&get_str(d, "style", "crossfade"), safe_float(d.get("duration"), 0.6), acc) }
     }
 }
 

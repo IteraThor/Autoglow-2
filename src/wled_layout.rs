@@ -17,7 +17,7 @@ pub fn unique_ranges(seg_data: &[Value]) -> Vec<Value> {
         .collect()
 }
 
-/// AutoGlow's segments from a WLED layout; what only AutoGlow knows (role, hit-locator direction) is kept
+/// AutoGlow's segments from a WLED layout; what only AutoGlow knows (role, hit-locator direction, shape) is kept
 /// from the previous segment with the same id and start
 pub fn segments_from_wled(seg_data: &[Value], hw_ins: &[Value], previous: &[SegmentConfig]) -> Vec<SegmentConfig> {
     let outputs: Vec<&Value> = hw_ins.iter().filter(|h| h.is_object()).collect();
@@ -52,6 +52,7 @@ pub fn segments_from_wled(seg_data: &[Value], hw_ins: &[Value], previous: &[Segm
         if let Some(o) = old {
             seg.clockwise = o.clockwise;
             seg.locator = o.locator;
+            seg.line = o.line;
         }
         out.push(seg);
     }

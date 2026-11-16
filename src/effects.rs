@@ -86,6 +86,10 @@ pub struct Effect {
     pub brightness: Option<i64>,
     pub transition: String,
     pub transition_duration: f64,
+    /// Drawn on a straight strip with two ends instead of a loop (Flow looks)
+    pub line: bool,
+    /// Where the last dart landed, 0..1 round the loop from its start point (Flow ripple and spread)
+    pub origin: Option<f64>,
 }
 
 impl Effect {

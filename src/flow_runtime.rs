@@ -42,6 +42,8 @@ pub trait FlowOutput: Send + Sync {
     fn hit(&self, ip: &str, seg_id: Option<i64>, effect: &EffectConfig, strength: f64);
     fn locate(&self, ip: &str, seg_id: Option<i64>, position: f64, color: RGBColor);
     fn can_locate(&self, ip: &str, seg_id: Option<i64>) -> bool;
+    /// Where the last dart landed, for ripples and "from the hit" (the preview has no strip to tell)
+    fn origin(&self, _ip: &str, _seg_id: Option<i64>, _position: f64) {}
     fn to_waiting(&self) -> BoxFuture<'_, ()>;
     fn broadcast(&self, message: Value) -> BoxFuture<'_, ()>;
 }
@@ -399,11 +401,18 @@ impl FlowRuntime {
             let Some(key) = hit_key(event, &flow) else { continue };
             let effect = flow.hit(&key);
             let gentle = flow.camera_friendly && TURN_STEPS.contains(&s.step.as_str());
-            if effect.enabled {
-                if !streaming {
-                    self.out.ensure_streaming().await;
-                    streaming = true;
+            let pos = board_position(event.segment_number);
+            if effect.enabled && !streaming {
+                // The strip must be streaming before it can remember where the dart landed
+                self.out.ensure_streaming().await;
+                streaming = true;
+            }
+            if let Some(pos) = pos {
+                if self.out.can_locate(&ip, sid) {
+                    self.out.origin(&ip, sid, pos);
                 }
+            }
+            if effect.enabled {
                 let mut eff = self.coloured(s, effect, &flow, None, false);
                 if gentle && eff.duration > CAMERA_FRIENDLY_MAX_HIT {
                     eff.duration = CAMERA_FRIENDLY_MAX_HIT;
@@ -412,7 +421,6 @@ impl FlowRuntime {
                 played = Some(key.clone());
                 all.push(format!("{}{}", key, if gentle { " (gentle)" } else { "" }));
             }
-            let pos = board_position(event.segment_number);
             if flow.hit_locator && role != "ambient" && ["single", "double", "triple", "ton", "ton40"].contains(&key.as_str()) {
                 if let Some(pos) = pos {
                     if self.out.can_locate(&ip, sid) {

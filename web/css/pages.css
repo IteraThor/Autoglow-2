@@ -990,6 +990,42 @@ input.led-summary-seg-name:focus {
   font: 10px var(--font-mono);
 }
 
+/* Loop or line: a small switch beside a segment's name, with the shape drawn in front of the word */
+.wz-shape {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 var(--fs-xs) var(--font-ui);
+  cursor: pointer;
+}
+
+.wz-shape:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.wz-shape::before {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.wz-shape[data-shape="line"]::before {
+  width: 12px;
+  height: 0;
+  border-width: 2px 0 0;
+  border-radius: 0;
+}
+
 /* A light strip's on/off at the end of the strip's header */
 .wz-idle-switch {
   margin-left: auto;

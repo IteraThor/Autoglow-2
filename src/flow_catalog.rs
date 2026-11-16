@@ -34,6 +34,12 @@ fn opt_palette() -> (Value, Vec<Value>) {
 fn opt_amount() -> (Value, Vec<Value>) {
     (json!("some"), vec![json!("few"), json!("some"), json!("many")])
 }
+fn opt_waves() -> (Value, Vec<Value>) {
+    (json!(2), vec![json!(1), json!(2), json!(3)])
+}
+fn opt_edges() -> (Value, Vec<Value>) {
+    (json!("soft"), vec![json!("soft"), json!("sharp")])
+}
 fn opt_colour_from() -> (Value, Vec<Value>) {
     (json!("custom"), vec![json!("custom"), json!("player")])
 }
@@ -42,14 +48,20 @@ pub const FLOW_EFFECTS: &[FlowEffectSpec] = &[
     FlowEffectSpec { id: "solid", label: "Solid", job: "A steady colour", options: &[] },
     FlowEffectSpec { id: "breathe", label: "Breathe", job: "A calm, slow glow", options: &[] },
     FlowEffectSpec { id: "flash", label: "Flash", job: "Instant hit feedback", options: &[("pulses", opt_pulses)] },
-    FlowEffectSpec { id: "chase", label: "Chase", job: "Light running around the strip", options: &[("tail", opt_tail), ("comets", opt_comets)] },
-    FlowEffectSpec { id: "curtain", label: "Curtain", job: "Fills the strip from the top", options: &[("sides", opt_sides)] },
+    FlowEffectSpec { id: "chase", label: "Chase", job: "Light running along the strip", options: &[("tail", opt_tail), ("comets", opt_comets)] },
+    FlowEffectSpec { id: "curtain", label: "Curtain", job: "Fills the strip, then clears it", options: &[("sides", opt_sides)] },
     FlowEffectSpec { id: "rainbow", label: "Rainbow", job: "A big celebration", options: &[("palette", opt_palette)] },
     FlowEffectSpec { id: "sparkle", label: "Sparkle", job: "Glitter over a colour", options: &[("amount", opt_amount)] },
+    FlowEffectSpec { id: "wave", label: "Wave", job: "Colour flowing along the strip", options: &[("waves", opt_waves), ("edges", opt_edges)] },
+    FlowEffectSpec { id: "meteors", label: "Meteors", job: "Lights of different speed and length", options: &[("amount", opt_amount)] },
+    FlowEffectSpec { id: "fireworks", label: "Fireworks", job: "Bursts that spread and fade", options: &[] },
+    FlowEffectSpec { id: "confetti", label: "Confetti", job: "Sparkle in many colours", options: &[("amount", opt_amount)] },
+    FlowEffectSpec { id: "ripple", label: "Ripple", job: "A wave of light from one point", options: &[] },
+    FlowEffectSpec { id: "fire", label: "Fire", job: "Flickering flames", options: &[] },
 ];
 
 /// Transition id -> label. "instant" is shown as Cut.
-pub const FLOW_TRANSITIONS: &[(&str, &str)] = &[("instant", "Cut"), ("crossfade", "Fade"), ("wipe", "Wipe"), ("curtain", "Curtain"), ("flash", "Flash")];
+pub const FLOW_TRANSITIONS: &[(&str, &str)] = &[("instant", "Cut"), ("crossfade", "Fade"), ("wipe", "Wipe"), ("curtain", "Curtain"), ("flash", "Flash"), ("sweep", "Sweep"), ("spread", "From the hit"), ("dissolve", "Dissolve"), ("dip", "Dip")];
 
 pub const SPEED_MIN: f64 = 0.25;
 pub const SPEED_MAX: f64 = 4.0;
@@ -190,7 +202,7 @@ pub fn render_effect(effect: &EffectConfig) -> Effect {
         let o = normalize_options(id, Some(op));
         let s = |k: &str, d: &str| o.get(k).map(py_str).unwrap_or_else(|| d.to_string());
         let i = |k: &str| o.get(k).map(|v| safe_int(Some(v), 1)).unwrap_or(1);
-        FlowOpts { pulses: i("pulses"), comets: i("comets"), tail: s("tail", "short"), sides: s("sides", "both"), palette: s("palette", "vivid"), amount: s("amount", "some") }
+        FlowOpts { pulses: i("pulses"), comets: i("comets"), tail: s("tail", "short"), sides: s("sides", "both"), palette: s("palette", "vivid"), amount: s("amount", "some"), waves: i("waves"), edges: s("edges", "soft") }
     });
     Effect {
         anim: Anim::parse(&effect.animation),
@@ -205,5 +217,7 @@ pub fn render_effect(effect: &EffectConfig) -> Effect {
         brightness: effect.brightness,
         transition: effect.transition.clone(),
         transition_duration: effect.transition_duration,
+        line: false,
+        origin: None,
     }
 }

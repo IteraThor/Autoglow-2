@@ -194,7 +194,7 @@ impl Engine {
 
     /// Whether a segment goes all the way around the board (only then can it show the hit locator)
     pub fn segment_locator(&self, ip: &str, seg_id: Option<i64>) -> bool {
-        self.segment_flag(ip, seg_id, |s| s.locator)
+        self.segment_flag(ip, seg_id, |s| s.locator && !s.line)
     }
 
     pub fn segment_clockwise(&self, ip: &str, seg_id: Option<i64>) -> bool {
@@ -712,7 +712,7 @@ impl FlowOutput for EngineFlowOutput {
 
     fn show(&self, ip: &str, seg_id: Option<i64>, effect: &EffectConfig, t: &FlowTransition) {
         if let Some(d) = self.eng().and_then(|e| e.get_driver(Some(ip))) {
-            d.flow_show(seg_id, effect, &t.style, t.duration, t.accent_color.map(|c| c.tuple()));
+            d.flow_show(seg_id, effect, &t.style, t.duration, t.accent_color.map(|c| c.tuple()), t.reverse);
         }
     }
 
@@ -726,6 +726,14 @@ impl FlowOutput for EngineFlowOutput {
         if let Some(e) = self.eng() {
             if let Some(d) = e.get_driver(Some(ip)) {
                 d.flow_locate(seg_id, position, color, 1.2, e.segment_clockwise(ip, seg_id));
+            }
+        }
+    }
+
+    fn origin(&self, ip: &str, seg_id: Option<i64>, position: f64) {
+        if let Some(e) = self.eng() {
+            if let Some(d) = e.get_driver(Some(ip)) {
+                d.flow_origin(seg_id, position, e.segment_clockwise(ip, seg_id));
             }
         }
     }

@@ -167,6 +167,37 @@ pub async fn rename_segment(State(s): State<S>, req: Req) -> ApiResult {
     ok(json!({"status": "ok", "name": name}))
 }
 
+/// Whether a segment is a loop (its ends meet) or a line (two ends); looks and transitions are drawn to fit
+pub async fn segment_shape(State(s): State<S>, req: Req) -> ApiResult {
+    let data = req.json()?;
+    let ip = non_empty(data.get("ip")).map(py_str).unwrap_or_default().trim().to_string();
+    let seg_id = safe_int(data.get("segment_id"), -1);
+    let line = match data.get("shape").and_then(Value::as_str) {
+        Some("line") => true,
+        Some("loop") => false,
+        _ => return Err(AppError::validation("Choose Loop or Line.").field("shape")),
+    };
+    let mut snap = {
+        let mut c = s.engine.cfg();
+        let mut found = false;
+        for d in c.devices.iter_mut().filter(|d| d.ip == ip) {
+            for sg in d.segments.iter_mut().filter(|x| x.id == seg_id) {
+                sg.line = line;
+                found = true;
+            }
+        }
+        if !found {
+            return Err(AppError::validation("That segment was not found.").field("segment_id"));
+        }
+        c.clone()
+    };
+    if !save_cfg(&s, &mut snap) {
+        return Err(AppError::persistence("AutoGlow could not save the shape."));
+    }
+    s.engine.sync_drivers(&snap);
+    ok(json!({"status": "ok", "shape": if line { "line" } else { "loop" }}))
+}
+
 /// How bright one controller's light strips are during a game (0..255); shows at once during a game
 pub async fn game_brightness(State(s): State<S>, req: Req) -> ApiResult {
     let data = req.json()?;

@@ -51,7 +51,7 @@ fn lights(s: &S) -> Vec<Value> {
                     .map(|sg| {
                         let pwm = is_pwm_segment(sg);
                         json!({"id": sg.id, "name": sg.name, "gpio": sg.gpio, "start": sg.start, "length": sg.length, "role": sg.role,
-                               "light_strip": pwm, "clockwise": sg.clockwise, "locator": sg.locator,
+                               "light_strip": pwm, "clockwise": sg.clockwise, "locator": sg.locator, "shape": if sg.line { "line" } else { "loop" },
                                "profile": if pwm { Value::Null } else { json!(flows.profile_name_for(Some(&d.ip), Some(sg.id))) }})
                     })
                     .collect()
@@ -482,11 +482,11 @@ pub async fn try_look(State(s): State<S>, req: Req) -> ApiResult {
                 if !HIT_IDS.contains(&item.as_str()) {
                     return Err(AppError::validation("Unknown hit."));
                 }
-                drv.flow_show(sid, &coloured(&turn.effect, true), "instant", 0.0, None);
+                drv.flow_show(sid, &coloured(&turn.effect, true), "instant", 0.0, None, false);
                 drv.flow_hit(sid, &coloured(flow.hit(&item), false), 1.0);
             }
             "locator" => {
-                drv.flow_show(sid, &coloured(&turn.effect, true), "instant", 0.0, None);
+                drv.flow_show(sid, &coloured(&turn.effect, true), "instant", 0.0, None, false);
                 let n = safe_int(non_empty(data.get("number")), 20);
                 drv.flow_locate(sid, board_position(Some(n)).unwrap_or(0.0), colour, 2.0, s.engine.segment_clockwise(&ip, sid));
             }
@@ -496,7 +496,7 @@ pub async fn try_look(State(s): State<S>, req: Req) -> ApiResult {
                 }
                 let st = flow.step(&item);
                 let t = &st.transition;
-                drv.flow_show(sid, &coloured(&st.effect, item == "turn"), &t.style, t.duration, t.accent_color.map(|c| c.tuple()));
+                drv.flow_show(sid, &coloured(&st.effect, item == "turn"), &t.style, t.duration, t.accent_color.map(|c| c.tuple()), t.reverse);
             }
         }
     }

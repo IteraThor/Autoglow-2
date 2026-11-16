@@ -33,6 +33,8 @@ pub struct Channel {
     pub start: i64,
     pub stop: i64,
     pub offset: i64,
+    /// A straight strip with two ends (Flow looks only)
+    pub line: bool,
     pub baseline: Option<Effect>,
     pub baseline_start: f64,
     pub transient: Option<Effect>,
@@ -55,9 +57,11 @@ pub struct Fade {
     pub duration: f64,
     pub style: String,
     pub accent: Option<(u8, u8, u8)>,
+    pub reverse: bool,
     pub frame: Option<Vec<u8>>,
     pub effect: Option<Effect>,
     pub effect_start: f64,
+    pub origin: Option<f64>,
 }
 
 /// A hit on top of the look: `layer` shows as much as `mask`'s brightness says
@@ -152,7 +156,7 @@ fn render_flow_channel(ch: &Channel, now: f64, count: usize, fire: &mut FireStat
             if src.as_ref().map_or(true, |s| s.len() != count * 3) {
                 src = Some(vec![0u8; count * 3]);
             }
-            base = blend_flow(&src.unwrap(), &base, f, &fade.style, fade.accent, false);
+            base = blend_flow(&src.unwrap(), &base, f, &fade.style, fade.accent, fade.reverse, ch.line, fade.origin);
         }
     }
     let last_base = base.clone();

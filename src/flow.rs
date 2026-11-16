@@ -16,6 +16,8 @@ pub struct FlowOpts {
     pub sides: String,
     pub palette: String,
     pub amount: String,
+    pub waves: i64,
+    pub edges: String,
 }
 
 const SPEED_MIN: f64 = 0.25;
@@ -31,6 +33,18 @@ const FLASH_REPEAT: f64 = 2.0;
 pub const EDGE_SHARE: f64 = 0.06;
 const FLASH_RISE: f64 = 0.2;
 const LOCATOR_WIDTH: f64 = 1.0 / 20.0;
+const WAVE_PERIOD: f64 = 3.0;
+const METEOR_FASTEST: f64 = 0.75;
+const METEOR_SLOWEST: f64 = 0.3;
+const FIREWORK_PERIOD: f64 = 1.7;
+const CONFETTI_SLOT: f64 = 0.8;
+const RIPPLE_PERIOD: f64 = 1.4;
+const FIRE_FLICKER: f64 = 2.2;
+const FIRE_FLICKER_FINE: f64 = 5.0;
+const SWEEP_GLOW: f64 = 0.045;
+const DISSOLVE_SPREAD: f64 = 0.25;
+const GOLD: Color = (255, 215, 140);
+const CONFETTI_COLOURS: [Color; 4] = [(255, 60, 90), (255, 200, 40), (60, 220, 120), (200, 90, 255)];
 
 type Color = (i64, i64, i64);
 
@@ -195,12 +209,39 @@ fn chase(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
     let share = if o.tail == "long" { 0.35 } else { 0.12 };
     let tail = pmax(1.0, count as f64 * share);
     let n = count as f64;
+    let mut out = vec![0u8; count * 3];
+    if e.line {
+        // A line has ends to bounce off: the strip is unfolded to twice its length, so the tail folds back too
+        let l = 2.0 * n;
+        let first = pymod(elapsed / lap, 2.0) * n + if e.reverse { n } else { 0.0 };
+        let heads = if o.comets == 2 { vec![first, first + n] } else { vec![first] };
+        for i in 0..count {
+            let centre = i as f64 + 0.5;
+            let mut level = 0.0;
+            for &head in &heads {
+                for at in [centre, l - centre] {
+                    let behind = pymod(head - at, l);
+                    let lv = if behind > l - 1.0 {
+                        1.0 - (l - behind)
+                    } else if behind <= tail {
+                        (1.0 - behind / tail).powf(1.5)
+                    } else {
+                        0.0
+                    };
+                    if lv > level {
+                        level = lv;
+                    }
+                }
+            }
+            put(&mut out, i, mix(c_bg, c_head, level));
+        }
+        return out;
+    }
     let direction = if e.reverse { -1.0 } else { 1.0 };
     let mut heads = vec![(pymod(progress * n * direction, n), direction)];
     if o.comets == 2 {
         heads.push((pymod(-progress * n * direction, n), -direction));
     }
-    let mut out = vec![0u8; count * 3];
     for i in 0..count {
         let centre = i as f64 + 0.5;
         let mut level = 0.0;
@@ -222,14 +263,20 @@ fn chase(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
     out
 }
 
-/// How far a pixel is from where the curtain starts, 0 (start) to 1 (last to fill)
-pub fn curtain_distance(i: usize, count: usize, one_side: bool, reverse: bool) -> f64 {
+/// How far a pixel is from where the curtain starts, 0 (start) to 1 (last to fill). From both sides a loop
+/// starts at its start point and meets on the far side; a line opens from its middle. Reverse turns that round.
+pub fn curtain_distance(i: usize, count: usize, one_side: bool, reverse: bool, line: bool) -> f64 {
     let centre = i as f64 + 0.5;
     if one_side {
         let d = centre / count as f64;
         return if reverse { 1.0 - d } else { d };
     }
-    pmin(centre, count as f64 - centre) / (count as f64 / 2.0)
+    let d = pmin(centre, count as f64 - centre) / (count as f64 / 2.0);
+    if line != reverse {
+        1.0 - d
+    } else {
+        d
+    }
 }
 
 fn curtain(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
@@ -261,7 +308,7 @@ fn curtain(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
     let one = o.sides == "one";
     let mut out = vec![0u8; count * 3];
     for i in 0..count {
-        let d = curtain_distance(i, count, one, e.reverse);
+        let d = curtain_distance(i, count, one, e.reverse, e.line);
         let covered = clamp01((front - d) / edge);
         let level = if closing { 1.0 - covered } else { covered };
         put(&mut out, i, mix(c_bg, c_fill, level));
@@ -353,6 +400,202 @@ fn sparkle(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
     out
 }
 
+fn wrap_dist(x: f64, p: f64) -> f64 {
+    let d = (x - p).abs();
+    pmin(d, 1.0 - d)
+}
+
+/// How far a pixel is from where a ripple or a spread begins: 0 at the origin, 1 at the farthest point.
+/// A loop spreads both ways round from the origin (the start point without one) and meets opposite;
+/// a line always spreads from its middle to both ends.
+fn origin_distance(x: f64, origin: Option<f64>, line: bool) -> f64 {
+    if line {
+        (x - 0.5).abs() * 2.0
+    } else {
+        wrap_dist(x, pymod(origin.unwrap_or(0.0), 1.0)) * 2.0
+    }
+}
+
+fn wave(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
+    let (c_wave, c_bg) = (rgb(e.c1), rgb(e.c2));
+    let dir = if e.reverse { -1.0 } else { 1.0 };
+    let phase = dir * elapsed * speed(e) / WAVE_PERIOD;
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut s = 0.5 + 0.5 * (2.0 * PI * (x * o.waves as f64 - phase)).sin();
+        if o.edges == "sharp" {
+            s = clamp01((s - 0.5) * 8.0 + 0.5);
+        }
+        put(&mut out, i, mix(c_bg, c_wave, s));
+    }
+    out
+}
+
+fn meteors(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
+    let (c_head, c_bg) = (rgb(e.c1), rgb(e.c2));
+    let n_meteors = match o.amount.as_str() {
+        "few" => 2,
+        "many" => 6,
+        _ => 4,
+    };
+    let sp = speed(e);
+    let mut level = vec![0.0f64; count];
+    for m in 0..n_meteors {
+        let v = (METEOR_SLOWEST + (METEOR_FASTEST - METEOR_SLOWEST) * hash01(m, 11)) * sp;
+        let len = pmax(0.12 + 0.2 * hash01(m, 23), 1.5 / count as f64);
+        // A loop is one lap; a line adds the tail running off the end and a pause before the next one
+        let cycle = if e.line { 1.0 + len + 0.2 + 0.6 * hash01(m, 31) } else { 1.0 };
+        let head = pymod(hash01(m, 5) * cycle + elapsed * v, cycle);
+        for i in 0..count {
+            let mut x = (i as f64 + 0.5) / count as f64;
+            if e.reverse {
+                x = 1.0 - x;
+            }
+            let behind = if e.line { head - x } else { pymod(head - x, 1.0) };
+            if behind < 0.0 || behind >= len {
+                continue;
+            }
+            let flicker = if behind > 0.03 { 0.7 + 0.3 * hash01(i as i64, (elapsed * 24.0).floor() as i64 + m * 7) } else { 1.0 };
+            let lv = (1.0 - behind / len).powf(1.6) * flicker;
+            if lv > level[i] {
+                level[i] = lv;
+            }
+        }
+    }
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        put(&mut out, i, mix(c_bg, c_head, level[i]));
+    }
+    out
+}
+
+fn fireworks(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let c_bg = rgb(e.c2);
+    let colours = [rgb(e.c1), mix(rgb(e.c1), (255, 255, 255), 0.6), GOLD];
+    // Three bursts overlap, so at most three open per second, however fast it is set
+    let period = pmax(FIREWORK_PERIOD / speed(e), 3.0 * min_flash_period());
+    let n = count as f64;
+    let mut out = fill(count, c_bg);
+    for s in 0..3i64 {
+        let tt = elapsed / period + s as f64 / 3.0;
+        let k = tt.floor() as i64;
+        let u = tt - k as f64;
+        let centre = if e.line { 0.2 + 0.6 * hash01(k, s * 13 + 1) } else { hash01(k, s * 13 + 1) };
+        let col = colours[(hash01(k, s + 77) * 3.0) as usize];
+        let mut u2 = u;
+        if e.line {
+            if u < 0.3 {
+                // The rocket runs up from the start to where the burst will open
+                let head = centre * smoothstep(u / 0.3);
+                let width = pmax(0.06, 1.5 / n);
+                for i in 0..count {
+                    let b = head - (i as f64 + 0.5) / n;
+                    if b >= 0.0 && b < width {
+                        let cur = (out[i * 3] as i64, out[i * 3 + 1] as i64, out[i * 3 + 2] as i64);
+                        put(&mut out, i, mix(cur, col, 0.8 * (1.0 - b / width)));
+                    }
+                }
+                continue;
+            }
+            u2 = (u - 0.3) / 0.7;
+        }
+        let r = (1.0 - (1.0 - u2).powf(3.0)) * 0.17;
+        let bright = (1.0 - u2).powf(1.4);
+        let flick = (elapsed * 30.0).floor() as i64 + k;
+        for i in 0..count {
+            let x = (i as f64 + 0.5) / n;
+            let d = if e.line { (x - centre).abs() } else { wrap_dist(x, centre) };
+            if d > r + 0.5 / n {
+                continue;
+            }
+            let level = bright * (0.35 + 0.65 * (d / pmax(r, 1e-6)).powf(2.0)) * (0.6 + 0.4 * hash01(i as i64, flick));
+            let cur = (out[i * 3] as i64, out[i * 3 + 1] as i64, out[i * 3 + 2] as i64);
+            put(&mut out, i, mix(cur, col, level));
+        }
+    }
+    out
+}
+
+fn confetti(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
+    let c_bg = rgb(e.c2);
+    let palette = [rgb(e.c1), CONFETTI_COLOURS[0], CONFETTI_COLOURS[1], CONFETTI_COLOURS[2], CONFETTI_COLOURS[3]];
+    let chance = match o.amount.as_str() {
+        "few" => 0.08,
+        "many" => 0.3,
+        _ => 0.18,
+    };
+    let slot = CONFETTI_SLOT / speed(e);
+    let mut out = fill(count, c_bg);
+    for i in 0..count {
+        let ii = i as i64;
+        let t = elapsed / slot + hash01(ii, 7919);
+        let k = t as i64;
+        if hash01(ii, k) >= chance {
+            continue;
+        }
+        let u = (t - k as f64 - hash01(k, ii) * 0.4) / 0.6;
+        if !(0.0..1.0).contains(&u) {
+            continue;
+        }
+        let level = if u < 0.12 { u / 0.12 } else { (-3.5 * (u - 0.12)).exp() };
+        let col = palette[(hash01(ii * 3 + 1, k) * 5.0) as usize];
+        put(&mut out, i, mix(c_bg, col, level));
+    }
+    out
+}
+
+fn ripple(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let (c_ring, c_bg) = (rgb(e.c1), rgb(e.c2));
+    // Rings never follow each other faster than a flash may repeat
+    let tt = elapsed / pmax(RIPPLE_PERIOD / speed(e), min_flash_period());
+    let u = tt - tt.floor();
+    let front = u * 1.15;
+    let fade = (1.0 - u).powf(0.8);
+    // One LED is 2/count wide in these units, so the ring is never thinner than that
+    let width = pmax(0.09, 2.0 / count as f64);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let d = origin_distance((i as f64 + 0.5) / count as f64, e.origin, e.line);
+        let mut l = (-((d - front) / width).powf(2.0)).exp() * fade;
+        if d < front {
+            l += 0.22 * (1.0 - u).powf(2.0);
+        }
+        put(&mut out, i, mix(c_bg, c_ring, l));
+    }
+    out
+}
+
+/// Smooth noise 0..1 along x
+fn vnoise(x: f64, seed: i64) -> f64 {
+    let k = x.floor();
+    let a = hash01(k as i64, seed);
+    a + (hash01(k as i64 + 1, seed) - a) * smoothstep(x - k)
+}
+
+fn fire(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let (c_flame, c_cold) = (rgb(e.c1), rgb(e.c2));
+    let c_hot = mix(c_flame, (255, 240, 200), 0.75);
+    let sp = speed(e);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        // h: 0 where it burns, 1 at the tips of the flames
+        let (h, seed) = if e.line {
+            (if e.reverse { 1.0 - x } else { x }, 1)
+        } else {
+            // Loop: it burns on the far side and licks up both halves towards the start point
+            let far = (1.0 - 2.0 * x).abs();
+            (if e.reverse { 1.0 - far } else { far }, if x > 0.5 { 2 } else { 1 })
+        };
+        let heat = 1.15 - h * 1.3 + 0.6 * (vnoise(h * 5.0 - elapsed * sp * FIRE_FLICKER, seed) - 0.5) + 0.3 * (vnoise(h * 14.0 - elapsed * sp * FIRE_FLICKER_FINE, seed + 9) - 0.5);
+        let heat = clamp01(heat).powf(1.3);
+        let c = if heat < 0.55 { mix(c_cold, c_flame, heat / 0.55) } else { mix(c_flame, c_hot, (heat - 0.55) / 0.45) };
+        put(&mut out, i, c);
+    }
+    out
+}
+
 /// render_flow_frame: one frame of a Flow Matrix look
 pub fn render_flow(e: &Effect, anim: &str, o: &FlowOpts, elapsed: f64, count: usize) -> Vec<u8> {
     if count == 0 {
@@ -366,6 +609,12 @@ pub fn render_flow(e: &Effect, anim: &str, o: &FlowOpts, elapsed: f64, count: us
         "curtain" => curtain(e, elapsed, count, o),
         "rainbow" => rainbow(e, elapsed, count, o),
         "sparkle" => sparkle(e, elapsed, count, o),
+        "wave" => wave(e, elapsed, count, o),
+        "meteors" => meteors(e, elapsed, count, o),
+        "fireworks" => fireworks(e, elapsed, count),
+        "confetti" => confetti(e, elapsed, count, o),
+        "ripple" => ripple(e, elapsed, count),
+        "fire" => fire(e, elapsed, count),
         _ => fill(count, rgb(e.c1)),
     };
     if let Some(bri) = e.brightness {
@@ -395,7 +644,7 @@ fn lerp_all(a: &[u8], b: &[u8], t: f64) -> Vec<u8> {
 }
 
 /// blend_flow (style already normalized by Python; anything unknown fades)
-pub fn blend_flow(buf_a: &[u8], buf_b: &[u8], factor: f64, style: &str, accent: Option<(u8, u8, u8)>, reverse: bool) -> Vec<u8> {
+pub fn blend_flow(buf_a: &[u8], buf_b: &[u8], factor: f64, style: &str, accent: Option<(u8, u8, u8)>, reverse: bool, line: bool, origin: Option<f64>) -> Vec<u8> {
     let n_bytes = buf_a.len().max(buf_b.len());
     if n_bytes == 0 {
         return Vec::new();
@@ -433,7 +682,7 @@ pub fn blend_flow(buf_a: &[u8], buf_b: &[u8], factor: f64, style: &str, accent: 
             let front = smoothstep(f) * (1.0 + edge);
             let mut out = vec![0u8; n_bytes];
             for i in 0..count {
-                let d = curtain_distance(i, count, one, reverse);
+                let d = curtain_distance(i, count, one, reverse, line);
                 let t = clamp01((front - d) / edge);
                 for c in 0..3 {
                     let j = i * 3 + c;
@@ -442,6 +691,65 @@ pub fn blend_flow(buf_a: &[u8], buf_b: &[u8], factor: f64, style: &str, accent: 
                 }
             }
             out
+        }
+        "sweep" => {
+            if f <= 0.0 {
+                return a;
+            }
+            if f >= 1.0 {
+                return b;
+            }
+            let light = accent.map(|c| (c.0 as f64, c.1 as f64, c.2 as f64)).unwrap_or((255.0, 255.0, 255.0));
+            let light = [light.0, light.1, light.2];
+            let edge = pmax(EDGE_SHARE, 1.0 / count.max(1) as f64);
+            let front = smoothstep(f) * (1.0 + edge);
+            let amp = (PI * f).sin().powf(0.4);
+            let glow = pmax(SWEEP_GLOW, 1.0 / count as f64);
+            let mut out = vec![0u8; n_bytes];
+            for i in 0..count {
+                let d = curtain_distance(i, count, true, reverse, line);
+                let t = clamp01((front - d) / edge);
+                let g = (-((d - front) / glow).powf(2.0)).exp() * amp;
+                for c in 0..3 {
+                    let j = i * 3 + c;
+                    let va = a[j] as f64;
+                    let v = va + (b[j] as f64 - va) * t;
+                    out[j] = byte((v + (light[c] - v) * g + 0.5) as i64);
+                }
+            }
+            out
+        }
+        "spread" => {
+            let edge = pmax(EDGE_SHARE, 1.0 / count.max(1) as f64);
+            let front = smoothstep(f) * (1.0 + edge);
+            let mut out = vec![0u8; n_bytes];
+            for i in 0..count {
+                let d = origin_distance((i as f64 + 0.5) / count as f64, origin, line);
+                let t = clamp01((front - d) / edge);
+                for c in 0..3 {
+                    let j = i * 3 + c;
+                    let va = a[j] as f64;
+                    out[j] = byte((va + (b[j] as f64 - va) * t + 0.5) as i64);
+                }
+            }
+            out
+        }
+        "dissolve" => {
+            let mut out = vec![0u8; n_bytes];
+            for i in 0..count {
+                let t = clamp01((f * (1.0 + DISSOLVE_SPREAD) - hash01(i as i64, 991)) / DISSOLVE_SPREAD);
+                for c in 0..3 {
+                    let j = i * 3 + c;
+                    let va = a[j] as f64;
+                    out[j] = byte((va + (b[j] as f64 - va) * t + 0.5) as i64);
+                }
+            }
+            out
+        }
+        "dip" => {
+            let src = if f < 0.5 { &a } else { &b };
+            let level = smoothstep((f - 0.5).abs() * 2.0);
+            src.iter().map(|&v| byte((v as f64 * level + 0.5) as i64)).collect()
         }
         _ => lerp_all(&a, &b, smoothstep(f)),
     }

@@ -39,14 +39,16 @@ const OPTION_LABELS = {
   pulses: ['Pulses', { 1: '1', 2: '2', 3: '3' }],
   tail: ['Tail', { short: 'Short', long: 'Long' }],
   comets: ['Comets', { 1: 'One', 2: 'Two' }],
-  sides: ['Fills from', { both: 'The top, both ways', one: 'The top, one way' }],
+  sides: ['Fills', { both: 'From two sides', one: 'One way along' }],
   palette: ['Colours', { vivid: 'Vivid', soft: 'Soft' }],
-  amount: ['Amount', { few: 'Few', some: 'Some', many: 'Many' }]
+  amount: ['Amount', { few: 'Few', some: 'Some', many: 'Many' }],
+  waves: ['Waves', { 1: '1', 2: '2', 3: '3' }],
+  edges: ['Edges', { soft: 'Soft', sharp: 'Sharp' }]
 };
 
-const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'curtain', 'sparkle']);
+const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'curtain', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire']);
 const NO_COLOUR = new Set(['rainbow']);
-const CAN_REVERSE = new Set(['chase', 'curtain', 'rainbow']);
+const CAN_REVERSE = new Set(['chase', 'curtain', 'rainbow', 'wave', 'meteors', 'fire']);
 const PLAYER_STEPS = new Set(['takeout', 'leg_won', 'match_won']);
 
 const page = {
@@ -89,6 +91,16 @@ function resolved(effect, forcePlayer = false, player = 0) {
 function stepLook(id) {
   const step = page.draft.steps[id];
   return resolved(step.effect, id === 'turn');
+}
+
+// The selected segment is a straight strip with two ends (set on its controller's page); otherwise a loop
+const isLine = () => currentSeg()?.shape === 'line';
+
+// What the two directions are called: it depends on the shape, and on whether the look runs along the strip
+// or comes in from two sides
+function directionLabels(twoSided) {
+  if (twoSided) return isLine() ? { false: 'From the middle', true: 'From the ends' } : { false: 'From the start point', true: 'From the far side' };
+  return isLine() ? { false: 'From the start', true: 'From the end' } : { false: 'Clockwise', true: 'Anticlockwise' };
 }
 
 function allSegments() {
@@ -165,7 +177,7 @@ function loopTime(t, effect) {
 }
 
 function lookFrame(effect) {
-  return (t, n) => renderFlowFrame(effect, loopTime(t, effect), n);
+  return (t, n) => renderFlowFrame(effect, loopTime(t, effect), n, isLine());
 }
 
 function stepFrame(id) {
@@ -174,7 +186,7 @@ function stepFrame(id) {
     if (!step) return new Uint8ClampedArray(n * 3);
     if (!step.effect.enabled) return new Uint8ClampedArray(n * 3);
     const eff = stepLook(id);
-    return renderFlowFrame(eff, loopTime(t, eff), n);
+    return renderFlowFrame(eff, loopTime(t, eff), n, isLine());
   };
 }
 
@@ -186,11 +198,11 @@ function transitionFrame(id) {
     const dur = tr.style === 'instant' ? 0 : tr.duration;
     const cycle = 0.7 + dur + 1.0;
     const u = t % cycle;
-    const a = before ? renderFlowFrame(before, u, n) : new Uint8ClampedArray(n * 3);
-    const b = renderFlowFrame(stepLook(id), Math.max(0, u - 0.7), n);
+    const a = before ? renderFlowFrame(before, u, n, isLine()) : new Uint8ClampedArray(n * 3);
+    const b = renderFlowFrame(stepLook(id), Math.max(0, u - 0.7), n, isLine());
     if (u < 0.7) return a;
     if (dur <= 0 || u >= 0.7 + dur) return b;
-    return blendFlow(a, b, (u - 0.7) / dur, tr.style, tr.accent_color || null);
+    return blendFlow(a, b, (u - 0.7) / dur, tr.style, tr.accent_color || null, !!tr.reverse, isLine());
   };
 }
 
@@ -201,10 +213,10 @@ function styleFrame(style, id) {
     const cycle = 0.5 + dur + 0.7;
     const u = t % cycle;
     const a = new Uint8ClampedArray(n * 3).fill(30);
-    const b = renderFlowFrame(stepLook(id), 0, n);
+    const b = renderFlowFrame(stepLook(id), 0, n, isLine());
     if (u < 0.5) return a;
     if (dur <= 0 || u >= 0.5 + dur) return b;
-    return blendFlow(a, b, (u - 0.5) / dur, style, step.transition.accent_color || null);
+    return blendFlow(a, b, (u - 0.5) / dur, style, step.transition.accent_color || null, !!step.transition.reverse, isLine());
   };
 }
 
@@ -685,7 +697,7 @@ function chartNode(id, box) {
   el.append(
     h('span', { class: 'fc-title' }, dot, nodeLabel(id)),
     h('span', { class: 'fc-meta' }, on ? `${(effectMeta(eff.animation)?.label || 'Solid')} · ${timing}` : 'Off'),
-    strip(step === 'turn' ? ((t, n) => renderFlowFrame(resolved(eff, true, player), t, n)) : stepFrame(step), { leds: 36, cls: 'fc-strip' }));
+    strip(step === 'turn' ? ((t, n) => renderFlowFrame(resolved(eff, true, player), t, n, isLine())) : stepFrame(step), { leds: 36, cls: 'fc-strip' }));
   return el;
 }
 
@@ -916,7 +928,7 @@ function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoic
       onset: (v, done) => setEffect(e => { e.brightness = v >= 100 ? null : v; }, done)
     }),
     CAN_REVERSE.has(effect.animation) && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
-      segmented([false, true], !!effect.reverse, v => setEffect(e => { e.reverse = v; }), { false: 'Clockwise', true: 'Anticlockwise' })));
+      segmented([false, true], !!effect.reverse, v => setEffect(e => { e.reverse = v; }), directionLabels(effect.animation === 'curtain' && effect.options?.sides !== 'one'))));
   parts.push(more);
   return parts;
 }
@@ -933,8 +945,10 @@ function transitionEditor(id) {
       min: 0.1, max: 2, step: 0.1, value: tr.duration || 0.5, format: seconds,
       onset: (v, done) => setTr(x => { x.duration = v; }, done)
     }),
-    tr.style === 'flash' && h('details', { class: 'fm-more' }, h('summary', {}, 'More'),
-      colourField('Flash colour', tr.accent_color || [255, 255, 255], (c, done) => setTr(x => { x.accent_color = c; }, done)))
+    (tr.style === 'wipe' || tr.style === 'curtain' || tr.style === 'sweep') && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
+      segmented([false, true], !!tr.reverse, v => setTr(x => { if (v) x.reverse = true; else delete x.reverse; }), directionLabels(tr.style === 'curtain'))),
+    (tr.style === 'flash' || tr.style === 'sweep') && h('details', { class: 'fm-more' }, h('summary', {}, 'More'),
+      colourField(tr.style === 'sweep' ? 'Light colour' : 'Flash colour', tr.accent_color || [255, 255, 255], (c, done) => setTr(x => { x.accent_color = c; }, done)))
   ];
 }
 
@@ -1165,7 +1179,9 @@ function locatorCheck() {
   if (!rings.length) return h('p', { class: 'form-hint' }, 'Add a controller to check the hit locator.');
   return h('div', { class: 'fm-locator' },
     h('p', { class: 'form-hint' }, 'Check it once: "Show 20" should light the top of the board, "Show 6" the right side. If 6 lights up on the left, switch the direction. Strips that cover only part of the board: choose Off.'),
-    ...rings.map(seg => h('div', { class: 'fm-locator-row' },
+    ...rings.map(seg => seg.shape === 'line' ? h('div', { class: 'fm-locator-row' },
+      h('span', { class: 'fm-locator-name' }, `${seg.controller} · ${seg.name}`),
+      h('span', { class: 'form-hint' }, 'A line: the hit locator needs a loop around the board.')) : h('div', { class: 'fm-locator-row' },
       h('span', { class: 'fm-locator-name' }, `${seg.controller} · ${seg.name}`),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => tryOnLights('locator', 'turn', { number: 20, ip: seg.ip, segment_id: seg.id }) }, 'Show 20'),
       h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => tryOnLights('locator', 'turn', { number: 6, ip: seg.ip, segment_id: seg.id }) }, 'Show 6'),

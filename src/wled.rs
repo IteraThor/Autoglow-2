@@ -5,6 +5,7 @@
 //! segment's channel (legacy effects, Flow looks with fades, hits and the hit locator) and hands a scene
 //! snapshot to the LED thread whenever it changes.
 
+use crate::effects::Effect;
 use crate::flow_catalog::{normalize_style_str, render_effect};
 use crate::http::{get_json, is_host_online, post_json, post_json_value};
 use crate::led_thread::{self, wall, Scene, Shared};
@@ -796,9 +797,11 @@ struct FadeSt {
     duration: f64,
     style: String,
     accent: Option<(i64, i64, i64)>,
+    reverse: bool,
     frame: Option<Vec<u8>>,
     effect: Option<EffectConfig>,
     effect_start: f64,
+    origin: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -809,6 +812,7 @@ struct OverlaySt {
     layer: EffectConfig,
     mask: EffectConfig,
     brightness: Option<i64>,
+    origin: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -833,6 +837,8 @@ struct Chan {
     fade: Option<FadeSt>,
     overlay: Option<OverlaySt>,
     locator: Option<LocatorSt>,
+    /// Where the last dart landed (see flow_origin); ripples and "from the hit" start there
+    origin: Option<f64>,
     flow_session: i64,
 }
 
@@ -851,6 +857,7 @@ impl Chan {
             fade: None,
             overlay: None,
             locator: None,
+            origin: None,
             flow_session: 0,
         }
     }
@@ -859,6 +866,7 @@ impl Chan {
         self.fade = None;
         self.overlay = None;
         self.locator = None;
+        self.origin = None;
         self.flow_session = next_session();
     }
     fn prune(&mut self, now: f64) {
@@ -1064,7 +1072,7 @@ impl WledDriver {
     }
 
     /// Show a flow step's look on a segment, blending in from what it shows now. False when not streaming.
-    pub fn flow_show(self: &Arc<Self>, segment_id: Option<i64>, effect: &EffectConfig, style: &str, duration: f64, accent: Option<(i64, i64, i64)>) -> bool {
+    pub fn flow_show(self: &Arc<Self>, segment_id: Option<i64>, effect: &EffectConfig, style: &str, duration: f64, accent: Option<(i64, i64, i64)>, reverse: bool) -> bool {
         {
             let mut s = self.lock();
             if s.mode != ProtocolMode::ActiveUdp {
@@ -1087,9 +1095,11 @@ impl WledDriver {
                     duration,
                     style: style.to_string(),
                     accent,
+                    reverse,
                     effect: if frozen.is_some() { None } else { ch.baseline.clone() },
                     frame: frozen,
                     effect_start: ch.baseline_start,
+                    origin: ch.origin,
                 });
             }
             ch.baseline = Some(effect.clone());
@@ -1116,10 +1126,22 @@ impl WledDriver {
                 layer: EffectConfig { color_secondary: effect.color_primary, brightness: None, ..effect.clone() },
                 mask: EffectConfig { color_primary: RGBColor::WHITE, color_secondary: RGBColor::BLACK, brightness: None, ..effect.clone() },
                 brightness: effect.brightness,
+                origin: ch.origin,
             });
         }
         self.ensure_broadcast();
         true
+    }
+
+    /// Remember where the last dart landed (0 = top, clockwise) for ripples and \"from the hit\" transitions
+    pub fn flow_origin(self: &Arc<Self>, segment_id: Option<i64>, position: f64, clockwise: bool) {
+        let mut s = self.lock();
+        if s.mode != ProtocolMode::ActiveUdp {
+            return;
+        }
+        let ch = Self::flow_channel(&mut s, segment_id);
+        let pos = crate::effects::pymod(position, 1.0);
+        ch.origin = Some(if clockwise { pos } else { crate::effects::pymod(1.0 - pos, 1.0) });
     }
 
     /// Light the part of a segment next to a board position (0 = top, 0.25 = right, clockwise)
@@ -1208,11 +1230,16 @@ impl WledDriver {
             if ch.flow {
                 ch.prune(now);
             }
+            // A line has two ends: its looks know that, and nothing is rotated round a start point
+            let line = ch.flow && cfg.segments.iter().any(|sg| sg.id == *id && sg.line);
+            let render_effect = |e: &EffectConfig| Effect { line, ..render_effect(e) };
+            let with_origin = |e: &EffectConfig, origin: Option<f64>| Effect { origin, ..render_effect(e) };
             channels.push(led_thread::Channel {
                 id: *id,
                 start: ch.start,
                 stop: ch.stop,
-                offset: segment_offset(&cfg, *id),
+                offset: if line { 0 } else { segment_offset(&cfg, *id) },
+                line,
                 baseline: ch.baseline.as_ref().map(render_effect),
                 baseline_start: ch.baseline_start,
                 transient: ch.transient.as_ref().map(render_effect),
@@ -1227,9 +1254,11 @@ impl WledDriver {
                         duration: f.duration,
                         style: normalize_style_str(&f.style),
                         accent: f.accent.map(|(r, g, b)| (clamp(r, 0, 255) as u8, clamp(g, 0, 255) as u8, clamp(b, 0, 255) as u8)),
+                        reverse: f.reverse,
                         frame: f.frame.clone(),
                         effect: f.effect.as_ref().map(render_effect),
                         effect_start: f.effect_start,
+                        origin: f.origin,
                     })
                 } else {
                     None
@@ -1239,8 +1268,8 @@ impl WledDriver {
                         start: o.start,
                         duration: o.duration,
                         strength: o.strength,
-                        layer: render_effect(&o.layer),
-                        mask: render_effect(&o.mask),
+                        layer: with_origin(&o.layer, o.origin),
+                        mask: with_origin(&o.mask, o.origin),
                         brightness: o.brightness,
                     })
                 } else {
