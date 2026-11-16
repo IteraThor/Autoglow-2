@@ -212,9 +212,22 @@ impl FlowRuntime {
                 let p = self.slot(s, event.player_index, event.player_name.as_deref());
                 self.turn(s, p).await;
             }
-            Takeout | TakeoutInProgress => {
-                if s.step == "turn" && !Self::held(s) {
+            // Takeout: waiting for the darts to be pulled. In progress: a hand is at the board (Autodarts may go
+            // back and forth between the two). A strip without its own in-progress look keeps the takeout look.
+            Takeout => {
+                if ["turn", "takeout_in_progress"].contains(&s.step.as_str()) && !Self::held(s) {
                     self.enter(s, "takeout", None).await;
+                }
+            }
+            TakeoutInProgress => {
+                if ["turn", "takeout"].contains(&s.step.as_str()) && !Self::held(s) {
+                    if self.segments_with("takeout_in_progress").is_empty() {
+                        if s.step == "turn" {
+                            self.enter(s, "takeout", None).await;
+                        }
+                    } else {
+                        self.enter(s, "takeout_in_progress", None).await;
+                    }
                 }
             }
             LegWon => {
@@ -365,7 +378,7 @@ impl FlowRuntime {
             s.player = p;
         }
         s.step = step_id.into();
-        if ["turn", "takeout", "leg_won", "match_won"].contains(&step_id) {
+        if ["turn", "takeout", "takeout_in_progress", "leg_won", "match_won"].contains(&step_id) {
             info!("Flow -> {} (player {})", step_id, s.player + 1);
         } else {
             info!("Flow -> {}", step_id);
@@ -560,10 +573,12 @@ pub async fn run_preview(runtime: Arc<FlowRuntime>, players: i64, bull_off: bool
                 visit += 1;
                 let final_visit = rnd == 1 && k == players - 1;
                 if !final_visit {
-                    let mut t = ev(DartEventType::TakeoutInProgress);
-                    t.player_index = Some(p);
-                    send(t).await;
-                    sleep(TAKEOUT_TIME).await;
+                    for kind in [DartEventType::Takeout, DartEventType::TakeoutInProgress] {
+                        let mut t = ev(kind);
+                        t.player_index = Some(p);
+                        send(t).await;
+                        sleep(TAKEOUT_TIME / 2.0).await;
+                    }
                 }
             }
         }

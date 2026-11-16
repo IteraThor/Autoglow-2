@@ -93,12 +93,22 @@ fn player_colours_follow_names_like_python() {
 
 #[test]
 fn flows_serialize_like_python() {
+    // The Python reference has no Pulling in progress step: it must come out as an off copy of Pulling darts
+    let without_pulling = |f: &GameFlow| {
+        let mut v = f.to_value();
+        let steps = v["steps"].as_object_mut().unwrap();
+        let mut copy = steps["takeout"].clone();
+        copy["effect"]["enabled"] = json!(false);
+        copy.as_object_mut().unwrap().remove("from");
+        assert_eq!(steps.shift_remove("takeout_in_progress").unwrap(), copy);
+        v
+    };
     let r = reference();
-    assert_eq!(create_default_game_flow().to_value(), r["default_flow"]);
+    assert_eq!(without_pulling(&create_default_game_flow()), r["default_flow"]);
     let v1 = GameFlow::from_value(&fixture("game_flows_v1_2026-11-01.json"), None);
-    assert_eq!(v1.to_value(), r["v1"]);
+    assert_eq!(without_pulling(&v1), r["v1"]);
     // Reading what was written gives the same flow again
-    assert_eq!(GameFlow::from_value(&v1.to_value(), None).to_value(), r["v1"]);
+    assert_eq!(without_pulling(&GameFlow::from_value(&v1.to_value(), None)), r["v1"]);
 }
 
 #[test]

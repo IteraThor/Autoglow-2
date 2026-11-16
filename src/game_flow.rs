@@ -1,7 +1,9 @@
 //! Game flow model and storage (Flow Matrix).
 //!
 //! A flow profile describes how the light strips follow a match:
-//!     Waiting -> Bull-off -> Game starts -> [Player's turn <-> Pulling darts] -> Leg won -> ... -> Match won -> Waiting
+//!     Waiting -> Bull-off -> Game starts -> [Player's turn <-> Pulling darts (-> Pulling in progress)] -> Leg won -> ... -> Match won -> Waiting
+//! - Pulling darts: the turn is over and the board waits for the darts to be pulled. Pulling in progress: the board
+//!   sees a hand at the board (off in every preset; a profile without it simply keeps the Pulling darts look).
 //! - Steps: an on/off switch, a look (one of the curated Flow Matrix effects) and the transition it comes in
 //!   with. A step that is off is skipped: the next step simply comes in with its own transition.
 //! - Hits (1x, 180, Bull ...) play on top of the current look and fade back into it.
@@ -21,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub const FILE_VERSION: i64 = 2;
-pub const STEP_IDS: [&str; 6] = ["bull_off", "game_start", "turn", "takeout", "leg_won", "match_won"];
+pub const STEP_IDS: [&str; 7] = ["bull_off", "game_start", "turn", "takeout", "takeout_in_progress", "leg_won", "match_won"];
 pub const TIMED_STEPS: [&str; 3] = ["game_start", "leg_won", "match_won"];
 pub const ALWAYS_ON_STEPS: [&str; 1] = ["turn"];
 pub const HIT_IDS: [&str; 9] = ["single", "double", "triple", "bullseye", "miss", "bust", "ton", "ton40", "180"];
@@ -35,6 +37,7 @@ pub fn step_label(id: &str) -> &'static str {
         "game_start" => "Game starts",
         "turn" => "Player's turn",
         "takeout" => "Pulling darts",
+        "takeout_in_progress" => "Pulling in progress",
         "leg_won" => "Leg won",
         "match_won" => "Match won",
         _ => "",
@@ -258,6 +261,15 @@ impl GameFlow {
     }
 
     fn post_init(&mut self) {
+        // A profile from before Pulling in progress existed: it starts as an off copy of Pulling darts
+        if !self.steps.contains_key("takeout_in_progress") {
+            if let Some(t) = self.steps.get("takeout") {
+                let mut copy = t.clone();
+                copy.effect.enabled = false;
+                copy.from.clear();
+                self.steps.insert("takeout_in_progress".into(), copy);
+            }
+        }
         for sid in STEP_IDS {
             self.steps.entry(sid.into()).or_insert_with(|| FlowStep::new(EffectConfig { enabled: false, options: Some(Obj::new()), ..Default::default() }, FlowTransition::default()));
         }

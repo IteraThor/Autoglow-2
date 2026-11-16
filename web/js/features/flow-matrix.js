@@ -19,7 +19,8 @@ const STEP_HELP = {
   bull_off: 'Plays while players throw for the bull to decide who starts.',
   game_start: 'A short intro when the match begins. The first turn waits for it.',
   turn: 'Shows whose turn it is in that player\'s colour. Every match comes back to this look.',
-  takeout: 'Shows while darts are pulled from the board, until the next turn starts.',
+  takeout: 'Shows once the turn is over, while the board waits for the darts to be pulled.',
+  takeout_in_progress: 'Shows while a hand is at the board pulling the darts, until the next turn starts.',
   leg_won: 'Celebrates a won leg in the winner\'s colour. The next leg waits for it.',
   match_won: 'The finale. Afterwards the lights go back to waiting.'
 };
@@ -28,6 +29,7 @@ const OFF_TEXT = {
   bull_off: 'the waiting lights stay on during the bull-off',
   game_start: 'the first turn comes in straight away',
   takeout: 'the lights change straight to the next player',
+  takeout_in_progress: 'the pulling darts look stays while the darts are pulled',
   leg_won: 'the next leg starts straight away',
   match_won: 'the lights go back to waiting when the match ends'
 };
@@ -40,7 +42,7 @@ const stepOfKey = key => key.split('<')[0];
 const beforeOf = key => key.split('<')[1] || BEFORE[key];
 
 // The step that is usually showing before a step comes in (for transition previews)
-const BEFORE = { bull_off: null, game_start: 'bull_off', turn: 'takeout', takeout: 'turn', leg_won: 'turn', match_won: 'turn' };
+const BEFORE = { bull_off: null, game_start: 'bull_off', turn: 'takeout', takeout: 'turn', takeout_in_progress: 'takeout', leg_won: 'turn', match_won: 'turn' };
 
 const OPTION_LABELS = {
   pulses: ['Pulses', { 1: '1', 2: '2', 3: '3' }],
@@ -55,7 +57,7 @@ const OPTION_LABELS = {
 const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire']);
 const NO_COLOUR = new Set(['rainbow']);
 const CAN_REVERSE = new Set(['chase', 'rainbow', 'wave', 'meteors', 'fire']);
-const PLAYER_STEPS = new Set(['takeout', 'leg_won', 'match_won']);
+const PLAYER_STEPS = new Set(['takeout', 'takeout_in_progress', 'leg_won', 'match_won']);
 
 const page = {
   root: null,
@@ -548,6 +550,7 @@ const LAYOUTS = {
         game_start: { x: 490, y: top + 70, w: W, h: H },
         p1: { x: 745, y: top + 70, w: W, h: H },
         takeout: { x: 990, y: top + 70, w: W, h: H },
+        takeout_in_progress: { x: 975, y: top + 200, w: W + 30, h: H },
         p2: { x: 1235, y: top + 70, w: W, h: H },
         match_won: { x: 1530, y: top + 0, w: W, h: H },
         leg_won: { x: 1530, y: top + 160, w: W, h: H },
@@ -556,7 +559,8 @@ const LAYOUTS = {
       },
       frame: { x: 710, y: top - 14, w: 720, h: 254 },
       chips: { x: 728, y: top - 2, w: 690 },
-      players: { x: 990, y: top + 182 }
+      players: { x: 990, y: top + 182 },
+      pullRow: 130 // extra height while Pulling in progress shows (its own row under Pulling darts)
     };
   })(),
   vertical: (() => {
@@ -571,13 +575,15 @@ const LAYOUTS = {
         game_start: { x: cx, y: 300, w: W, h: H },
         p1: { x: cx, y: 500, w: W, h: H },
         takeout: { x: cx, y: 640, w: W, h: H },
+        takeout_in_progress: { x: cx + 270, y: 640, w: 200, h: H },
         p2: { x: cx, y: 780, w: W, h: H },
         match_won: { x: cx - 70, y: 970, w: W, h: H },
         leg_won: { x: cx + 230, y: 970, w: W, h: H }
       },
       frame: { x: cx - 50, y: 410, w: 640, h: 466 },
       chips: { x: cx + 132, y: 424, w: 440 },
-      players: { x: cx + 245, y: 805 }
+      players: { x: cx + 245, y: 805 },
+      pullRow: 0
     };
   })()
 };
@@ -593,9 +599,12 @@ const EDGES = {
     { from: ['takeout', 'l', 16], to: ['p1', 'r', 16], step: 'turn' },
     { from: ['takeout', 'r', -16], to: ['p2', 'l', -16], step: 'turn' },
     { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout' },
+    { from: ['takeout', 'b'], to: ['takeout_in_progress', 't'], step: 'takeout_in_progress', pull: true },
+    { from: ['takeout_in_progress', 'l'], to: ['p1', 'b', 40], step: 'turn', pull: true },
+    { from: ['takeout_in_progress', 'r'], to: ['p2', 'b', -40], step: 'turn', pull: true },
     { from: ['frame', 'r'], to: ['match_won', 'l'], step: 'match_won' },
     { from: ['frame', 'r'], to: ['leg_won', 'l'], step: 'leg_won' },
-    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', src: 'leg_won', label: 'next leg', out: 44, endsHere: true },
+    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', src: 'leg_won', label: 'next leg', out: 44, pullOut: 130, endsHere: true },
     { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', out: 36, bypass: ['frame', 't'] },
     { from: ['waiting', 'b'], to: ['timeout', 't'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
@@ -608,9 +617,12 @@ const EDGES = {
     { from: ['takeout', 't', 50], to: ['p1', 'b', 50], step: 'turn' },
     { from: ['takeout', 'b', -50], to: ['p2', 't', -50], step: 'turn' },
     { from: ['p2', 't', 50], to: ['takeout', 'b', 50], step: 'takeout' },
+    { from: ['takeout', 'r'], to: ['takeout_in_progress', 'l'], step: 'takeout_in_progress', pull: true },
+    { from: ['takeout_in_progress', 't'], to: ['p1', 'b', 90], step: 'turn', pull: true },
+    { from: ['takeout_in_progress', 'b'], to: ['p2', 't', 90], step: 'turn', pull: true },
     { from: ['frame', 'b'], to: ['match_won', 't'], step: 'match_won' },
     { from: ['frame', 'b'], to: ['leg_won', 't'], step: 'leg_won' },
-    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', src: 'leg_won', label: 'next leg', out: 60, endsHere: true },
+    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', src: 'leg_won', label: 'next leg', out: 60, at: 0.2, endsHere: true },
     { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70, bypass: ['frame', 'l'] },
     { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
@@ -644,9 +656,25 @@ function nodeHidden(id) {
   return !!page.draft.steps[step] && !stepMeta(step).always_on && !stepOn(step);
 }
 
-function visibleChart(view) {
+// Pulling in progress sits beside Pulling darts (its own row in the horizontal chart): shown, the match frame grows
+// to hold it; hidden, it leaves with its arrows and the chart is as it was without it
+function withPulling(view) {
   const base = LAYOUTS[view];
-  if (showDisabled()) return { L: base, edges: EDGES[view] };
+  if (showDisabled() || !nodeHidden('takeout_in_progress')) {
+    const grow = base.pullRow;
+    if (!grow) return { L: base, edges: EDGES[view] };
+    return {
+      L: { ...base, height: base.height + grow, frame: { ...base.frame, h: base.frame.h + grow }, players: { ...base.players, y: base.players.y + grow } },
+      edges: EDGES[view].map(e => (e.pullOut ? { ...e, out: e.out + e.pullOut } : e))
+    };
+  }
+  const { takeout_in_progress: _, ...nodes } = base.nodes;
+  return { L: { ...base, nodes }, edges: EDGES[view].filter(e => !e.pull) };
+}
+
+function visibleChart(view) {
+  const { L: base, edges: baseEdges } = withPulling(view);
+  if (showDisabled()) return { L: base, edges: baseEdges };
   const hidden = Object.keys(base.nodes).filter(nodeHidden);
   const [pos, size, total] = view === 'vertical' ? ['y', 'h', 'height'] : ['x', 'w', 'width'];
   const cuts = hidden.filter(id => GAPS[view][id]).map(id => [base.nodes[id][pos], GAPS[view][id]]);
@@ -667,7 +695,7 @@ function visibleChart(view) {
     nodes: Object.fromEntries(Object.entries(base.nodes).filter(([id]) => !hidden.includes(id)).map(([id, box]) => [id, close(box)])),
     frame: close(base.frame), chips: close(base.chips), players: close(base.players)
   };
-  let edges = EDGES[view];
+  let edges = baseEdges;
   for (const id of hidden) {
     const into = edges.filter(e => e.to[0] === id);
     const out = edges.filter(e => e.from[0] === id && !e.endsHere);
@@ -918,7 +946,7 @@ function fitChart(scroller, sizer, stage, L) {
 
 function playersRow() {
   const players = page.draft.players;
-  const liveP = page.live && ['turn', 'takeout'].includes(page.live.step) ? page.live.player : null;
+  const liveP = page.live && ['turn', 'takeout', 'takeout_in_progress'].includes(page.live.step) ? page.live.player : null;
   return h('button', {
     type: 'button', class: `fc-players${isSelected('players') ? ' is-selected' : ''}`, onclick: () => select({ kind: 'players' }),
     title: 'Player colours'
@@ -1189,7 +1217,7 @@ function stepPanel(id) {
     h('div', { class: step.effect.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(step.effect, {
         setEffect, play: playOnClick('step', id), timed: meta.timed, forcePlayer: id === 'turn', playerChoice: PLAYER_STEPS.has(id),
-        playerWord: id === 'takeout' ? 'Player colour' : 'Winner\'s colour'
+        playerWord: id.startsWith('takeout') ? 'Player colour' : 'Winner\'s colour'
       })),
       h('button', { type: 'button', class: 'fm-link-row', onclick: () => select({ kind: 'transition', id }) },
         h('span', { class: 'fm-link-label' }, 'Comes in with'),
@@ -1672,7 +1700,7 @@ function onTelemetry(msg) {
 function updateLive() {
   const root = page.root;
   if (!root || !root.isConnected) return;
-  const liveP = page.live && ['turn', 'takeout'].includes(page.live.step) ? page.live.player : null;
+  const liveP = page.live && ['turn', 'takeout', 'takeout_in_progress'].includes(page.live.step) ? page.live.player : null;
   root.querySelectorAll('.fc-node[data-step]').forEach(el => {
     let on = page.live?.step === el.dataset.step;
     if (on && el.dataset.step === 'turn') on = (el.dataset.node === 'p1') === ((page.live.player || 0) % 2 === 0);
