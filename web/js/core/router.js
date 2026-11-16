@@ -16,8 +16,7 @@ export const VIEWS = [
   {
     id: 'lighting', label: 'Lighting', path: '/lighting',
     subs: [
-      { id: 'matrix', label: 'Event Matrix (legacy)', pane: 'tab-effects', mode: 'matrix' },
-      { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator', mode: 'flow' }
+      { id: 'flow', label: 'Flow Matrix', pane: 'tab-simulator' }
     ]
   },
   // One page: setup and the show as a timeline (web/js/features/studio.js); old /studio/<sub> links land here
@@ -35,7 +34,7 @@ const ALIASES = {
   '/': '/lighting/flow', '/index.html': '/lighting/flow', '/hub': '/lighting/flow', '/home': '/lighting/flow',
   '/devices': '/setup/controllers', '/wled-devices': '/setup/controllers',
   '/autodarts': '/setup/connection', '/autodarts-account': '/setup/connection',
-  '/matrix': '/lighting/matrix', '/event-matrix': '/lighting/matrix',
+  '/matrix': '/lighting/flow', '/event-matrix': '/lighting/flow', '/lighting/matrix': '/lighting/flow',
   '/studio/players': '/players',
   '/simulator': '/lighting/flow', '/led-simulator': '/lighting/flow',
   '/power': '/settings', '/power-timers': '/settings', '/idle': '/settings', '/idle-mode': '/settings',
@@ -43,11 +42,6 @@ const ALIASES = {
 };
 
 function defaultSub(view) {
-  if (view.id === 'lighting') {
-    const mode = appStore.get().lightingMode;
-    // Flow Matrix unless the legacy Event Matrix engine is chosen
-    return view.subs.find(s => s.mode === mode) || view.subs.find(s => s.id === 'flow');
-  }
   return view.subs[0];
 }
 
@@ -58,7 +52,6 @@ export function resolve(rawPath) {
   const [, viewId, subId, rawParam] = path.split('/');
   const view = VIEWS.find(v => v.id === viewId) || VIEWS.find(v => v.id === 'lighting');
   if (!view.subs) return { view, sub: null, param: null, pane: view.pane, path: view.path };
-  // Lighting always shows the engine selected in Settings
   const sub = view.id === 'lighting' ? defaultSub(view) : view.subs.find(s => s.id === subId) || defaultSub(view);
   const param = sub.detail && sub.id === subId && rawParam ? decodeURIComponent(rawParam) : null;
   const subPath = `${view.path}/${sub.id}`;

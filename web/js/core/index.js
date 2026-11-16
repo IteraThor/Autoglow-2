@@ -8,7 +8,6 @@ import { esc, h, showFieldError, clearFieldError } from './dom.js';
 import { router } from './router.js';
 import { appStore } from './store.js';
 import { toast } from './toast.js';
-import { initModeSwitch, setLightingMode } from '../components/mode-switch.js';
 import { initShell } from '../components/shell.js';
 import { initControllers } from '../features/controllers.js';
 import { initFlowMatrix } from '../features/flow-matrix.js';
@@ -31,12 +30,10 @@ Object.assign(window, {
   appStore,
   connection,
   router,
-  switchLightingMode: setLightingMode,
   dom: { esc, h, showFieldError, clearFieldError }
 });
 
 initShell();
-initModeSwitch();
 initControllers();
 initReadiness();
 initSettings();

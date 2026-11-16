@@ -24,7 +24,6 @@ mod flow_routes;
 mod hub;
 mod misc_routes;
 mod power;
-mod profiles;
 mod studio_routes;
 mod club_routes;
 mod join_routes;
@@ -86,11 +85,6 @@ pub fn parse_multipart(req: &Req) -> Vec<Part> {
     out
 }
 
-/// The first uploaded file of a multipart body: (file name, bytes)
-pub async fn first_multipart_file(req: &Req) -> Option<(Option<String>, Vec<u8>)> {
-    parse_multipart(req).into_iter().next().map(|p| (p.filename, p.data))
-}
-
 /// Every page of the single-page app. The first group is canonical; the rest are older links that
 /// web/js/core/router.js redirects to their canonical page.
 pub const SPA_PATHS: &[&str] = &[
@@ -144,12 +138,6 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/setup/checklist", get(hub::setup_checklist))
         .route("/api/config", get(config::get_config).post(config::post_config))
         .route("/api/config/reset", post(config::reset_config))
-        .route("/api/matrix/presets", get(profiles::get_presets).delete(profiles::delete_preset))
-        .route("/api/matrix/presets/select", post(profiles::select_preset))
-        .route("/api/matrix/presets/save", post(profiles::save_preset))
-        .route("/api/matrix/presets/rename", post(profiles::rename_preset))
-        .route("/api/matrix/presets/export", get(profiles::export_preset))
-        .route("/api/matrix/presets/import", post(profiles::import_preset))
         .route("/api/ping", get(wled_routes::ping))
         .route("/api/wled/update", post(wled_routes::wled_update))
         .route("/api/wled/preset", get(wled_routes::get_wled_preset).post(wled_routes::save_wled_preset))
@@ -196,7 +184,6 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/flow/preview/stop", post(flow_routes::preview_stop))
         .route("/api/flow/segment-direction", post(flow_routes::segment_direction))
         .route("/api/flow/standby", post(flow_routes::standby))
-        .route("/api/flow/mode", get(flow_routes::get_mode).post(flow_routes::set_mode))
         .route("/api/studio", get(studio_routes::get_studio).post(studio_routes::post_studio))
         .route("/api/studio/players", post(studio_routes::save_player))
         .route("/api/studio/players/{id}", post(studio_routes::update_player).merge(delete(studio_routes::delete_player)))

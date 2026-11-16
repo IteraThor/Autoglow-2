@@ -1,5 +1,5 @@
 //! Unified async engine & event coordinator: Autodarts event ingestion, idle power management,
-//! profile-driven lighting (Event Matrix) or the Flow Matrix runtime, and live UI telemetry.
+//! the Flow Matrix runtime, and live UI telemetry.
 //!
 //! The engine also owns the current AppConfig; routes read and replace it through engine.cfg.
 
@@ -23,26 +23,11 @@ const IDLE_PRESET_ID: i64 = 1;
 const IDLE_PRESET_NAME: &str = "AutoGlow Default";
 
 use DartEventType::*;
-const BULL_OFF_HOLD_ENDS: [DartEventType; 6] = [BullOffWon, GameStart, GameIdle, LegWon, MatchWon, GameFinish];
-const INTRO_EVENTS: [DartEventType; 2] = [GameStart, BullOffStart];
-const INTRO_ENDING_EVENTS: [DartEventType; 12] = [Single, Double, Triple, Bullseye, Bust, Score180, Takeout, TakeoutInProgress, LegWon, MatchWon, GameIdle, BullOffWon];
-const MATCH_END_EVENTS: [DartEventType; 2] = [MatchWon, GameFinish];
-const MATCHLESS_GAME_EVENTS: [DartEventType; 8] = [GameStart, BullOffStart, Single, Double, Triple, Bullseye, Score180, Bust];
-const NON_GAME_EVENTS: [DartEventType; 3] = [Calibrating, ManualReset, GameIdle];
 
 /// PWM white spotlight segments are driven by brightness, not by RGB effects
 pub fn is_pwm_segment(seg: &SegmentConfig) -> bool {
     let t = seg.r#type.to_lowercase();
     t.contains("pwm") || t.contains("white") || seg.name.to_lowercase().contains("pwm")
-}
-
-/// The segments of a device that play effects; [None] when it has none, so all its LEDs play
-pub fn effect_segment_ids(dev: &DeviceConfig) -> Vec<Option<i64>> {
-    if dev.segments.is_empty() {
-        vec![None]
-    } else {
-        dev.segments.iter().filter(|s| !is_pwm_segment(s)).map(|s| Some(s.id)).collect()
-    }
 }
 
 fn abort(t: &mut Option<JoinHandle<()>>) -> bool {
@@ -65,16 +50,11 @@ pub struct EngState {
     pub last_event_name: String,
     pub previous_event_name: String,
     running: bool,
-    game_start_end_time: f64,
-    pending_throw: Option<DartEvent>,
     /// A held Bull-off Started effect (duration 0) stays on through the bull-off instead of the turn colours
-    bull_off_hold: bool,
     /// Set when the Lighting page plays a test effect, so leaving the page can restore idle
     pub lighting_test_active: bool,
     pub flow_idle_pending: bool,
     idle_task: Option<JoinHandle<()>>,
-    game_start_task: Option<JoinHandle<()>>,
-    match_end_task: Option<JoinHandle<()>>,
 }
 
 pub struct Engine {
@@ -109,14 +89,9 @@ impl Engine {
                 last_event_name: "Standby".into(),
                 previous_event_name: "\u{2014}".into(),
                 running: false,
-                game_start_end_time: 0.0,
-                pending_throw: None,
-                bull_off_hold: false,
                 lighting_test_active: false,
                 flow_idle_pending: false,
                 idle_task: None,
-                game_start_task: None,
-                match_end_task: None,
             }),
             telemetry: tx,
             preview: Mutex::new(None),
@@ -257,26 +232,6 @@ impl Engine {
         *self.cfg() = cfg;
     }
 
-    pub fn is_flow_mode(&self) -> bool {
-        self.cfg().lighting_mode == LightingMode::Flow
-    }
-
-    pub async fn set_lighting_mode(&self, mode: LightingMode) {
-        let changed = self.cfg().lighting_mode != mode;
-        if changed {
-            self.runtime().reset(false).await;
-            for drv in self.drivers() {
-                drv.flow_clear();
-            }
-            let mut s = self.state();
-            abort(&mut s.game_start_task);
-            s.game_start_end_time = 0.0;
-            s.pending_throw = None;
-        }
-        self.cfg().lighting_mode = mode;
-        info!("AutoGlow Engine active lighting mode set to: {}", mode.as_str());
-    }
-
     // --- lifecycle ---------------------------------------------------------------------------
 
     pub async fn start(self: &Arc<Self>) {
@@ -303,8 +258,6 @@ impl Engine {
             let mut s = self.state();
             s.running = false;
             abort(&mut s.idle_task);
-            abort(&mut s.match_end_task);
-            abort(&mut s.game_start_task);
         }
         self.runtime().reset(false).await;
         if let Some((h, _)) = self.preview.lock().unwrap().take() {
@@ -423,46 +376,6 @@ impl Engine {
         self.wake_up(ProtocolMode::IdleHttp).await
     }
 
-    fn profile_effect(&self, cfg: &AppConfig, ip: &str, seg: Option<i64>, key: &str) -> Option<EffectConfig> {
-        cfg.profile_for(Some(ip), seg).get_effect(key).cloned()
-    }
-
-    fn max_effect_duration(&self, key: &str) -> f64 {
-        let cfg = self.cfg_clone();
-        let devs = self.active_devices();
-        let mut m: f64 = 0.0;
-        for d in &devs {
-            for sid in effect_segment_ids(d) {
-                if let Some(e) = self.profile_effect(&cfg, &d.ip, sid, key) {
-                    if e.enabled && e.duration > 0.0 {
-                        m = m.max(e.duration);
-                    }
-                }
-            }
-        }
-        if m == 0.0 && devs.is_empty() {
-            if let Some(e) = cfg.profile().get_effect(key) {
-                if e.enabled && e.duration > 0.0 {
-                    m = e.duration;
-                }
-            }
-        }
-        m
-    }
-
-    /// True when any segment's profile plays an effect for the event (Event Matrix only)
-    fn is_event_enabled(&self, key: &str) -> bool {
-        if self.is_flow_mode() {
-            return false;
-        }
-        let cfg = self.cfg_clone();
-        let devs = self.active_devices();
-        if devs.is_empty() {
-            return cfg.profile().get_effect(key).map_or(false, |e| e.enabled);
-        }
-        devs.iter().any(|d| effect_segment_ids(d).into_iter().any(|sid| self.profile_effect(&cfg, &d.ip, sid, key).map_or(false, |e| e.enabled)))
-    }
-
     // --- events ------------------------------------------------------------------------------
 
     pub fn process_event(self: &Arc<Self>, event: DartEvent) -> BoxFuture<'static, ()> {
@@ -480,166 +393,11 @@ impl Engine {
             event.score,
             event.segment_name.clone().unwrap_or_else(|| "None".into())
         );
-        if self.is_flow_mode() {
-            self.process_flow_event(&event).await;
-            return;
-        }
-        self.track_intro(&event);
-        if event.kind() == Throw && self.hold_turn_color(&event).await {
-            return;
-        }
-        let is_end = MATCH_END_EVENTS.contains(&event.kind());
-        let is_idle = event.kind() == GameIdle;
-        let teardown = self.cfg().disconnect_udp_on_match_end;
-        let celebration = if is_end && teardown { self.max_effect_duration("match_won") } else { 0.0 };
-        if !(is_idle || (is_end && teardown && celebration <= 0.0)) {
-            self.wake_for(&event).await;
-        }
-        if is_idle || is_end {
-            self.release_udp_after_match(is_idle, teardown, celebration).await;
-        }
-        self.record_event_name(&event);
-        self.play_event_effect(&event, key).await;
-        let t = self.game_event_telemetry(&event);
-        self.broadcast(t).await;
-    }
-
-    fn track_intro(self: &Arc<Self>, event: &DartEvent) {
-        let k = event.kind();
-        if INTRO_EVENTS.contains(&k) {
-            let dur = self.max_effect_duration(k.as_str());
-            let mut s = self.state();
-            abort(&mut s.game_start_task);
-            abort(&mut s.match_end_task);
-            s.pending_throw = None;
-            if dur > 0.0 {
-                s.game_start_end_time = wall() + dur;
-                let me = Arc::clone(self);
-                s.game_start_task = Some(tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs_f64(dur)).await;
-                    let pending = {
-                        let mut s = me.state();
-                        s.game_start_end_time = 0.0;
-                        s.pending_throw.take()
-                    };
-                    if let Some(p) = pending {
-                        info!("Intro animation finished -> transitioning to active player throw color");
-                        me.process_event(p).await;
-                    }
-                }));
-            } else {
-                s.game_start_end_time = 0.0;
-            }
-        } else if INTRO_ENDING_EVENTS.contains(&k) {
-            let mut s = self.state();
-            abort(&mut s.game_start_task);
-            s.game_start_end_time = 0.0;
-            s.pending_throw = None;
-        }
-        if k == BullOffStart {
-            let hold = self.is_event_enabled(k.as_str()) && self.max_effect_duration(k.as_str()) <= 0.0;
-            self.state().bull_off_hold = hold;
-        } else if BULL_OFF_HOLD_ENDS.contains(&k) {
-            self.state().bull_off_hold = false;
-        }
-    }
-
-    /// True when a THROW's turn colour must wait (held bull-off animation, or the intro: then it is queued)
-    async fn hold_turn_color(&self, event: &DartEvent) -> bool {
-        {
-            let mut s = self.state();
-            if s.bull_off_hold {
-                info!("Bull-off animation held -> skipping the turn color until the bull-off is decided");
-            } else if wall() < s.game_start_end_time {
-                info!("Intro animation playing ({:.1}s remaining) -> queued player throw color", s.game_start_end_time - wall());
-                s.pending_throw = Some(event.clone());
-            } else {
-                return false;
-            }
-        }
-        self.broadcast(json!({
-            "type": "game_event", "event": event.kind().as_str(), "player_name": event.player_name, "player_index": event.player_index,
-            "score": event.score, "multiplier": event.multiplier, "segment": event.segment_name.clone().unwrap_or_default(),
-        }))
-        .await;
-        true
-    }
-
-    async fn wake_for(self: &Arc<Self>, event: &DartEvent) {
-        let k = event.kind();
-        let no_match = self.autodarts.as_ref().map_or(false, |a| a.active_match_id().is_none());
-        let active_game = if no_match { MATCHLESS_GAME_EVENTS.contains(&k) } else { !NON_GAME_EVENTS.contains(&k) };
-        let (off, dim) = {
-            let s = self.state();
-            (s.is_board_off, s.is_board_dimmed)
-        };
-        if active_game {
-            if off || dim || self.any_not_streaming() {
-                self.wake_up(ProtocolMode::ActiveUdp).await;
-            }
-        } else if off || dim {
-            self.wake_up(ProtocolMode::IdleHttp).await;
-        }
-    }
-
-    async fn release_udp_after_match(self: &Arc<Self>, aborted: bool, teardown: bool, celebration: f64) {
-        abort(&mut self.state().match_end_task);
-        if !teardown {
-            return;
-        }
-        if aborted {
-            info!("Match aborted / game idle -> releasing UDP mode and restoring Idle Preset 1 (disconnect_udp_on_match_end is True)");
-            self.set_protocol_mode(ProtocolMode::IdleHttp).await;
-        } else if celebration > 0.0 {
-            info!("Match won celebration scheduled ({:.1}s) -> will disconnect UDP after effect", celebration);
-            let me = Arc::clone(self);
-            self.state().match_end_task = Some(tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs_f64(celebration)).await;
-                info!("Match end celebration finished ({:.1}s) -> releasing UDP mode and restoring Idle Preset 1", celebration);
-                me.set_protocol_mode(ProtocolMode::IdleHttp).await;
-            }));
-        } else {
-            info!("Match won -> releasing UDP mode and restoring Idle Preset 1 immediately");
-            self.set_protocol_mode(ProtocolMode::IdleHttp).await;
-        }
-    }
-
-    fn event_effect(profile: &ProfileConfig, event: &DartEvent, key: &str, players: &[String]) -> Option<EffectConfig> {
-        if event.kind() == Throw {
-            return profile.resolve_player_effect(event.player_name.as_deref(), event.player_index, players);
-        }
-        profile.get_effect(key).cloned()
+        self.process_flow_event(&event).await;
     }
 
     pub fn match_players(&self) -> Vec<String> {
         self.autodarts.as_ref().map(|a| a.current_players()).unwrap_or_default()
-    }
-
-    async fn play_event_effect(&self, event: &DartEvent, key: &str) {
-        let cfg = self.cfg_clone();
-        let players = self.match_players();
-        let devs = self.active_devices();
-        let last = self.state().last_event_name.clone();
-        for d in &devs {
-            let Some(drv) = self.get_driver(Some(&d.ip)) else { continue };
-            for sid in effect_segment_ids(d) {
-                let Some(eff) = Self::event_effect(cfg.profile_for(Some(&d.ip), sid), event, key, &players) else { continue };
-                if !eff.enabled {
-                    continue;
-                }
-                let where_ = sid.map_or_else(|| "all segments".to_string(), |s| format!("Segment #{}", s));
-                info!("Dispatching effect '{}' on {} ({}) {} for '{}'", eff.animation, d.name, d.ip, where_, last);
-                drv.play_effect(&eff, sid, false, None);
-            }
-        }
-        if devs.is_empty() {
-            if let Some(eff) = Self::event_effect(cfg.profile(), event, key, &players).filter(|e| e.enabled) {
-                info!("Dispatching global effect '{}' for '{}'", eff.animation, last);
-                for drv in self.drivers() {
-                    drv.play_effect(&eff, None, false, None);
-                }
-            }
-        }
     }
 
     fn record_event_name(&self, event: &DartEvent) {
@@ -664,7 +422,7 @@ impl Engine {
             "segment_name": event.segment_name.clone().unwrap_or_default(), "score": event.score, "multiplier": event.multiplier,
             "timestamp": wall(), "players": self.match_players(),
             "active_player_idx": self.autodarts.as_ref().map_or(0, |a| a.active_player_idx()),
-            "lighting_mode": self.cfg().lighting_mode.as_str(), "flow_phase": self.flow_active_phase(),
+            "flow_phase": self.flow_active_phase(),
         })
     }
 
@@ -798,9 +556,6 @@ impl Engine {
     /// Write the waiting look to the controllers (all, those in ips, or those playing `profile`).
     /// During a match it waits until the lights are back to waiting. Returns the controllers not reached.
     pub async fn apply_idle(self: &Arc<Self>, ips: Option<Vec<String>>, profile: Option<&str>) -> Vec<String> {
-        if self.cfg().lighting_mode == LightingMode::Matrix {
-            return Vec::new();
-        }
         let devices: Vec<DeviceConfig> = self
             .active_devices()
             .into_iter()

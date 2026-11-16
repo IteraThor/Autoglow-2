@@ -2,7 +2,7 @@
 //! every page polls; it never contacts the controllers) and /api/setup/checklist
 
 use super::*;
-use crate::models::{AppConfig, LightingMode, ProtocolMode};
+use crate::models::{AppConfig, ProtocolMode};
 
 fn seconds_until(limit_min: i64, enabled: bool, idle: f64) -> Value {
     if !enabled {
@@ -25,7 +25,6 @@ pub fn engine_snapshot(s: &S, cfg: &AppConfig) -> Value {
     let idle = (wall() - st.last_activity_time).max(0.0);
     json!({
         "running": true,
-        "lighting_mode": cfg.lighting_mode.as_str(),
         "protocol_mode": if streaming { "udp" } else { "http" },
         "power_state": power,
         "illumination": st.current_illumination,
@@ -93,20 +92,9 @@ pub async fn status(State(s): State<S>) -> ApiResult {
     let cfg = s.engine.cfg_clone();
     let e = engine_snapshot(&s, &cfg);
     ok(json!({
-        "status": "ok", "version": crate::VERSION, "lighting_mode": e["lighting_mode"], "protocol_mode": e["protocol_mode"],
+        "status": "ok", "version": crate::VERSION, "protocol_mode": e["protocol_mode"],
         "power_state": e["power_state"], "flow_phase": e["flow_phase"], "autodarts": autodarts_snapshot(&s),
     }))
-}
-
-/// Flow Matrix ships with working default steps; the Event Matrix needs an enabled effect on a controller
-fn lighting_configured(cfg: &AppConfig) -> bool {
-    if cfg.lighting_mode == LightingMode::Flow {
-        return true;
-    }
-    cfg.devices.iter().filter(|d| !d.ip.is_empty()).any(|d| {
-        let ids: Vec<Option<i64>> = if d.segments.is_empty() { vec![None] } else { d.segments.iter().map(|x| Some(x.id)).collect() };
-        ids.into_iter().any(|sid| cfg.profile_for(Some(&d.ip), sid).events.iter().any(|(_, e)| e.enabled))
-    })
 }
 
 pub async fn setup_checklist(State(s): State<S>) -> ApiResult {
@@ -115,7 +103,7 @@ pub async fn setup_checklist(State(s): State<S>) -> ApiResult {
     let steps = vec![
         json!({"id": "controller", "done": cfg.devices.iter().any(|d| !d.ip.is_empty())}),
         json!({"id": "autodarts", "done": connected}),
-        json!({"id": "lighting", "done": lighting_configured(&cfg)}),
+        json!({"id": "lighting", "done": true}),
     ];
     let complete = steps.iter().all(|s| s["done"] == json!(true));
     ok(json!({"status": "ok", "steps": steps, "complete": complete}))

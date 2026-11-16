@@ -49,9 +49,6 @@ impl AppError {
     pub fn not_found(msg: impl Into<String>) -> AppError {
         AppError::make(404, "NOT_FOUND", false, msg)
     }
-    pub fn conflict(msg: impl Into<String>) -> AppError {
-        AppError::make(409, "CONFLICT", false, msg)
-    }
     pub fn persistence(msg: impl Into<String>) -> AppError {
         AppError::make(500, "PERSISTENCE", true, msg)
     }

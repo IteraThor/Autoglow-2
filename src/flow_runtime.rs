@@ -223,7 +223,7 @@ impl FlowRuntime {
                 let w = self.slot(s, event.player_index, event.player_name.as_deref());
                 self.timed(s, "leg_won", Some(w)).await;
             }
-            MatchWon | GameFinish => {
+            MatchWon => {
                 s.queued_turn = None;
                 let w = if event.player_name.is_some() || event.player_index.is_some() {
                     self.slot(s, event.player_index, event.player_name.as_deref())

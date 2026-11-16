@@ -29,6 +29,5 @@ export function createStore(initial = {}) {
 }
 
 export const appStore = createStore({
-  connected: true,
-  lightingMode: null
+  connected: true
 });

@@ -408,7 +408,7 @@ impl Shared {
         let me = Arc::clone(self);
         let spawned = thread::Builder::new()
             .name("autoglow-led".into())
-            .spawn(move || run(me, epoch));
+            .spawn(move || run_guarded(me, epoch));
         if let Err(e) = spawned {
             let mut s = self.lock();
             s.running = false;
@@ -485,6 +485,18 @@ impl Targets {
             self.addrs = scene.targets.iter().map(|h| (h.clone(), resolve_target(h, scene.port))).collect();
             self.key = key;
             self.resolved_at = Instant::now();
+        }
+    }
+}
+
+/// A panic while drawing must not leave "running" set, or no new thread would ever start and the strips freeze
+fn run_guarded(shared: Arc<Shared>, epoch: u64) {
+    let me = Arc::clone(&shared);
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(shared, epoch))).is_err() {
+        let mut s = me.lock();
+        push_error(&mut s, "The LED thread crashed; it restarts with the next light change".into());
+        if s.epoch == epoch {
+            s.running = false;
         }
     }
 }

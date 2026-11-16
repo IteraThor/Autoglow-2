@@ -15,7 +15,6 @@ function activatePane(targetId) {
 
   if (targetId === 'tab-devices') renderDevicesTab();
   if (targetId === 'tab-autodarts') renderAutodartsTab();
-  if (targetId === 'tab-effects') renderEffectsTable();
   if (targetId.startsWith('tab-studio') && window.renderStudio) window.renderStudio(targetId);
   if (targetId === 'tab-dashboard' && window.renderDashboard) window.renderDashboard();
   if (targetId === 'tab-players' && window.renderPlayers) window.renderPlayers();
@@ -42,37 +41,8 @@ async function loadConfig() {
       appState = data;
       window.appState = data;
 
-      // Validate persisted device selections against loaded devices
-      const devicesList = Array.isArray(appState.devices) ? appState.devices : [];
-      if (selectedMatrixDeviceIp && !devicesList.find(d => d.ip === selectedMatrixDeviceIp)) {
-        selectedMatrixDeviceIp = null;
-        if (typeof localStorage !== 'undefined') localStorage.removeItem('autoglow_selected_matrix_device');
-      }
-
       renderDevicesTab();
       renderAutodartsTab();
-      renderEffectsTable();
-      updateLightingModeUI(appState.lighting_mode || 'matrix');
-
-      // Background fetch Autodarts status to resolve account details for player slot prefilling
-      fetch('/api/autodarts/status')
-        .then(r => r.json())
-        .then(adData => {
-          if (adData && adData.status === 'ok' && adData.account) {
-            window.lastFetchedAutodartsAccount = adData.account;
-            if (!appState.autodarts) appState.autodarts = {};
-            appState.autodarts.email = adData.account.email;
-            appState.autodarts.name = adData.account.name;
-            appState.autodarts.username = adData.account.username;
-            const effectsPane = document.getElementById('tab-effects');
-            if (effectsPane && effectsPane.classList.contains('active')) {
-              renderEffectsTable();
-            }
-          }
-        })
-        .catch(err => {
-          console.warn('[AutoGlow] Could not fetch Autodarts account status:', err);
-        });
     }
   } catch (err) {
     showToast(`Could not load configuration: ${err.message || err}`, 'error');
@@ -149,12 +119,6 @@ function handleTelemetryMessage(msg) {
     return;
   }
 
-  if (msg.type === 'lighting_mode_changed') {
-    if (window.appState) window.appState.lighting_mode = msg.mode;
-    updateLightingModeUI(msg.mode);
-    return;
-  }
-
   if (msg.type === 'game_flow_state') {
     if (typeof window.onFlowTelemetry === 'function') window.onFlowTelemetry(msg);
     return;
@@ -165,12 +129,36 @@ function handleTelemetryMessage(msg) {
   }
 }
 
-// --- Lighting mode (Event Matrix vs Flow Matrix) ---
-// The header switch and the Lighting page read the mode from the shared store
-function updateLightingModeUI(mode) {
-  window.appStore.set({ lightingMode: mode === 'flow' ? 'flow' : 'matrix' });
+// --- Stream light (UDP vs HTTP) ---
+let currentProtocolMode = 'http';
+
+async function fetchProtocolMode() {
+  try {
+    const res = await fetch('/api/protocol/mode');
+    const data = await res.json();
+    if (data.status === 'ok') updateProtocolUI(data.mode);
+  } catch (err) {
+    console.debug('Failed to fetch protocol mode:', err);
+  }
 }
-window.updateLightingModeUI = updateLightingModeUI;
+
+async function toggleProtocolMode() {
+  const targetMode = currentProtocolMode === 'udp' ? 'http' : 'udp';
+  try {
+    const data = await window.api.post('/api/protocol/mode', { mode: targetMode });
+    updateProtocolUI(data.mode);
+    window.toast.info(data.mode === 'udp' ? 'Stream started' : 'Stream stopped');
+  } catch (err) {
+    window.toast.error(err, { onRetry: toggleProtocolMode });
+  }
+}
+window.toggleProtocolMode = toggleProtocolMode;
+
+// The header's Stream light shows the mode from the shared store
+function updateProtocolUI(mode) {
+  currentProtocolMode = mode;
+  window.appStore.set({ protocolMode: mode });
+}
 
 // Document Ready Initialization
 document.addEventListener('DOMContentLoaded', async () => {

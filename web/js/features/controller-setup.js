@@ -287,9 +287,8 @@ export async function runControllerSetup(ip, live) {
   ]);
   const plan = planFromLive(ip, live, preset);
   const original = { hw_ins: structuredClone(live?.hw_ins || []), state: structuredClone(live?.state || {}) };
-  // Flow Matrix profiles: each zone keeps the look it had (looks are picked in Lighting); none in the legacy Event Matrix
-  const flowMode = appStore.get().lightingMode !== 'matrix';
-  const profileNames = flowMode ? (overview?.profiles || []).map(p => p.name) : [];
+  // Flow Matrix profiles: each zone keeps the look it had (looks are picked in Lighting)
+  const profileNames = (overview?.profiles || []).map(p => p.name);
   const savedProfiles = Object.fromEntries(((overview?.lights || []).find(d => d.ip === ip)?.segments || [])
     .map(s => [String(s.id ?? 0), s.profile]));
   const defaultProfile = overview?.default || profileNames[0] || '';

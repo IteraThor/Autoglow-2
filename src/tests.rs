@@ -186,7 +186,6 @@ fn config_round_trip_keeps_unknown_keys_and_types() {
     let mut cfg = AppConfig::from_value(&raw);
     assert_eq!(cfg.global_brightness, 150);
     assert_eq!(cfg.inactivity_timeout_minutes, 1);
-    assert_eq!(cfg.lighting_mode, LightingMode::Matrix);
     assert_eq!(cfg.devices[0].segments[0].length, 30);
     assert_eq!(cfg.devices[0].segments[0].offset, 5);
     let v = cfg.to_value();

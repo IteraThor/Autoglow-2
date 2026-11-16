@@ -418,9 +418,6 @@ function statusNotes() {
   const notes = [];
   const flow = page.draft;
   const o = page.overview;
-  if (o.lighting_mode !== 'flow') {
-    notes.push({ tone: 'warn', text: 'Games use the legacy Event Matrix right now (not supported).', action: ['Use the Flow Matrix', () => window.switchLightingMode('flow')] });
-  }
   if (o.match_running) notes.push({ tone: 'live', text: 'A match is running. The chart follows it live.' });
   for (const s of o.steps) {
     if (!s.always_on && !flow.steps[s.id].effect.enabled) {

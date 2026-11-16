@@ -76,39 +76,10 @@
   color: var(--accent-primary);
 }
 
-.matrix-event-row,
-.matrix-player-row {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.matrix-event-row.is-disabled > td:not(:first-child),
-.matrix-player-row.is-disabled > td:not(:first-child) {
-  opacity: 0.32;
-  filter: grayscale(100%);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
-.matrix-event-row.is-disabled td:not(:first-child) select,
-.matrix-event-row.is-disabled td:not(:first-child) input,
-.matrix-event-row.is-disabled td:not(:first-child) button,
-.matrix-event-row.is-disabled td:not(:first-child) .custom-select-trigger,
-.matrix-player-row.is-disabled td:not(:first-child) select,
-.matrix-player-row.is-disabled td:not(:first-child) input,
-.matrix-player-row.is-disabled td:not(:first-child) button {
-  pointer-events: none;
-}
 
-.matrix-device-select {
-  min-width: 150px;
-  max-width: 220px;
-  height: 26px;
-  padding: 2px 8px;
-  font-weight: 600;
-}
 
-.matrix-device-select[hidden] {
-  display: none;
-}
 
 /* Device Selector Cards for Event Matrix and Power Landing */
 .card-device-select {

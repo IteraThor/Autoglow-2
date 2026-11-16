@@ -6,7 +6,7 @@ use crate::engine::is_pwm_segment;
 use crate::flow_catalog::catalog_for_ui;
 use crate::flow_runtime::board_position;
 use crate::game_flow::*;
-use crate::models::{EffectConfig, LightingMode, ProtocolMode};
+use crate::models::{EffectConfig, ProtocolMode};
 
 const MAX_NAME: usize = 40;
 
@@ -86,7 +86,7 @@ fn overview(s: &S) -> Obj {
     let snap = s.engine.runtime().snapshot();
     crate::obj! {
         "status" => "ok", "profiles" => profiles, "default" => flows.default_profile(), "lights" => lights,
-        "lighting_mode" => cfg.lighting_mode.as_str(), "match_end_to_waiting" => cfg.disconnect_udp_on_match_end,
+        "match_end_to_waiting" => cfg.disconnect_udp_on_match_end,
         "standby" => json!({"dim_on": cfg.inactivity_timeout_enabled, "dim_minutes": cfg.inactivity_timeout_minutes, "off_on": cfg.idle_power_off_enabled,
                             "off_minutes": cfg.idle_power_off_minutes, "dim_brightness": cfg.idle_dimming_brightness}),
         "match_running" => match_running(s),
@@ -551,25 +551,6 @@ pub async fn segment_direction(State(s): State<S>, req: Req) -> ApiResult {
     }
     s.engine.sync_drivers(&snap);
     ok(json!({"status": "ok", "direction": dir}))
-}
-
-pub async fn get_mode(State(s): State<S>) -> ApiResult {
-    ok(json!({"status": "ok", "mode": s.engine.cfg().lighting_mode.as_str()}))
-}
-
-/// Switch the lighting engine: Flow Matrix (default) or the legacy Event Matrix
-pub async fn set_mode(State(s): State<S>, req: Req) -> ApiResult {
-    let data = req.json()?;
-    let mode = if get_str(&data, "mode", "flow").trim().to_lowercase() == "matrix" { LightingMode::Matrix } else { LightingMode::Flow };
-    s.engine.set_lighting_mode(mode).await;
-    let mut snap = s.engine.cfg_clone();
-    if !save_cfg(&s, &mut snap) {
-        warn!("Could not persist lighting_mode to config.json");
-    }
-    s.engine.broadcast(json!({"type": "lighting_mode_changed", "mode": mode.as_str()})).await;
-    info!("Lighting mode changed to '{}' and persisted.", mode.as_str());
-    let failed = if mode == LightingMode::Flow { s.engine.apply_idle(None, None).await } else { Vec::new() };
-    ok(json!({"status": "ok", "mode": mode.as_str(), "idle_failed": failed}))
 }
 
 /// Save the standby timers (the same values as Settings > Power) from the Flow Matrix chart

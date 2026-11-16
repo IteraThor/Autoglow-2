@@ -126,28 +126,6 @@ impl ProtocolMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LightingMode {
-    Matrix,
-    Flow,
-}
-
-impl LightingMode {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            LightingMode::Matrix => "matrix",
-            LightingMode::Flow => "flow",
-        }
-    }
-    pub fn parse(s: &str) -> LightingMode {
-        if s.to_lowercase() == "matrix" {
-            LightingMode::Matrix
-        } else {
-            LightingMode::Flow
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DartEventType {
     Score180,
@@ -161,7 +139,6 @@ pub enum DartEventType {
     GameStart,
     BullOffStart,
     BullOffWon,
-    GameFinish,
     GameIdle,
     Calibrating,
     Takeout,
@@ -185,7 +162,6 @@ impl DartEventType {
             GameStart => "game_start",
             BullOffStart => "bull_off_start",
             BullOffWon => "bull_off_won",
-            GameFinish => "game_finish",
             GameIdle => "game_idle",
             Calibrating => "calibrating",
             Takeout => "takeout",
@@ -404,18 +380,6 @@ impl PlayerSlotConfig {
         PlayerSlotConfig { id: safe_int(d.get("id"), default_id), name_filter: get_str(d, "name_filter", ""), match_type, effect, enabled }
     }
 
-    /// Whether this slot's name filter of the given kind picks a lower-case player name
-    fn picks(&self, name: &str, match_type: NameMatchType) -> bool {
-        let filt = self.name_filter.trim().to_lowercase();
-        if filt.is_empty() || self.match_type != match_type {
-            return false;
-        }
-        if match_type == NameMatchType::Exact {
-            name == filt
-        } else {
-            name.contains(&filt)
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -656,65 +620,6 @@ impl ProfileConfig {
         self.event(key).or_else(|| alt.and_then(|a| self.event(a)))
     }
 
-    /// Resolve the throwing effect for a player: exact name, contains name, free slots for unnamed
-    /// match players, slot by index, then the profile's throw effect.
-    pub fn resolve_player_effect(&self, player_name: Option<&str>, player_index: Option<i64>, match_players: &[String]) -> Option<EffectConfig> {
-        let defaults;
-        let all: &[PlayerSlotConfig] = if self.player_slots.is_empty() {
-            defaults = ProfileConfig::default_player_slots(None);
-            &defaults
-        } else {
-            &self.player_slots
-        };
-        let p_name = player_name.map(|n| n.trim().to_lowercase()).unwrap_or_default();
-        let p_idx = player_index.filter(|i| *i >= 0).unwrap_or(0);
-        let first_pick = |name: &str, mt: NameMatchType, skip: &HashSet<i64>| all.iter().find(|s| !skip.contains(&s.id) && s.picks(name, mt));
-        let none = HashSet::new();
-        let is_named = |name: &str| all.iter().any(|s| s.picks(name, NameMatchType::Exact) || s.picks(name, NameMatchType::Contains));
-
-        let mut target = if p_name.is_empty() {
-            None
-        } else {
-            first_pick(&p_name, NameMatchType::Exact, &none).or_else(|| first_pick(&p_name, NameMatchType::Contains, &none))
-        };
-        if target.is_none() && !match_players.is_empty() {
-            let mut claimed = HashSet::new();
-            for m in match_players {
-                let m_name = m.trim().to_lowercase();
-                if m_name.is_empty() {
-                    continue;
-                }
-                if let Some(e) = first_pick(&m_name, NameMatchType::Exact, &none) {
-                    claimed.insert(e.id);
-                }
-                if let Some(c) = first_pick(&m_name, NameMatchType::Contains, &claimed) {
-                    claimed.insert(c.id);
-                }
-            }
-            let free: Vec<&PlayerSlotConfig> = all.iter().filter(|s| !claimed.contains(&s.id)).collect();
-            if !free.is_empty() {
-                let upto = (p_idx as usize).min(match_players.len());
-                let rank = match_players[..upto].iter().filter(|p| !is_named(&p.trim().to_lowercase())).count();
-                target = Some(free[rank % free.len()]);
-            }
-        }
-        if target.is_none() {
-            target = all.iter().find(|s| s.id == p_idx + 1);
-        }
-        if target.is_none() && !all.is_empty() {
-            target = Some(&all[(p_idx as usize) % all.len()]);
-        }
-        if let Some(t) = target {
-            if t.enabled && t.effect.enabled {
-                return Some(t.effect.clone());
-            }
-        }
-        if !all.iter().any(|s| s.enabled && s.effect.enabled) {
-            return self.get_effect("throw").cloned();
-        }
-        Some(EffectConfig { enabled: false, ..Default::default() })
-    }
-
     pub fn to_value(&self) -> Value {
         let events: Map<String, Value> = self.events.iter().map(|(k, v)| (k.clone(), v.to_value())).collect();
         json!({"name": self.name, "events": events, "player_slots": self.player_slots.iter().map(|s| s.to_value()).collect::<Vec<_>>()})
@@ -792,7 +697,6 @@ pub struct AppConfig {
     pub autodarts_password: String,
     pub autodarts_board_id: String,
     pub game_mode_spotlight_brightness: i64,
-    pub lighting_mode: LightingMode,
     pub auto_connect_udp_on_game_start: bool,
     pub disconnect_udp_on_match_end: bool,
     pub inactivity_timeout_enabled: bool,
@@ -817,7 +721,6 @@ impl Default for AppConfig {
             autodarts_password: String::new(),
             autodarts_board_id: String::new(),
             game_mode_spotlight_brightness: 255,
-            lighting_mode: LightingMode::Flow,
             auto_connect_udp_on_game_start: true,
             disconnect_udp_on_match_end: false,
             inactivity_timeout_enabled: true,
@@ -833,10 +736,6 @@ impl Default for AppConfig {
 impl AppConfig {
     pub fn get_profile(&self, name: &str) -> Option<&ProfileConfig> {
         self.profiles.iter().find(|p| p.name == name)
-    }
-
-    pub fn get_profile_mut(&mut self, name: &str) -> Option<&mut ProfileConfig> {
-        self.profiles.iter_mut().find(|p| p.name == name)
     }
 
     /// The active profile (AppConfig.profile in the Python version)
@@ -875,56 +774,6 @@ impl AppConfig {
 
     pub fn profile_for(&self, ip: Option<&str>, seg_id: Option<i64>) -> &ProfileConfig {
         self.get_profile(&self.profile_name_for(ip, seg_id)).unwrap_or_else(|| self.profile())
-    }
-
-    /// Controller-wide choice: every segment follows it, replacing any segment choices
-    pub fn set_device_profile(&mut self, ip: &str, name: &str) -> bool {
-        if ip.is_empty() || self.get_profile(name).is_none() {
-            return false;
-        }
-        self.device_profiles.insert(ip.into(), json!(name));
-        self.segment_profiles.remove(ip);
-        true
-    }
-
-    pub fn set_segment_profile(&mut self, ip: &str, seg_id: i64, name: &str) -> bool {
-        if ip.is_empty() || self.get_profile(name).is_none() {
-            return false;
-        }
-        self.segment_profiles.entry(ip.into()).or_default().insert(seg_id.to_string(), json!(name));
-        true
-    }
-
-    pub fn rename_profile_refs(&mut self, old: &str, new: &str) {
-        for v in self.device_profiles.values_mut() {
-            if py_str(v) == old {
-                *v = json!(new);
-            }
-        }
-        for segs in self.segment_profiles.values_mut() {
-            for v in segs.values_mut() {
-                if py_str(v) == old {
-                    *v = json!(new);
-                }
-            }
-        }
-    }
-
-    pub fn drop_profile_refs(&mut self, name: &str) {
-        self.device_profiles.retain(|_, v| py_str(v) != name);
-        for segs in self.segment_profiles.values_mut() {
-            segs.retain(|_, v| py_str(v) != name);
-        }
-        self.segment_profiles.retain(|_, s| !s.is_empty());
-    }
-
-    pub fn set_active_profile(&mut self, name: &str) -> bool {
-        if self.get_profile(name).is_some() {
-            self.active_profile = name.into();
-            true
-        } else {
-            false
-        }
     }
 
     pub fn add_or_update_profile(&mut self, profile: ProfileConfig, set_active: bool) {
@@ -970,7 +819,6 @@ impl AppConfig {
             "autodarts_password" => self.autodarts_password,
             "autodarts_board_id" => self.autodarts_board_id,
             "game_mode_spotlight_brightness" => self.game_mode_spotlight_brightness,
-            "lighting_mode" => self.lighting_mode.as_str(),
             "auto_connect_udp_on_game_start" => self.auto_connect_udp_on_game_start,
             "disconnect_udp_on_match_end" => self.disconnect_udp_on_match_end,
             "inactivity_timeout_enabled" => self.inactivity_timeout_enabled,
@@ -1055,7 +903,6 @@ impl AppConfig {
             autodarts_password: get_str(d, "autodarts_password", ""),
             autodarts_board_id: get_str(d, "autodarts_board_id", ""),
             game_mode_spotlight_brightness: safe_int(d.get("game_mode_spotlight_brightness"), 255),
-            lighting_mode: LightingMode::parse(&get_str(d, "lighting_mode", "")),
             auto_connect_udp_on_game_start: get_bool(d, "auto_connect_udp_on_game_start", true),
             disconnect_udp_on_match_end: get_bool(d, "disconnect_udp_on_match_end", false),
             inactivity_timeout_enabled: get_bool(d, "inactivity_timeout_enabled", true),

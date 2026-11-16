@@ -396,7 +396,7 @@ impl Studio {
         for (slot, data, ext) in uploads {
             let _ = std::fs::create_dir_all(players_dir());
             let fname = format!("{}-{}.{}", py_str(&p["id"]), hex::encode(rand::random::<[u8; 3]>()), ext);
-            std::fs::write(players_dir().join(&fname), &data).map_err(|e| PlayerError::Invalid(e.to_string()))?;
+            crate::storage::write_atomic(&players_dir().join(&fname), &data).map_err(|e| PlayerError::Invalid(e.to_string()))?;
             remove_image(&p.get(slot).map(py_str).unwrap_or_default());
             p.insert(slot.into(), json!(fname));
         }
@@ -456,7 +456,7 @@ impl Studio {
                 keep.insert(name.clone());
                 if !players_dir().join(&name).is_file() {
                     if let Some(d) = fetch(&name).filter(|d| picture_type(d).is_ok()) {
-                        std::fs::write(players_dir().join(&name), d).map_err(|e| e.to_string())?;
+                        crate::storage::write_atomic(&players_dir().join(&name), &d).map_err(|e| e.to_string())?;
                     }
                 }
             }

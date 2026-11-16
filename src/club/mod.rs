@@ -294,7 +294,8 @@ impl Club {
                     let m = Arc::clone(&me);
                     m.lock().syncing = true;
                     tokio::task::spawn_blocking(move || {
-                        m.sync();
+                        // A panic in sync must not leave the flag set, or this board never syncs again
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| m.sync()));
                         m.lock().syncing = false;
                     });
                 }

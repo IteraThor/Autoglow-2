@@ -1,10 +1,9 @@
 // AutoGlow 2 - Unsaved-changes guard for the Lighting pages
-// Event Matrix and Flow Matrix edit a draft; leaving the page asks to save or discard it.
+// The Flow Matrix edits a draft; leaving the page asks to save or discard it.
 
 import { router } from '../core/router.js';
 
 const PAGES = [
-  { pane: 'tab-effects', what: 'event matrix', page: () => window.matrixPage },
   { pane: 'tab-simulator', what: 'flow', page: () => window.flowPage }
 ];
 

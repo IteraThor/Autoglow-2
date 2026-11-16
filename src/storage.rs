@@ -250,11 +250,6 @@ pub fn save_preset_file(profile: &ProfileConfig, dir: &Path) -> bool {
     }
 }
 
-pub fn delete_preset_file(name: &str, dir: &Path) -> bool {
-    let target = dir.join(sanitize_preset_filename(name));
-    target.exists() && fs::remove_file(&target).is_ok()
-}
-
 fn json_files(dir: &Path) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> =
         fs::read_dir(dir).map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.extension().map_or(false, |e| e == "json")).collect()).unwrap_or_default();

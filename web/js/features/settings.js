@@ -1,7 +1,6 @@
 // AutoGlow 2 - Settings page: every field is a draft until the single Save button writes it.
 // Discard (or leaving the page and choosing Discard) puts everything back to what is saved.
 
-import { confirmLegacyMatrix, setLightingMode } from '../components/mode-switch.js';
 import { api } from '../core/api.js';
 import { appStore } from '../core/store.js';
 import { router } from '../core/router.js';
@@ -11,25 +10,14 @@ import { confirmLeave } from './lighting-guard.js';
 const PIN_FIELDS = ['pinCurrentInput', 'pinNewInput', 'pinConfirmInput'];
 const $ = id => document.getElementById(id);
 
-let draftMode = null;      // engine picked on the page, null while it matches the saved one
 let removePin = false;     // "Remove PIN" armed, applied on Save
 let saving = false;
 
-const savedMode = () => appStore.get().lightingMode;
 const pinValue = id => $(id)?.value ?? '';
 
-const modeChanged = () => draftMode !== null && draftMode !== savedMode();
 const pinChanged = () => removePin || PIN_FIELDS.some(id => pinValue(id) !== '');
 
-export const isDirty = () => modeChanged() || pinChanged();
-
-function renderMode() {
-  const active = draftMode ?? savedMode();
-  document.querySelectorAll('#modeSwitch [data-mode]').forEach(btn => {
-    btn.setAttribute('aria-pressed', String(btn.dataset.mode === active));
-    btn.disabled = saving;
-  });
-}
+export const isDirty = () => pinChanged();
 
 function renderRemove() {
   const btn = $('btnRemovePin');
@@ -41,7 +29,6 @@ function renderRemove() {
 }
 
 function refresh() {
-  renderMode();
   renderRemove();
   const dirty = isDirty();
   $('settingsSaveBar')?.classList.toggle('dirty', dirty);
@@ -52,7 +39,6 @@ function refresh() {
 
 // Put every field back to the saved value
 export function reset() {
-  draftMode = null;
   removePin = false;
   PIN_FIELDS.forEach(id => { if ($(id)) $(id).value = ''; });
   refresh();
@@ -89,11 +75,7 @@ export async function save() {
   refresh();
   let ok = true;
   try {
-    if (modeChanged()) {
-      ok = await setLightingMode(draftMode, { quiet: true, confirmed: true });
-      if (ok) draftMode = null;
-    }
-    if (ok && pinChanged()) {
+    if (pinChanged()) {
       ok = await window.savePinSettings(removePin);
       if (ok) {
         removePin = false;
@@ -155,7 +137,6 @@ function currentOffline() {
 
 export function initSettings() {
   window.settingsPage = { save, reset, isDirty };
-  window.settingsDraftMode = () => draftMode;
 
   router.addLeaveGuard((from) => (from.pane === 'tab-settings' && isDirty()
     ? confirmLeave({ body: LEAVE_BODY, save, discard: reset })
@@ -167,16 +148,6 @@ export function initSettings() {
   const pane = $('tab-settings');
   pane.addEventListener('input', refresh);
   pane.addEventListener('change', refresh);
-  document.querySelectorAll('#modeSwitch [data-mode]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const mode = btn.dataset.mode;
-      const current = draftMode ?? savedMode();
-      // Picking the legacy engine needs a yes to the "not supported" warning first
-      if (mode === 'matrix' && current !== 'matrix' && !await confirmLegacyMatrix()) return;
-      draftMode = mode === savedMode() ? null : mode;
-      refresh();
-    });
-  });
   $('btnRemovePin')?.addEventListener('click', () => {
     removePin = !removePin;
     refresh();
@@ -196,11 +167,6 @@ export function initSettings() {
   $('btnSettingsSave').addEventListener('click', save);
   $('btnSettingsDiscard').addEventListener('click', reset);
 
-  // The engine can also change elsewhere (another browser); follow it unless the user is mid-edit
-  appStore.subscribe(s => s.lightingMode, () => {
-    if (draftMode === savedMode()) draftMode = null;
-    refresh();
-  });
   refresh();
 
   api.get('/api/status')
