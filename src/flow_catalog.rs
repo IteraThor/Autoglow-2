@@ -25,9 +25,6 @@ fn opt_tail() -> (Value, Vec<Value>) {
 fn opt_comets() -> (Value, Vec<Value>) {
     (json!(1), vec![json!(1), json!(2)])
 }
-fn opt_sides() -> (Value, Vec<Value>) {
-    (json!("both"), vec![json!("both"), json!("one")])
-}
 fn opt_palette() -> (Value, Vec<Value>) {
     (json!("vivid"), vec![json!("vivid"), json!("soft")])
 }
@@ -49,7 +46,6 @@ pub const FLOW_EFFECTS: &[FlowEffectSpec] = &[
     FlowEffectSpec { id: "breathe", label: "Breathe", job: "A calm, slow glow", options: &[] },
     FlowEffectSpec { id: "flash", label: "Flash", job: "Instant hit feedback", options: &[("pulses", opt_pulses)] },
     FlowEffectSpec { id: "chase", label: "Chase", job: "Light running along the strip", options: &[("tail", opt_tail), ("comets", opt_comets)] },
-    FlowEffectSpec { id: "curtain", label: "Curtain", job: "Fills the strip, then clears it", options: &[("sides", opt_sides)] },
     FlowEffectSpec { id: "rainbow", label: "Rainbow", job: "A big celebration", options: &[("palette", opt_palette)] },
     FlowEffectSpec { id: "sparkle", label: "Sparkle", job: "Glitter over a colour", options: &[("amount", opt_amount)] },
     FlowEffectSpec { id: "wave", label: "Wave", job: "Colour flowing along the strip", options: &[("waves", opt_waves), ("edges", opt_edges)] },
@@ -133,8 +129,8 @@ fn legacy(anim: &str) -> (&'static str, Value) {
         "chase" | "radar" => ("chase", json!({"tail": "long"})),
         "comet" | "scan" => ("chase", json!({"tail": "short"})),
         "dual_comet" => ("chase", json!({"comets": 2})),
-        "curtain" => ("curtain", json!({"sides": "both"})),
-        "wipe" => ("curtain", json!({"sides": "one"})),
+        // Curtain and Wipe are transitions now; as a look they become a steady colour
+        "curtain" | "wipe" => ("solid", json!({})),
         "rainbow" => ("rainbow", json!({"palette": "vivid"})),
         "pastel_rainbow" => ("rainbow", json!({"palette": "soft"})),
         "sparkle" => ("sparkle", json!({})),
@@ -202,7 +198,7 @@ pub fn render_effect(effect: &EffectConfig) -> Effect {
         let o = normalize_options(id, Some(op));
         let s = |k: &str, d: &str| o.get(k).map(py_str).unwrap_or_else(|| d.to_string());
         let i = |k: &str| o.get(k).map(|v| safe_int(Some(v), 1)).unwrap_or(1);
-        FlowOpts { pulses: i("pulses"), comets: i("comets"), tail: s("tail", "short"), sides: s("sides", "both"), palette: s("palette", "vivid"), amount: s("amount", "some"), waves: i("waves"), edges: s("edges", "soft") }
+        FlowOpts { pulses: i("pulses"), comets: i("comets"), tail: s("tail", "short"), palette: s("palette", "vivid"), amount: s("amount", "some"), waves: i("waves"), edges: s("edges", "soft") }
     });
     Effect {
         anim: Anim::parse(&effect.animation),

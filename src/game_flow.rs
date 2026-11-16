@@ -514,7 +514,7 @@ fn preset_flow(pid: &str) -> GameFlow {
         "minimal" => (
             steps_of(vec![
                 ("bull_off", off_look("breathe", 0.0), fade(0.4)),
-                ("game_start", off_look("curtain", 2.0), fade(0.4)),
+                ("game_start", off_look("solid", 2.0), fade(0.4)),
                 ("turn", look("solid").player().bri(60).eff(), fade(0.4)),
                 ("takeout", off_look("solid", 0.0), fade(0.4)),
                 ("leg_won", look("breathe").player().dur(3.0).spd(1.5).bri(70).eff(), fade(0.4)),
@@ -528,7 +528,7 @@ fn preset_flow(pid: &str) -> GameFlow {
         "arena" => (
             steps_of(vec![
                 ("bull_off", look("breathe").c(WHITE).c2((25, 25, 25)).eff(), fade(0.5)),
-                ("game_start", look("curtain").c(WHITE).dur(2.0).eff(), comes_in("curtain", 0.8, None)),
+                ("game_start", look("wave").c(WHITE).dur(2.0).eff(), comes_in("curtain", 0.8, None)),
                 ("turn", look("solid").player().eff(), comes_in("wipe", 0.5, None)),
                 ("takeout", look("solid").c((170, 170, 170)).eff(), fade(0.3)),
                 ("leg_won", look("sparkle").player().c2((20, 20, 20)).dur(4.0).opt("amount", json!("many")).eff(), comes_in("flash", 0.5, None)),
@@ -589,10 +589,10 @@ fn preset_flow(pid: &str) -> GameFlow {
         _ => (
             steps_of(vec![
                 ("bull_off", look("breathe").c(SOFT_WHITE).c2((20, 20, 20)).spd(0.8).eff(), fade(0.6)),
-                ("game_start", look("curtain").c(CYAN).dur(2.0).eff(), fade(0.5)),
+                ("game_start", look("wave").c(CYAN).dur(2.0).eff(), fade(0.5)),
                 ("turn", look("solid").player().eff(), comes_in("wipe", 0.6, None)),
                 ("takeout", look("solid").c(DIM_WHITE).eff(), fade(0.4)),
-                ("leg_won", look("curtain").player().dur(3.0).eff(), fade(0.4)),
+                ("leg_won", look("wave").player().dur(3.0).eff(), fade(0.4)),
                 ("match_won", look("rainbow").dur(6.0).opt("palette", json!("soft")).eff(), fade(0.8)),
             ]),
             hits_of(vec![

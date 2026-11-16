@@ -9,8 +9,6 @@ const MIN_FLASH_PERIOD = 1.0 / MAX_FLASH_HZ;
 const BREATHE_PERIOD = 4.0;
 const CHASE_LAP = 2.5;
 const RAINBOW_LAP = 6.0;
-const CURTAIN_FILL = 1.0;
-const CURTAIN_LOOP = 3.0;
 const SPARKLE_SLOT = 0.9;
 const FLASH_REPEAT = 2.0;
 const TAIL_SHARE = { short: 0.12, long: 0.35 };
@@ -35,7 +33,6 @@ const OPTION_DEFAULTS = {
   breathe: {},
   flash: { pulses: [1, [1, 2, 3]] },
   chase: { tail: ['short', ['short', 'long']], comets: [1, [1, 2]] },
-  curtain: { sides: ['both', ['both', 'one']] },
   rainbow: { palette: ['vivid', ['vivid', 'soft']] },
   sparkle: { amount: ['some', ['few', 'some', 'many']] },
   wave: { waves: [2, [1, 2, 3]], edges: ['soft', ['soft', 'sharp']] },
@@ -199,33 +196,6 @@ export function curtainDistance(i, n, sides, reverse, line = false) {
   }
   const d = Math.min(centre, n - centre) / (n / 2);
   return !!line !== !!reverse ? 1 - d : d;
-}
-
-function renderCurtain(eff, t, n, o, line) {
-  const c = rgb(eff.color_primary);
-  const bg = rgb(eff.color_secondary);
-  const speed = speedOf(eff);
-  const duration = Number(eff.duration) || 0;
-  let closing = false;
-  let q;
-  if (duration > 0) {
-    const fillTime = Math.min(CURTAIN_FILL / speed, duration * 0.6);
-    q = fillTime > 0 ? smoothstep(t / fillTime) : 1;
-  } else {
-    const p = mod(t / (CURTAIN_LOOP / speed), 1);
-    if (p < 0.4) q = smoothstep(p / 0.4);
-    else if (p < 0.6) q = 1;
-    else { q = smoothstep((p - 0.6) / 0.4); closing = true; }
-  }
-  const edge = Math.max(EDGE_SHARE, 1 / Math.max(1, n));
-  const front = q * (1 + edge);
-  const out = new Uint8ClampedArray(n * 3);
-  for (let i = 0; i < n; i++) {
-    const d = curtainDistance(i, n, o.sides, !!eff.reverse, line);
-    const covered = clamp01((front - d) / edge);
-    out.set(mix(bg, c, closing ? 1 - covered : covered), i * 3);
-  }
-  return out;
 }
 
 const VIVID = [[0, [255, 0, 0]], [0.14, [255, 70, 0]], [0.28, [255, 190, 0]], [0.42, [0, 255, 20]],
@@ -449,7 +419,7 @@ function renderFire(eff, t, n, o, line) {
 
 const RENDERERS = {
   solid: renderSolid, breathe: renderBreathe, flash: renderFlash, chase: renderChase,
-  curtain: renderCurtain, rainbow: renderRainbow, sparkle: renderSparkle, wave: renderWave, meteors: renderMeteors,
+  rainbow: renderRainbow, sparkle: renderSparkle, wave: renderWave, meteors: renderMeteors,
   fireworks: renderFireworks, confetti: renderConfetti, ripple: renderRipple, fire: renderFire
 };
 

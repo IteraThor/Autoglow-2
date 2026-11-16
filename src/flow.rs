@@ -13,7 +13,6 @@ pub struct FlowOpts {
     pub pulses: i64,
     pub comets: i64,
     pub tail: String,
-    pub sides: String,
     pub palette: String,
     pub amount: String,
     pub waves: i64,
@@ -26,8 +25,6 @@ const MAX_FLASH_HZ: f64 = 3.0;
 const BREATHE_PERIOD: f64 = 4.0;
 const CHASE_LAP: f64 = 2.5;
 const RAINBOW_LAP: f64 = 6.0;
-const CURTAIN_FILL: f64 = 1.0;
-const CURTAIN_LOOP: f64 = 3.0;
 const SPARKLE_SLOT: f64 = 0.9;
 const FLASH_REPEAT: f64 = 2.0;
 pub const EDGE_SHARE: f64 = 0.06;
@@ -263,7 +260,7 @@ fn chase(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
     out
 }
 
-/// How far a pixel is from where the curtain starts, 0 (start) to 1 (last to fill). From both sides a loop
+/// How far a pixel is from where a wipe or curtain transition starts, 0 (start) to 1 (last to fill). From both sides a loop
 /// starts at its start point and meets on the far side; a line opens from its middle. Reverse turns that round.
 pub fn curtain_distance(i: usize, count: usize, one_side: bool, reverse: bool, line: bool) -> f64 {
     let centre = i as f64 + 0.5;
@@ -277,43 +274,6 @@ pub fn curtain_distance(i: usize, count: usize, one_side: bool, reverse: bool, l
     } else {
         d
     }
-}
-
-fn curtain(e: &Effect, elapsed: f64, count: usize, o: &FlowOpts) -> Vec<u8> {
-    let c_fill = rgb(e.c1);
-    let c_bg = rgb(e.c2);
-    let sp = speed(e);
-    let duration = e.duration;
-    let mut closing = false;
-    let q = if duration > 0.0 {
-        let fill_time = pmin(CURTAIN_FILL / sp, duration * 0.6);
-        if fill_time > 0.0 {
-            smoothstep(elapsed / fill_time)
-        } else {
-            1.0
-        }
-    } else {
-        let p = pymod(elapsed / (CURTAIN_LOOP / sp), 1.0);
-        if p < 0.4 {
-            smoothstep(p / 0.4)
-        } else if p < 0.6 {
-            1.0
-        } else {
-            closing = true;
-            smoothstep((p - 0.6) / 0.4)
-        }
-    };
-    let edge = pmax(EDGE_SHARE, 1.0 / count.max(1) as f64);
-    let front = q * (1.0 + edge);
-    let one = o.sides == "one";
-    let mut out = vec![0u8; count * 3];
-    for i in 0..count {
-        let d = curtain_distance(i, count, one, e.reverse, e.line);
-        let covered = clamp01((front - d) / edge);
-        let level = if closing { 1.0 - covered } else { covered };
-        put(&mut out, i, mix(c_bg, c_fill, level));
-    }
-    out
 }
 
 type Stop = (f64, Color);
@@ -606,7 +566,6 @@ pub fn render_flow(e: &Effect, anim: &str, o: &FlowOpts, elapsed: f64, count: us
         "breathe" => breathe(e, elapsed, count),
         "flash" => flash(e, elapsed, count, o),
         "chase" => chase(e, elapsed, count, o),
-        "curtain" => curtain(e, elapsed, count, o),
         "rainbow" => rainbow(e, elapsed, count, o),
         "sparkle" => sparkle(e, elapsed, count, o),
         "wave" => wave(e, elapsed, count, o),

@@ -99,6 +99,10 @@ export async function applySetup(ip, setup, successMessage) {
     for (const choice of setup.profiles || []) {
       await api.post('/api/flow/assign', { ip, segment_id: choice.segment_id, name: choice.name }).catch(() => {});
     }
+    // Loop or line per zone, as answered in the guide
+    for (const choice of setup.shapes || []) {
+      await api.post('/api/wled/segment-shape', { ip, segment_id: choice.segment_id, shape: choice.shape }).catch(() => {});
+    }
     // The setup saved a default idle look; the RGB strips wait with their profile's effect instead
     await api.post('/api/flow/idle/apply', { ip }).catch(() => {});
   } catch (err) {

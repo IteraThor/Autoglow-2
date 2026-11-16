@@ -39,16 +39,15 @@ const OPTION_LABELS = {
   pulses: ['Pulses', { 1: '1', 2: '2', 3: '3' }],
   tail: ['Tail', { short: 'Short', long: 'Long' }],
   comets: ['Comets', { 1: 'One', 2: 'Two' }],
-  sides: ['Fills', { both: 'From two sides', one: 'One way along' }],
   palette: ['Colours', { vivid: 'Vivid', soft: 'Soft' }],
   amount: ['Amount', { few: 'Few', some: 'Some', many: 'Many' }],
   waves: ['Waves', { 1: '1', 2: '2', 3: '3' }],
   edges: ['Edges', { soft: 'Soft', sharp: 'Sharp' }]
 };
 
-const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'curtain', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire']);
+const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire']);
 const NO_COLOUR = new Set(['rainbow']);
-const CAN_REVERSE = new Set(['chase', 'curtain', 'rainbow', 'wave', 'meteors', 'fire']);
+const CAN_REVERSE = new Set(['chase', 'rainbow', 'wave', 'meteors', 'fire']);
 const PLAYER_STEPS = new Set(['takeout', 'leg_won', 'match_won']);
 
 const page = {
@@ -139,11 +138,33 @@ function savedSeg() {
 const strips = new Map();
 let stripLoop = null;
 
-function strip(getFrame, { leds = STRIP_LEDS, cls = 'fm-strip' } = {}) {
-  const canvas = h('canvas', { class: cls, width: leds * 6, height: 10, 'aria-hidden': 'true' });
-  strips.set(canvas, { getFrame, leds, born: performance.now() });
+// ring: the selected segment is a loop, so the picture is a circle of LEDs (start at the top, clockwise) instead of a bar
+function strip(getFrame, { leds = STRIP_LEDS, cls = 'fm-strip', ring = false } = {}) {
+  ring = ring && !isLine();
+  const canvas = ring
+    ? h('canvas', { class: `${cls} fm-ring`, width: 160, height: 160, 'aria-hidden': 'true' })
+    : h('canvas', { class: cls, width: leds * 6, height: 10, 'aria-hidden': 'true' });
+  strips.set(canvas, { getFrame, leds, ring, born: performance.now() });
   if (!stripLoop) stripLoop = requestAnimationFrame(drawStrips);
   return canvas;
+}
+
+function drawRing(ctx, size, frame, leds) {
+  const c = size / 2;
+  const r = c - 10;
+  const dot = Math.max(2, Math.min(9, (Math.PI * 2 * r) / leds * 0.38));
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = '#0b0c0f';
+  ctx.beginPath();
+  ctx.arc(c, c, c - 1, 0, Math.PI * 2);
+  ctx.fill();
+  for (let i = 0; i < leds; i++) {
+    const a = -Math.PI / 2 + (Math.PI * 2 * (i + 0.5)) / leds;
+    ctx.fillStyle = `rgb(${frame[i * 3]},${frame[i * 3 + 1]},${frame[i * 3 + 2]})`;
+    ctx.beginPath();
+    ctx.arc(c + r * Math.cos(a), c + r * Math.sin(a), dot, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawStrips(now) {
@@ -159,6 +180,7 @@ function drawStrips(now) {
     let frame;
     try { frame = s.getFrame(t, s.leds); } catch (err) { continue; }
     const ctx = canvas.getContext('2d');
+    if (s.ring) { drawRing(ctx, canvas.width, frame, s.leds); continue; }
     const w = canvas.width / s.leds;
     ctx.fillStyle = '#0b0c0f';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -410,9 +432,10 @@ function tryLabel() {
   return seg ? `▶ Try on ${seg.name}` : '▶ Try on my lights';
 }
 
-async function tryOnLights(kind, id, extra = {}) {
+// quiet: played because a look was clicked, so nothing is said when there is nothing to play on
+async function tryOnLights(kind, id, extra = {}, { quiet = false } = {}) {
   if (!allSegments().length) {
-    toast.warning('Add a controller in Setup first.');
+    if (!quiet) toast.warning('Add a controller in Setup first.');
     return;
   }
   // The hit locator check names its own segment
@@ -420,9 +443,12 @@ async function tryOnLights(kind, id, extra = {}) {
   try {
     await api.post('/api/flow/try', { flow: page.draft, kind, id, segments, ...extra });
   } catch (err) {
-    toast.error(err);
+    if (!quiet) toast.error(err);
   }
 }
+
+// Clicking a look or a transition also plays it on the selected segment's strip
+const playOnClick = (kind, id) => () => tryOnLights(kind, id, {}, { quiet: true });
 
 // --- status line -------------------------------------------------------------
 
@@ -459,9 +485,12 @@ function statusNotes() {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const VIEW_KEY = 'autoglow_flow_view';
 
+// Opening a step, a hit or a transition plays what is set there on the strip
 function select(sel) {
   page.selected = sel;
   render();
+  if (sel?.kind === 'step' || sel?.kind === 'hit') playOnClick(sel.kind, sel.id)();
+  else if (sel?.kind === 'transition') playOnClick('step', sel.id)();
 }
 
 function isSelected(kind, id) {
@@ -859,23 +888,23 @@ function rangeField(label, { min, max, step, value, format, onset }) {
   return h('label', { class: 'fm-field' }, h('span', { class: 'form-label' }, label), h('span', { class: 'fm-range' }, input, out));
 }
 
-function flowLookGrid(effect, setEffect, forcePlayer) {
+function flowLookGrid(effect, setEffect, forcePlayer, play) {
   return h('div', { class: 'fm-effects' }, ...page.overview.catalog.effects.map(meta => {
     const on = effect.animation === meta.id;
     const sample = { ...effect, animation: meta.id, duration: effect.duration || 0 };
     return h('button', {
       type: 'button', class: `fm-effect${on ? ' is-on' : ''}`, 'aria-pressed': String(on),
-      onclick: () => setEffect(e => { e.animation = meta.id; e.options = { colour_from: e.options?.colour_from || 'custom' }; })
+      onclick: () => { setEffect(e => { e.animation = meta.id; e.options = { colour_from: e.options?.colour_from || 'custom' }; }); play?.(); }
     },
-    strip(lookFrame(resolved(sample, forcePlayer)), { leds: 24, cls: 'fm-strip fm-strip-sm' }),
+    strip(lookFrame(resolved(sample, forcePlayer)), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
     h('span', { class: 'fm-effect-name' }, meta.label),
     h('span', { class: 'fm-effect-job' }, meta.job));
   }));
 }
 
-function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false }) {
+function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false, play = null }) {
   const meta = effectMeta(effect.animation);
-  const parts = [flowLookGrid(effect, setEffect, forcePlayer)];
+  const parts = [flowLookGrid(effect, setEffect, forcePlayer, play)];
 
   for (const opt of meta.options) {
     const [label, names] = OPTION_LABELS[opt.key] || [opt.key, {}];
@@ -928,7 +957,7 @@ function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoic
       onset: (v, done) => setEffect(e => { e.brightness = v >= 100 ? null : v; }, done)
     }),
     CAN_REVERSE.has(effect.animation) && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
-      segmented([false, true], !!effect.reverse, v => setEffect(e => { e.reverse = v; }), directionLabels(effect.animation === 'curtain' && effect.options?.sides !== 'one'))));
+      segmented([false, true], !!effect.reverse, v => setEffect(e => { e.reverse = v; }), directionLabels(false))));
   parts.push(more);
   return parts;
 }
@@ -939,8 +968,8 @@ function transitionEditor(id) {
   return [
     h('div', { class: 'fm-effects fm-transitions' }, ...page.overview.catalog.transitions.map(t => h('button', {
       type: 'button', class: `fm-effect${tr.style === t.id ? ' is-on' : ''}`, 'aria-pressed': String(tr.style === t.id),
-      onclick: () => setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; })
-    }, strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm' }), h('span', { class: 'fm-effect-name' }, t.label)))),
+      onclick: () => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); playOnClick('step', id)(); }
+    }, strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }), h('span', { class: 'fm-effect-name' }, t.label)))),
     tr.style !== 'instant' && rangeField('Takes', {
       min: 0.1, max: 2, step: 0.1, value: tr.duration || 0.5, format: seconds,
       onset: (v, done) => setTr(x => { x.duration = v; }, done)
@@ -967,7 +996,7 @@ function stepPanel(id) {
     !step.effect.enabled && h('p', { class: 'fm-off-note' }, `Off: ${OFF_TEXT[id]}.`),
     h('div', { class: step.effect.enabled ? '' : 'fm-dim' },
       section('Look', ...lookEditor(step.effect, {
-        setEffect, timed: meta.timed, forcePlayer: id === 'turn', playerChoice: PLAYER_STEPS.has(id),
+        setEffect, play: playOnClick('step', id), timed: meta.timed, forcePlayer: id === 'turn', playerChoice: PLAYER_STEPS.has(id),
         playerWord: id === 'takeout' ? 'Player colour' : 'Winner\'s colour'
       })),
       h('button', { type: 'button', class: 'fm-link-row', onclick: () => select({ kind: 'transition', id }) },
@@ -1000,7 +1029,7 @@ function transitionPanel(id) {
       + (arrows > 1 ? ` This is shared by the ${arrows} arrows into ${meta.label} (they are highlighted).` : '')),
     h('div', { class: 'fm-hero' },
       h('div', { class: 'fm-hero-labels' }, h('span', {}, before), h('span', {}, '→'), h('span', {}, meta.label)),
-      strip(transitionFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero' })),
+      strip(transitionFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero', ring: true })),
     section('Style', ...transitionEditor(id)),
     h('div', { class: 'fm-panel-actions' },
       h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, tryLabel()),
@@ -1096,7 +1125,7 @@ function hitPanel(id) {
       onOff(hit.enabled, v => setEffect(e => { e.enabled = v; }), `${meta.label} on or off`)),
     h('p', { class: 'fm-panel-help' }, `${help} Plays on top of the current look and fades back into it.`),
     h('div', { class: hit.enabled ? '' : 'fm-dim' },
-      section('Look', ...lookEditor(hit, { setEffect, timed: true, playerChoice: true, playerWord: 'Player colour', isHit: true })),
+      section('Look', ...lookEditor(hit, { setEffect, play: playOnClick('hit', id), timed: true, playerChoice: true, playerWord: 'Player colour', isHit: true })),
       h('div', { class: 'fm-panel-actions' },
         h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('hit', id) }, tryLabel())))
   ];

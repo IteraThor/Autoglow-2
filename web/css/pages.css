@@ -990,7 +990,7 @@ input.led-summary-seg-name:focus {
   font: 10px var(--font-mono);
 }
 
-/* Loop or line: a small switch beside a segment's name, with the shape drawn in front of the word */
+/* Loop or line: a small label beside a segment's name, with the shape drawn in front of the word */
 .wz-shape {
   flex: none;
   display: inline-flex;
@@ -1002,12 +1002,6 @@ input.led-summary-seg-name:focus {
   background: transparent;
   color: var(--text-secondary);
   font: 600 var(--fs-xs) var(--font-ui);
-  cursor: pointer;
-}
-
-.wz-shape:hover {
-  border-color: var(--accent-primary);
-  color: var(--text-primary);
 }
 
 .wz-shape::before {
@@ -1913,6 +1907,68 @@ input.led-summary-seg-name:focus {
 
 .sf-kind[data-kind="light"] .sf-kind-glyph {
   background: #fff3dc;
+}
+
+/* 2 · An RGB strip: how it is mounted (loop or line) */
+.sf-shape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-4);
+}
+
+.sf-shape-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.sf-shape-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-shape-choice[aria-pressed="true"] {
+  border-color: var(--accent-primary);
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.sf-shape-text {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-xs);
+}
+
+.sf-shape-text strong {
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+}
+
+.sf-shape-glyph {
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+}
+
+.sf-shape-choice[data-shape="line"] .sf-shape-glyph {
+  width: 30px;
+  height: 0;
+  border-width: 3px 0 0;
+  border-radius: 0;
 }
 
 /* 2 · An RGB strip */

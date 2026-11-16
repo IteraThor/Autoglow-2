@@ -11,10 +11,7 @@ import { toast } from '../core/toast.js';
 import { runControllerSetup } from './controller-setup.js';
 import { createIdleEditor } from './idle-lighting.js';
 import { applySetup, devices, saveDevices } from './controllers.js';
-import {
-  COLOR_ORDERS, OUTPUT_TYPES, addOutput, addSegment, cleanName, draftFrom, duplicateNames, duplicatePins, isPwmOutput, nameKey,
-  outputTypeLabel, pinOf, removeLastOutput, removeSegment, setOutputLength, setOutputType, setSegmentRange, toPayload
-} from './led-layout.js';
+import { COLOR_ORDERS, cleanName, draftFrom, isPwmOutput, nameKey, outputTypeLabel, pinOf, toPayload } from './led-layout.js';
 import { confirmLeave } from './lighting-guard.js';
 
 // Names of the unsaved parts in the save bar
@@ -37,23 +34,6 @@ function dirtyParts() {
 export const isDetailDirty = () => dirtyParts().length > 0;
 
 // --- Small builders ---------------------------------------------------------
-
-function field(label, control, hint) {
-  return h('label', { class: 'form-field' },
-    h('span', { class: 'form-label' }, label),
-    control,
-    hint && h('span', { class: 'form-hint' }, hint));
-}
-
-function select(options, value, attrs) {
-  const el = h('select', { class: 'ui-select', ...attrs }, options.map(o => h('option', { value: o.value }, o.label)));
-  el.value = String(value);
-  return el;
-}
-
-function numberInput(value, attrs) {
-  return h('input', { type: 'number', class: 'ui-input ui-input-num', value, inputmode: 'numeric', ...attrs });
-}
 
 function section(id, title, lead, ...body) {
   return h('section', { class: 'card detail-section', id: `ctl-sec-${id}`, dataset: { section: id }, 'aria-labelledby': `ctl-sec-${id}-title` },
@@ -102,22 +82,6 @@ function renderGeneral() {
 }
 
 // --- LEDs & outputs ---------------------------------------------------------
-
-function stripBar(layout) {
-  const total = layout.outputs.reduce((sum, o) => sum + o.len, 0) || 1;
-  return h('div', { class: 'led-map', role: 'img', 'aria-label': `${layout.segments.length} segments over ${total} LEDs` },
-    layout.segments.map((seg, i) => {
-      const pwm = isPwmOutput(layout.outputs[seg.busIdx]);
-      const block = h('span', {
-        class: 'led-map-seg',
-        dataset: { kind: pwm ? 'pwm' : 'rgb', tone: String(i % 4) },
-        title: `${seg.name}: ${pwm ? 'light strip' : `LEDs ${seg.start + 1}–${seg.stop}`}`
-      }, h('span', { class: 'led-map-label' }, seg.name));
-      // Width follows the segment's LED count
-      if (!pwm) block.style.flexGrow = String(seg.stop - seg.start);
-      return block;
-    }));
-}
 
 // Segment names are edited in place and saved on their own (Enter or leaving the field): no LED rewrite
 function segmentNameInput(seg) {
@@ -171,31 +135,15 @@ async function renameSegment(seg, input) {
   }
 }
 
-// Loop (the ends meet) or line (two ends): looks and transitions are drawn to fit. AutoGlow's own setting, saved on
-// its own like the name: no LED rewrite. Only for segments AutoGlow has saved.
-function shapeToggle(seg) {
+// Loop (the ends meet) or line (two ends), shown next to the segment's name. It is chosen in the guided setup.
+function shapeLabel(seg) {
   const saved = (page.dev.segments || []).find(s => s.id === seg.id);
   if (!saved) return null;
   const line = saved.shape === 'line';
-  const btn = h('button', {
-    type: 'button', class: 'wz-shape', dataset: { shape: line ? 'line' : 'loop' },
-    'aria-label': `Shape of ${seg.name}: ${line ? 'line' : 'loop'}. Click to change.`,
-    title: line
-      ? 'Line: the strip has two ends. Lights bounce at the ends and curtains open from the middle. Click if its ends meet.'
-      : 'Loop: the ends of the strip meet, so lights run round and round. Click if the strip is a straight line.',
-    onclick: async () => {
-      btn.disabled = true;
-      try {
-        await api.post('/api/wled/segment-shape', { ip: page.ip, segment_id: seg.id, shape: line ? 'loop' : 'line' });
-        await window.loadConfig?.();
-        if (page) page.dev = devices().find(d => d.ip === page.ip) || page.dev;
-      } catch (err) {
-        toast.error(err);
-      }
-      if (page) renderLeds(page.bodies.leds);
-    }
+  return h('span', {
+    class: 'wz-shape', dataset: { shape: line ? 'line' : 'loop' },
+    title: line ? 'Line: a straight strip with two ends. Change it in the guided setup.' : 'Loop: the ends of the strip meet. Change it in the guided setup.'
   }, line ? 'Line' : 'Loop');
-  return btn;
 }
 
 // Read-only view of the layout, drawn as wiring: the controller, a wire per GPIO pin, and each strip with its zones
@@ -233,7 +181,7 @@ function zoneBlock(seg, index, whole, scale, tone) {
       h('div', { class: 'wz-zone-head' },
         h('span', { class: 'wz-zone-tag', title: `Zone ${index + 1}` }, String(index + 1)),
         segmentNameInput(seg),
-        shapeToggle(seg)),
+        shapeLabel(seg)),
       leds,
       h('div', { class: 'wz-range', title: `${count} LEDs` }, `${seg.start + 1}–${seg.stop}`));
   // Width follows the zone's LED count
@@ -274,7 +222,7 @@ function stripCard(hw, busIdx, segs, firstTone) {
       ? h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
           segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
-          segs[0] && shapeToggle(segs[0]),
+          segs[0] && shapeLabel(segs[0]),
           zones))
       : h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
@@ -345,7 +293,6 @@ function renderLedSummary(body) {
         return stripCard(hw, busIdx, segs, firstTone);
       }))));
   page.ledsActions.replaceChildren(
-    h('button', { type: 'button', class: 'ui-btn-link', onclick: openLedEditor }, 'Edit manually…'),
     h('button', {
       type: 'button', class: 'ui-btn ui-btn-sm ui-btn-primary', onclick: runGuidedSetup,
       title: 'Answer a few questions and let AutoGlow configure the LEDs'
@@ -353,131 +300,18 @@ function renderLedSummary(body) {
   placeIdle();
 }
 
-async function openLedEditor() {
-  const ok = await confirmDialog({
-    title: 'Edit the LED layout manually?',
-    body: 'This is for people who know their wiring. A wrong GPIO pin, LED count or type can stop the LEDs from working until it is fixed. The guided setup is the safe way to change the layout.',
-    confirmLabel: 'Edit manually'
-  });
-  if (!ok || !page) return;
-  page.ledsAdvanced = true;
-  renderLeds(page.bodies.leds);
-}
-
-function segName(seg, dupes) {
-  const input = h('input', {
-    type: 'text', class: 'ui-input', value: seg.name, maxlength: 32, 'aria-label': 'Segment name',
-    'aria-invalid': dupes.has(nameKey(seg.name)) ? 'true' : null, title: dupes.has(nameKey(seg.name)) ? 'Another segment has this name' : null,
-    oninput: () => {
-      seg.name = cleanName(input.value);
-      if (seg.name !== input.value) input.value = seg.name;
-      sync();
-    },
-    onchange: () => renderLeds(page.bodies.leds)
-  });
-  return input;
-}
-
 function renderLeds(body) {
   const { layout } = page;
-  page.closeEditorBtn = null;
   // The wiring shows the IP and version in its controller box; any other view puts them back in the page head
   page.head.insertBefore(page.meta, page.headActions);
-  // The summary puts its buttons in the section header; the manual editor has its own
+  // The summary puts its buttons in the section header
   page.ledsActions.replaceChildren();
   if (!layout) {
     body.replaceChildren(offlineNotice('to edit its LEDs'));
     return;
   }
   if (page.idle) renderIdle(page.bodies.idle);
-  if (!page.ledsAdvanced) {
-    renderLedSummary(body);
-    return;
-  }
-  const redraw = () => {
-    renderLeds(body);
-    sync();
-  };
-  const dupes = duplicatePins(layout);
-  const names = duplicateNames(layout);
-
-  const outputCards = layout.outputs.map((hw, busIdx) => {
-    const pwm = isPwmOutput(hw);
-    const own = layout.segments.map((seg, segIdx) => ({ seg, segIdx })).filter(x => x.seg.busIdx === busIdx);
-    const types = OUTPUT_TYPES.some(t => t.value === hw.type) ? OUTPUT_TYPES : [...OUTPUT_TYPES, { value: hw.type, label: outputTypeLabel(hw.type) }];
-    const isLast = busIdx === layout.outputs.length - 1 && layout.outputs.length > 1;
-
-    const pin = numberInput(pinOf(hw), {
-      min: 0, max: 48, 'aria-label': `Output ${busIdx + 1} GPIO`,
-      'aria-invalid': dupes.has(pinOf(hw)) ? 'true' : null,
-      onchange: () => { hw.pin = Number(pin.value) || 0; redraw(); }
-    });
-
-    // A light strip is one channel with one segment: only its name can change, next to the output's fields
-    const head = h('div', { class: 'output-head' },
-      h('div', { class: 'output-title' },
-        h('span', { class: 'seg-swatch', dataset: { kind: pwm ? 'pwm' : 'rgb' } }),
-        h('strong', {}, `Output ${busIdx + 1}`)),
-      field('Type', select(types, hw.type, { onchange: e => { setOutputType(layout, busIdx, e.target.value); redraw(); } })),
-      field('GPIO', pin),
-      !pwm && field('Order', select(COLOR_ORDERS, hw.order, { 'aria-label': 'Color order', onchange: e => { hw.order = Number(e.target.value); sync(); } })),
-      !pwm && field('LEDs', numberInput(hw.len, { min: 1, max: 1500, onchange: e => { setOutputLength(layout, busIdx, e.target.value); redraw(); } })),
-      pwm && own[0] && h('div', { class: 'output-pwm-name' }, field(`Segment #${own[0].seg.id} name`, segName(own[0].seg))),
-      isLast && h('button', {
-        type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet output-remove',
-        onclick: () => { removeLastOutput(layout); redraw(); }
-      }, 'Remove output'));
-
-    const rows = pwm ? [] : own.map(({ seg, segIdx }) => {
-      const nameInput = segName(seg, names);
-      const removable = own.length > 1;
-      const first = numberInput(seg.start + 1, { min: 1, 'aria-label': 'First LED' });
-      const last = numberInput(seg.stop, { min: 1, 'aria-label': 'Last LED' });
-      const commitRange = () => { setSegmentRange(layout, segIdx, first.value, last.value); redraw(); };
-      first.addEventListener('change', commitRange);
-      last.addEventListener('change', commitRange);
-      return h('tr', {},
-        h('td', { class: 'seg-id' }, `#${seg.id}`),
-        h('td', {}, nameInput),
-        h('td', {}, first),
-        h('td', {}, last),
-        h('td', { class: 'seg-count' }, String(seg.stop - seg.start)),
-        h('td', {}, numberInput(seg.of || 0, {
-          min: 0, 'aria-label': 'Start offset',
-          title: 'Effects begin this many LEDs into the segment and wrap around. 0 starts at the first LED.',
-          onchange: e => { seg.of = Math.max(0, Number(e.target.value) || 0) % Math.max(1, seg.stop - seg.start); redraw(); }
-        })),
-        h('td', {}, removable && h('button', {
-          type: 'button', class: 'ui-btn ui-btn-sm ui-btn-quiet', 'aria-label': `Remove ${seg.name}`, title: 'Remove segment',
-          onclick: () => { removeSegment(layout, segIdx); redraw(); }
-        }, '✕')));
-    });
-
-    return h('div', { class: 'output-card', dataset: { kind: pwm ? 'pwm' : 'rgb' } },
-      head,
-      dupes.has(pinOf(hw)) && h('p', { class: 'form-error' }, `GPIO ${pinOf(hw)} is used by another output. Each output needs its own pin.`),
-      !pwm && h('table', { class: 'seg-table' },
-        h('thead', {}, h('tr', {},
-          h('th', {}, ''), h('th', {}, 'Segment'), h('th', {}, 'First LED'), h('th', {}, 'Last LED'), h('th', {}, 'Count'), h('th', {}, 'Offset'),
-          h('th', {}, ''))),
-        h('tbody', {}, rows)),
-      !pwm && h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => { addSegment(layout, busIdx); redraw(); } }, '+ Add segment'));
-  });
-
-  // Closing is only possible without unsaved layout changes (sync() keeps it up to date)
-  page.closeEditorBtn = h('button', {
-    type: 'button', class: 'ui-btn ui-btn-sm', title: 'Back to the summary. Save or discard changes first.',
-    onclick: () => { page.ledsAdvanced = false; renderLeds(body); }
-  }, 'Close editor');
-  body.replaceChildren(
-    h('div', { class: 'led-editor-note' },
-      h('span', {}, 'Manual editing. Nothing changes on the controller until you save.'),
-      page.closeEditorBtn),
-    stripBar(layout),
-    ...outputCards,
-    h('div', { class: 'detail-row-actions' },
-      h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => { addOutput(layout); redraw(); } }, '+ Add output'))
-  );
+  renderLedSummary(body);
 }
 
 // --- Page -------------------------------------------------------------------
@@ -533,23 +367,16 @@ function renderIdle(body) {
     page.idle.load().then(sync);
   }
   if (!page.idle) return;
-  // Normally the controls sit in the light strip's card in the wiring; the manual editor replaces that view
-  page.sections.idle.hidden = !page.ledsAdvanced;
-  if (!page.ledsAdvanced) {
-    body.replaceChildren();
-    placeIdle();
-    return;
-  }
-  body.replaceChildren(...page.idleSegments.map(seg => h('div', { class: 'idle-light' },
-    h('div', { class: 'idle-light-head' }, h('strong', {}, seg.name), page.idle.switchFor(seg.id)),
-    page.idle.elementFor(seg.id))));
+  // The controls sit in the light strip's card in the wiring
+  page.sections.idle.hidden = true;
+  body.replaceChildren();
+  placeIdle();
 }
 
 function sync() {
   if (!page) return;
   const parts = dirtyParts();
   const ledsDirty = parts.includes('leds');
-  if (page.closeEditorBtn) page.closeEditorBtn.disabled = ledsDirty;
   page.sections.leds.toggleAttribute('data-dirty', ledsDirty);
   page.sections.idle.toggleAttribute('data-dirty', parts.includes('idle'));
   // The name's dot covers the name and the wiring, which share the card
@@ -567,25 +394,6 @@ async function save() {
   if (!general.name.trim()) {
     toast.error('Give the controller a name.');
     page.nameInput.focus();
-    return false;
-  }
-  if (layout && duplicatePins(layout).size) {
-    toast.error('Two outputs use the same GPIO pin. Give each output its own pin.');
-    // The summary does not show the pin error, so open the editor where it can be fixed
-    if (!page.ledsAdvanced) {
-      page.ledsAdvanced = true;
-      renderLeds(page.bodies.leds);
-    }
-    page.sections.leds.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    return false;
-  }
-  if (layout && duplicateNames(layout).size) {
-    toast.error('Two segments have the same name. Give each segment its own name.');
-    if (!page.ledsAdvanced) {
-      page.ledsAdvanced = true;
-      renderLeds(page.bodies.leds);
-    }
-    page.sections.leds.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return false;
   }
   page.saving = true;

@@ -218,7 +218,7 @@ function newOutput(kind, pin, bus = null) {
     type: kind === 'rgb' ? (bus && !isPwmBus(bus) ? Number(bus.type) || WS281X : WS281X) : PWM_WHITE,
     // A new strip starts as GRB, the order most WS281x strips use
     order: bus && !isPwmBus(bus) ? Number(bus.order) || 0 : 0,
-    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', colorStep: 'R', track: 0
+    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', colorStep: 'R', track: 0, shape: 'loop'
   };
 }
 
@@ -292,6 +292,9 @@ export async function runControllerSetup(ip, live) {
   const savedProfiles = Object.fromEntries(((overview?.lights || []).find(d => d.ip === ip)?.segments || [])
     .map(s => [String(s.id ?? 0), s.profile]));
   const defaultProfile = overview?.default || profileNames[0] || '';
+  // Loop or line as saved: a strip is a line when its first zone was
+  const savedShapes = Object.fromEntries(((overview?.lights || []).find(d => d.ip === ip)?.segments || []).map(s => [String(s.id ?? 0), s.shape]));
+  plan.outputs.forEach(o => { o.shape = o.kind === 'rgb' && savedShapes[String(o.orig[0]?.id)] === 'line' ? 'line' : 'loop'; });
 
   let stepIndex = 0;
   let touched = false;      // a light test changed the controller's layout
@@ -459,7 +462,7 @@ export async function runControllerSetup(ip, live) {
         // The strip is done: name it, then on to the next one
         if (await askName(step.o)) go(stepIndex + 1);
       } else {
-        close({ name: plan.name, hw_ins: buildOutputs(plan), seg: idleSegments(plan), profiles: profileChoices() });
+        close({ name: plan.name, hw_ins: buildOutputs(plan), seg: idleSegments(plan), profiles: profileChoices(), shapes: shapeChoices() });
       }
     }
 
@@ -683,7 +686,8 @@ export async function runControllerSetup(ip, live) {
             h('span', { class: 'sf-spacer' }),
             h('span', { class: 'sf-hint-plain' }, h('span', { class: 'sf-white-led', 'aria-hidden': 'true' }), 'Drag the marker to your last LED')),
           track),
-        colorsView(o, drawTrack)
+        colorsView(o, drawTrack),
+        shapeView(o)
       ];
     }
 
@@ -844,6 +848,31 @@ export async function runControllerSetup(ip, live) {
     function profileChoices() {
       if (!profileNames.length) return [];
       return layout(plan).filter(e => !e.light).map(e => ({ segment_id: e.seg.id, name: zoneProfile(e.o, e.range) }));
+    }
+
+    // Loop or line per new segment, for the caller to save once the layout is on the controller
+    function shapeChoices() {
+      return layout(plan).filter(e => !e.light).map(e => ({ segment_id: e.seg.id, shape: e.o.shape === 'line' ? 'line' : 'loop' }));
+    }
+
+    // How the strip is mounted: its ends meet (a circle) or it is a straight line with two ends
+    function shapeView(o) {
+      const box = h('section', { class: 'sf-shape', 'aria-label': 'Shape' });
+      const paint = () => {
+        const choice = (shape, title, sub) => h('button', {
+          class: 'sf-shape-choice', type: 'button', 'aria-pressed': String(o.shape === shape), dataset: { shape },
+          onclick: () => { o.shape = shape; paint(); }
+        }, h('span', { class: 'sf-shape-glyph', 'aria-hidden': 'true' }), h('span', { class: 'sf-shape-text' }, h('strong', {}, title), h('span', {}, sub)));
+        box.replaceChildren(
+          h('div', { class: 'sf-colors-text' },
+            h('h3', {}, 'How is the strip mounted?'),
+            h('span', { class: 'sf-colors-sub' }, 'Lights and effects follow the shape.')),
+          h('div', { class: 'sf-shape-choices', role: 'group', 'aria-label': 'Strip shape' },
+            choice('loop', 'Loop', 'The ends meet, like a circle'),
+            choice('line', 'Line', 'A straight strip with two ends')));
+      };
+      paint();
+      return box;
     }
 
     function zonesView(o) {
@@ -1025,7 +1054,7 @@ export async function runControllerSetup(ip, live) {
 
     function doneView() {
       const rows = sortedOutputs(plan).filter(o => validPin(o.pin)).map(o => {
-        const chips = [`GPIO ${o.pin}`, ...(o.kind === 'rgb' ? [`${o.count} LEDs`, COLOR_ORDERS[o.order & 0x0f]] : ['white'])];
+        const chips = [`GPIO ${o.pin}`, ...(o.kind === 'rgb' ? [`${o.count} LEDs`, COLOR_ORDERS[o.order & 0x0f], o.shape === 'line' ? 'Line' : 'Loop'] : ['white'])];
         let picture;
         if (o.kind === 'light') {
           picture = h('span', { class: 'sf-done-light', 'aria-hidden': 'true' });

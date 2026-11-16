@@ -154,13 +154,13 @@ fn a_line_has_two_ends() {
     // ...but on a line it has bounced off the end and is on its way back, the first LEDs still dark
     let back = lit(&draw(&look(chase.clone(), true), 2.6));
     assert!(back.contains(&38) && !back.contains(&1), "{:?}", back);
-    // Half way through its fill a curtain covers the middle of a line, and the far side of nothing: a loop starts at its ends
-    let curtain = json!({"animation": "curtain", "color_primary": [255, 0, 0], "color_secondary": [0, 0, 0], "speed": 1.0, "duration": 0.0, "options": {"sides": "both"}});
-    let (on_loop, on_line) = (lit(&draw(&look(curtain.clone(), false), 0.6)), lit(&draw(&look(curtain, true), 0.6)));
+    // A curtain transition, part of the way in: on a loop it starts at the start point and comes from both sides, on a line it opens from the middle
+    let (dark, bright) = (vec![0u8; 120], vec![255u8; 120]);
+    let (on_loop, on_line) = (lit(&blend_flow(&dark, &bright, 0.4, "curtain", None, false, false, None)), lit(&blend_flow(&dark, &bright, 0.4, "curtain", None, false, true, None)));
     assert!(on_loop.contains(&0) && on_loop.contains(&39) && !on_loop.contains(&20), "{:?}", on_loop);
     assert!(on_line.contains(&19) && on_line.contains(&20) && !on_line.contains(&0), "{:?}", on_line);
     // A wipe runs from the other end when reversed
-    let (a, b) = (vec![0u8; 120], vec![255u8; 120]);
+    let (a, b) = (dark, bright);
     assert_eq!(lit(&blend_flow(&a, &b, 0.3, "wipe", None, false, true, None)).first(), Some(&0));
     assert_eq!(lit(&blend_flow(&a, &b, 0.3, "wipe", None, true, true, None)).last(), Some(&39));
     // The direction is saved with the transition, and only when it is turned round

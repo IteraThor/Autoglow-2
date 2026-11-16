@@ -989,7 +989,7 @@
    },
    "game_start": {
     "effect": {
-     "animation": "curtain",
+     "animation": "wave",
      "color_primary": [
       0,
       190,
@@ -1014,7 +1014,8 @@
      "transition": "instant",
      "transition_duration": 0.0,
      "options": {
-      "sides": "both",
+      "waves": 2,
+      "edges": "soft",
       "colour_from": "custom"
      }
     },
@@ -1095,7 +1096,7 @@
    },
    "leg_won": {
     "effect": {
-     "animation": "curtain",
+     "animation": "wave",
      "color_primary": [
       255,
       255,
@@ -1120,7 +1121,8 @@
      "transition": "instant",
      "transition_duration": 0.0,
      "options": {
-      "sides": "both",
+      "waves": 2,
+      "edges": "soft",
       "colour_from": "player"
      }
     },
