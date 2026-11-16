@@ -18,6 +18,12 @@ pub async fn local(State(s): State<S>) -> ApiResult {
     ok(s.tournaments.local_view())
 }
 
+/// A made-up tournament for the Dashboard page's demo switch; nothing is stored
+pub async fn demo(req: Req) -> ApiResult {
+    let q = |k: &str| req.query.get(k).cloned().unwrap_or_default();
+    ok(crate::tournament::demo::view(&q("format"), &q("state")))
+}
+
 pub async fn discover(State(s): State<S>) -> ApiResult {
     ok(json!({"hosts": s.tournaments.discover().await}))
 }

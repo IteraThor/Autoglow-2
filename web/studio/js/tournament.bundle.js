@@ -808,6 +808,7 @@
   var STUDIO_LOOK = { autodarts: "arena", neon: "arena", velocity: "arena", arena: "flap", pub: "flap", tv: "poster", daylight: "poster", glass: "poster" };
   var query = new URLSearchParams(location.search);
   var preview = query.has("preview");
+  var demo = preview ? query.get("demo") || "" : "";
   var saved = {};
   var draft = null;
   var studioLook = { theme: "autodarts", accent: "" };
@@ -1001,7 +1002,7 @@
   async function poll() {
     var _a2;
     try {
-      const r = await fetch("/api/tournament/local", { cache: "no-store" });
+      const r = await fetch(demo ? `/api/tournament/demo?format=${encodeURIComponent(demo.split(":")[0])}&state=${encodeURIComponent(demo.split(":")[1] || "")}` : "/api/tournament/local", { cache: "no-store" });
       if (!r.ok) throw new Error(r.status);
       const body = await r.json();
       data = (_a2 = body.data) != null ? _a2 : body;

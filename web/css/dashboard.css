@@ -84,3 +84,8 @@ label.dsh-row { cursor: pointer; }
 .dsh-group { display: flex; flex-direction: column; gap: 18px; transition: opacity var(--st-fast); }
 .dsh-group.is-off { opacity: .45; pointer-events: none; }
 .dsh-row .stu-seg { flex: none; }
+
+/* The demo switch under the preview */
+.dsh-demo { display: grid; gap: 8px; }
+.dsh-demo-opts { display: flex; gap: 10px; flex-wrap: wrap; }
+.dsh-demo-opts[hidden] { display: none; }

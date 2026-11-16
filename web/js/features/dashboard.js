@@ -67,6 +67,19 @@ let saveTimer = null;
 let page = null;
 let statusTimer = null;
 let tab = 'presets';
+// The demo switch: the preview shows a made-up tournament, so a change can be judged with none running
+const DEMO_FORMATS = [{ value: 'single_ko', label: 'Single KO' }, { value: 'double_ko', label: 'Double KO' }, { value: 'groups', label: 'Groups' }, { value: 'league', label: 'League' }, { value: 'swiss', label: 'Swiss' }];
+const DEMO_STATES = [{ value: 'running', label: 'Running' }, { value: 'finished', label: 'Finished' }];
+const demoKey = 'autoglow-dashboard-demo';
+let demo = null;   // { format, state } while the switch is on
+try { demo = JSON.parse(localStorage.getItem(demoKey)); } catch (err) { /* off */ }
+const previewSrc = () => `/tournament/live?preview=1${demo ? `&demo=${demo.format}:${demo.state}` : ''}`;
+function setDemo(next) {
+  demo = next;
+  try { next ? localStorage.setItem(demoKey, JSON.stringify(next)) : localStorage.removeItem(demoKey); } catch (err) { /* not remembered */ }
+  page?.frame.setAttribute('src', previewSrc());
+  page?.demoRefresh();
+}
 
 // --- Saving -------------------------------------------------------------------------------------
 const saveListeners = new Set();
@@ -146,7 +159,8 @@ function statusChips() {
     try {
       const body = await api('/api/tournament/local');
       const t = body.tournament;
-      if (!t) chips = [['No tournament on this PC', false]];
+      if (demo) chips = [['Demo tournament in the preview', true], [t ? 'A real tournament is on this PC' : 'No real tournament on this PC', !!t]];
+      else if (!t) chips = [['No tournament on this PC', false]];
       else {
         const boards = (t.boards || []).filter(b => b.approved && !b.left).length;
         const ms = (t.matches || []).filter(m => !m.sides?.some(s => s.bye) && m.state !== 'skipped');
@@ -352,6 +366,21 @@ function build(host) {
   };
   note();
 
+  const demoSwitch = h('input', { type: 'checkbox', class: 'stu-switch', 'aria-label': 'Demo tournament' });
+  demoSwitch.addEventListener('change', () => setDemo(demoSwitch.checked ? demo || { format: 'single_ko', state: 'running' } : null));
+  const demoOptions = h('div', { class: 'dsh-demo-opts' });
+  const demoBox = h('div', { class: 'dsh-demo' },
+    h('label', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, 'Demo tournament', h('small', {}, 'Shows a made-up tournament in the preview. The TVs are not affected.')), demoSwitch),
+    demoOptions);
+  const demoRefresh = () => {
+    demoSwitch.checked = !!demo;
+    demoOptions.hidden = !demo;
+    demoOptions.replaceChildren(...(demo ? [
+      segmented(DEMO_FORMATS, demo.format, v => setDemo({ ...demo, format: v }), 'Demo format'),
+      segmented(DEMO_STATES, demo.state, v => setDemo({ ...demo, state: v }), 'Demo state')] : []));
+  };
+  demoRefresh();
+
   // fresh: a new tab (animated in); otherwise the tab is rebuilt quietly after a change
   const refresh = (fresh = false) => {
     tabs.querySelectorAll('button').forEach(b => { const on = b.dataset.id === tab; b.classList.toggle('is-on', on); b.setAttribute('aria-selected', String(on)); });
@@ -368,11 +397,12 @@ function build(host) {
     h('div', { class: 'stu-body' },
       h('div', { class: 'stu-left' },
         h('div', { class: 'stu-screen' }, frame),
+        demoBox,
         h('div', { class: 'dsh-now' }, h('span', { class: 'stu-h' }, 'On all TVs now'), holdSeg),
         holdNote,
-        h('p', { class: 'stu-hint' }, 'The preview is the real TV page with this PC\'s tournament.')),
+        h('p', { class: 'stu-hint' }, 'The preview is the real TV page with this PC\'s tournament, or the demo when it is on.')),
       panel));
-  return { frame, dots, refresh };
+  return { frame, dots, refresh, demoRefresh };
 }
 
 async function renderDashboard() {
@@ -381,7 +411,7 @@ async function renderDashboard() {
     const fresh = await api('/api/dashboard');
     if (S) Object.assign(S, fresh, pending); else S = fresh;
     page ||= build(host);
-    page.frame.setAttribute('src', '/tournament/live?preview=1');
+    page.frame.setAttribute('src', previewSrc());
     page.refresh(true);
     page.dots.refresh();
     clearInterval(statusTimer);

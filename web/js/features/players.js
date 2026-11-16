@@ -181,7 +181,9 @@ const DEMO = [
   ['Heimdall', 'The Watchman', 'Bifrost Bullseyes', 'Himinbjorg', 'Right', '23', 'D12', '2013', '72.1', '22', '130'],
   ['Sif Golden-Hair', 'Goldilocks', 'Asgard Darts Club', 'Asgard', 'Left', '20', 'D10', '2018', '66.5', '9', '108'],
   ['Tyr One-Hand', 'God of Single Combat', 'Midgard Marksmen', 'Midgard', 'Left', '25', 'D8', '2012', '70.3', '17', '120'],
-  ['Hela Lokisdottir', 'Queen of Hel', 'Jotunheim Tricksters', 'Helheim', 'Right', '19', 'D6', '2015', '77.2', '41', '150']
+  ['Hela Lokisdottir', 'Queen of Hel', 'Jotunheim Tricksters', 'Helheim', 'Right', '19', 'D6', '2015', '77.2', '41', '150'],
+  ['Thor Odinson', 'God of Thunder', 'Asgard Darts Club', 'Asgard', 'Right', '26', 'D20', '2010', '81.3', '88', '170'],
+  ['Loki Laufeyson', 'The Trickster', 'Jotunheim Tricksters', 'Jotunheim', 'Left', '22', 'D4', '2014', '73.6', '30', '136']
 ];
 const isDemo = p => DEMO.some(d => d[0] === p.name);
 

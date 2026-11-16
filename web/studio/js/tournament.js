@@ -33,6 +33,7 @@ const THEMES = ['arena', 'flap', 'poster'];
 const STUDIO_LOOK = { autodarts: 'arena', neon: 'arena', velocity: 'arena', arena: 'flap', pub: 'flap', tv: 'poster', daylight: 'poster', glass: 'poster' };
 const query = new URLSearchParams(location.search);
 const preview = query.has('preview');
+const demo = preview ? query.get('demo') || '' : '';   // "format:state": the Dashboard page's made-up tournament
 let saved = {};          // the settings from the server
 let draft = null;        // unsaved edits from the Dashboard page (preview only)
 let studioLook = { theme: 'autodarts', accent: '' };
@@ -249,7 +250,7 @@ async function loadRoster() {
 
 async function poll() {
   try {
-    const r = await fetch('/api/tournament/local', { cache: 'no-store' });
+    const r = await fetch(demo ? `/api/tournament/demo?format=${encodeURIComponent(demo.split(':')[0])}&state=${encodeURIComponent(demo.split(':')[1] || '')}` : '/api/tournament/local', { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     const body = await r.json();
     data = body.data ?? body;

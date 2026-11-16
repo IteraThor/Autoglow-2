@@ -5,6 +5,7 @@
 //! The Chrome extension only ever talks to its own AutoGlow (/api/tournament/*).
 
 pub mod agent;
+pub mod demo;
 pub mod engine;
 #[cfg(test)]
 mod tests;
