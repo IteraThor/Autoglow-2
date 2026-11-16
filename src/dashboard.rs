@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 
 pub const LAYOUTS: [&str; 4] = ["overview", "boards", "wall", "single"];
 /// "studio": the look and accent the Studio uses
-pub const THEMES: [&str; 4] = ["arena", "flap", "poster", "studio"];
+pub const THEMES: [&str; 9] = ["arena", "flap", "poster", "mono", "gazette", "blueprint", "pop", "worldcup", "studio"];
 pub const PRESETS: [&str; 6] = ["overview", "boards", "wall", "standings", "minimal", "custom"];
 /// The scenes the dashboard rotates through, with their default seconds
 pub const SCENES: [(&str, i64); 4] = [("bracket", 14), ("tables", 14), ("results", 10), ("leaders", 10)];

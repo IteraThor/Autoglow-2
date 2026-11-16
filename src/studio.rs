@@ -18,7 +18,7 @@ pub const PROFILE_FIELDS: [(&str, usize); 12] = [
     ("favourite_double", 10), ("playing_since", 10), ("stat_average", 10), ("stat_180s", 10), ("stat_best_checkout", 10),
 ];
 const PICTURE_SLOTS: [&str; 2] = ["image", "mockup"];
-const THEMES: [&str; 8] = ["autodarts", "tv", "arena", "neon", "velocity", "glass", "pub", "daylight"];
+const THEMES: [&str; 13] = ["autodarts", "tv", "arena", "neon", "velocity", "glass", "pub", "daylight", "mono", "gazette", "blueprint", "pop", "worldcup"];
 const LAYOUTS: [&str; 3] = ["split", "board", "player"];
 const MAX_TEXT_LENGTH: usize = 80;
 

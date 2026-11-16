@@ -184,7 +184,12 @@ export const THEMES = [
   { id: 'velocity', name: 'Velocity', bg: '#121212', row: '#e2342d', text: '#ffffff', slant: true },
   { id: 'glass', name: 'Glass', bg: 'rgba(160,190,220,.35)', row: 'rgba(255,255,255,.35)', text: '#0d1b2a' },
   { id: 'pub', name: 'Pub', bg: '#2a3a2e', row: '#3a2a1a', text: '#f3ecd7', frame: '#6b4a2b' },
-  { id: 'daylight', name: 'Daylight', bg: '#f4f5f7', row: '#ffffff', text: '#1d2430' }
+  { id: 'daylight', name: 'Daylight', bg: '#f4f5f7', row: '#ffffff', text: '#1d2430' },
+  { id: 'mono', name: 'Mono', bg: '#000000', row: 'transparent', text: '#ffffff', outline: 'rgba(255,255,255,.22)' },
+  { id: 'gazette', name: 'Gazette', bg: '#f4efe4', row: '#1a1814', text: '#f4efe4' },
+  { id: 'blueprint', name: 'Blueprint', bg: '#12449a', row: 'transparent', text: '#eaf2ff', outline: '#eaf2ff' },
+  { id: 'pop', name: 'Pop', bg: '#ffd60a', row: '#fffdf5', text: '#141414', outline: '#141414' },
+  { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', row: '#4b1fa8', text: '#f7c948' }
 ];
 
 export function themeSwatch(t, accent) {

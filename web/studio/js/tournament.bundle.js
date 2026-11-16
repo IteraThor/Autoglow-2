@@ -804,8 +804,8 @@
     calm: false
   };
   var LAYOUTS = ["overview", "boards", "wall", "single"];
-  var THEMES = ["arena", "flap", "poster"];
-  var STUDIO_LOOK = { autodarts: "arena", neon: "arena", velocity: "arena", arena: "flap", pub: "flap", tv: "poster", daylight: "poster", glass: "poster" };
+  var THEMES = ["arena", "flap", "poster", "mono", "gazette", "blueprint", "pop", "worldcup"];
+  var STUDIO_LOOK = { autodarts: "arena", neon: "arena", velocity: "arena", arena: "flap", pub: "flap", tv: "poster", daylight: "poster", glass: "poster", mono: "mono", gazette: "gazette", blueprint: "blueprint", pop: "pop", worldcup: "worldcup" };
   var query = new URLSearchParams(location.search);
   var preview = query.has("preview");
   var demo = preview ? query.get("demo") || "" : "";

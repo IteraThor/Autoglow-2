@@ -28,9 +28,9 @@ const DEFAULTS = {
   ticker: true, ticker_speed: 'normal', ticker_items: {}, ticker_text: '', text: 'normal', calm: false
 };
 const LAYOUTS = ['overview', 'boards', 'wall', 'single'];
-const THEMES = ['arena', 'flap', 'poster'];
+const THEMES = ['arena', 'flap', 'poster', 'mono', 'gazette', 'blueprint', 'pop', 'worldcup'];
 // The Studio's looks, as the dashboard look closest to each
-const STUDIO_LOOK = { autodarts: 'arena', neon: 'arena', velocity: 'arena', arena: 'flap', pub: 'flap', tv: 'poster', daylight: 'poster', glass: 'poster' };
+const STUDIO_LOOK = { autodarts: 'arena', neon: 'arena', velocity: 'arena', arena: 'flap', pub: 'flap', tv: 'poster', daylight: 'poster', glass: 'poster', mono: 'mono', gazette: 'gazette', blueprint: 'blueprint', pop: 'pop', worldcup: 'worldcup' };
 const query = new URLSearchParams(location.search);
 const preview = query.has('preview');
 const demo = preview ? query.get('demo') || '' : '';   // "format:state": the Dashboard page's made-up tournament
