@@ -437,3 +437,18 @@ fn step_transition_depends_on_where_it_comes_from() {
     let back = GameFlow::from_value(&f.to_value(), None);
     assert_eq!(back.step("turn").from.len(), 1);
 }
+
+#[test]
+fn ag1_preset_is_the_autoglow_1_traffic_light() {
+    let f = crate::game_flow::build_preset("ag1", None);
+    let look = |s: &str| (f.step(s).enabled(), f.step(s).effect.animation.clone(), f.step(s).effect.color_primary, f.step(s).transition.style.clone());
+    let green = RGBColor::new(0, 255, 0);
+    assert_eq!(look("takeout"), (true, "solid".into(), RGBColor::new(255, 255, 0), "instant".into()));
+    assert_eq!(look("takeout_in_progress"), (true, "solid".into(), RGBColor::new(255, 0, 0), "instant".into()));
+    assert!(!f.step("bull_off").enabled());
+    assert_eq!(f.step("turn").transition.style, "instant");
+    assert!(f.players.iter().all(|p| p.color == green));
+    assert!(!f.step("game_start").enabled() && !f.step("leg_won").enabled() && !f.step("match_won").enabled());
+    assert!(f.hits.values().all(|h| !h.enabled) && !f.hit_locator);
+    assert_eq!((f.idle.fx, f.idle.colors[0]), (0, green));
+}

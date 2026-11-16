@@ -501,8 +501,10 @@ function statusNotes() {
   if (!Object.values(flow.hits).some(hh => hh.enabled)) {
     notes.push({ tone: 'off', text: 'No hit effects · darts don\'t light anything up.', select: { kind: 'hit', id: '180' } });
   }
+  // One colour for everyone (AG1) is a choice, not a mix-up
   const seen = new Map();
-  flow.players.slice(0, 4).forEach((p, i) => {
+  const oneColour = new Set(flow.players.map(p => hex(p.color))).size === 1;
+  if (!oneColour) flow.players.slice(0, 4).forEach((p, i) => {
     const key = hex(p.color);
     if (seen.has(key)) notes.push({ tone: 'warn', text: `Player ${seen.get(key) + 1} and player ${i + 1} have the same colour.`, select: { kind: 'players' } });
     else seen.set(key, i);
@@ -1481,15 +1483,21 @@ function locatorCheck() {
       }, { cw: 'Clockwise', ccw: 'Anticlockwise', off: 'Off (not around the board)' }))));
 }
 
+// Experimental: shown switched off and locked until it is ready (the server ignores the profile setting too)
+function lockedOff(label) {
+  const el = onOff(false, () => {}, label);
+  el.classList.add('is-locked');
+  el.querySelector('input').disabled = true;
+  return el;
+}
+
 function profilePanel() {
-  const flow = page.draft;
   return [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Profile settings')),
     h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. Changes only affect this segment.'),
     section('Hit locator',
-      h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
-      h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
-      flow.hit_locator && locatorCheck())
+      h('div', { class: 'fm-toggle-row' }, lockedOff('Hit locator'), h('span', { class: 'fm-experimental' }, 'Experimental')),
+      h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour. Still experimental, so it can\'t be switched on yet.'))
   ];
 }
 

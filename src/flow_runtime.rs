@@ -427,7 +427,7 @@ impl FlowRuntime {
                 played = Some(key.clone());
                 all.push(key.clone());
             }
-            if flow.hit_locator && role != "ambient" && ["single", "double", "triple", "ton", "ton40"].contains(&key.as_str()) {
+            if crate::game_flow::HIT_LOCATOR_READY && flow.hit_locator && role != "ambient" && ["single", "double", "triple", "ton", "ton40"].contains(&key.as_str()) {
                 if let Some(pos) = pos {
                     if self.out.can_locate(&ip, sid) {
                         if !streaming {

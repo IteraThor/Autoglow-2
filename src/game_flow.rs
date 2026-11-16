@@ -28,6 +28,8 @@ pub const TIMED_STEPS: [&str; 3] = ["game_start", "leg_won", "match_won"];
 pub const ALWAYS_ON_STEPS: [&str; 1] = ["turn"];
 pub const HIT_IDS: [&str; 9] = ["single", "double", "triple", "bullseye", "miss", "bust", "ton", "ton40", "180"];
 pub const MAX_PLAYERS: usize = 6;
+/// The hit locator is experimental: the Flow editor shows it locked off and the runtime ignores the profile setting
+pub const HIT_LOCATOR_READY: bool = false;
 pub const PLAYER_COLOURS: [(i64, i64, i64); 6] = [(0, 110, 255), (255, 120, 0), (220, 0, 200), (0, 220, 170), (255, 215, 0), (235, 235, 235)];
 pub const DEFAULT_PROFILE_NAME: &str = "Classic";
 
@@ -431,15 +433,20 @@ const GOLD: C3 = (255, 175, 0);
 const RED: C3 = (255, 0, 30);
 const GREY: C3 = (120, 120, 140);
 const CYAN: C3 = (0, 190, 255);
+// AutoGlow 1's default status colours (classic.rs STATUSES)
+const AG1_THROW: C3 = (0, 255, 0);
+const AG1_TAKEOUT: C3 = (255, 255, 0);
+const AG1_PULLING: C3 = (255, 0, 0);
 
-pub const PRESET_ORDER: [&str; 5] = ["minimal", "classic", "arena", "show", "party"];
+pub const PRESET_ORDER: [&str; 6] = ["minimal", "classic", "arena", "show", "party", "ag1"];
 
 pub fn preset_info(id: &str) -> (&'static str, &'static str) {
     match id {
         "minimal" => ("Minimal", "Only shows whose turn it is. Calm and quiet."),
-        "arena" => ("Arena", "Bold, like a stage match, with a hit locator around the board."),
+        "arena" => ("Arena", "Bold, like a stage match."),
         "show" => ("Show", "Big moments feel big: score tiers, sparkle and rainbow finales."),
         "party" => ("Party", "Everything celebrates. Flashing during turns may disturb dart detection."),
+        "ag1" => ("AG1", "Like AutoGlow 1: green to throw, yellow to pull the darts, red while pulling. Instant changes, no effects."),
         _ => ("Classic", "Clear player colours, gentle changes and a few highlights."),
     }
 }
@@ -610,6 +617,24 @@ fn preset_flow(pid: &str) -> GameFlow {
             true,
             idle(9, 100, 170, None),
         ),
+        // AutoGlow 1 (Classic mode): the board status as a traffic light, solid colours, instant changes (WLED tt 0)
+        "ag1" => {
+            let cut = || comes_in("instant", 0.0, None);
+            (
+                steps_of(vec![
+                    ("bull_off", look("solid").c(AG1_THROW).off().eff(), cut()),
+                    ("game_start", off_look("solid", 2.0), cut()),
+                    ("turn", look("solid").player().eff(), cut()),
+                    ("takeout", look("solid").c(AG1_TAKEOUT).eff(), cut()),
+                    ("takeout_in_progress", look("solid").c(AG1_PULLING).eff(), cut()),
+                    ("leg_won", off_look("solid", 3.0), cut()),
+                    ("match_won", off_look("solid", 5.0), cut()),
+                ]),
+                HashMap::new(),
+                false,
+                idle(0, 100, 128, Some(vec![RGBColor::new(AG1_THROW.0, AG1_THROW.1, AG1_THROW.2), RGBColor::BLACK, RGBColor::BLACK])),
+            )
+        }
         _ => (
             steps_of(vec![
                 ("bull_off", look("breathe").c(SOFT_WHITE).c2((20, 20, 20)).spd(0.8).eff(), fade(0.6)),
@@ -627,7 +652,9 @@ fn preset_flow(pid: &str) -> GameFlow {
             idle(9, 70, 128, None),
         ),
     };
-    let mut f = GameFlow::build(DEFAULT_PROFILE_NAME, steps, hits, Vec::new());
+    // AG1 has no player colours: every player's turn is the same green
+    let players = if pid == "ag1" { vec![FlowPlayer { color: RGBColor::new(AG1_THROW.0, AG1_THROW.1, AG1_THROW.2), name: String::new() }; MAX_PLAYERS] } else { Vec::new() };
+    let mut f = GameFlow::build(DEFAULT_PROFILE_NAME, steps, hits, players);
     f.hit_locator = locator;
     f.idle = idl;
     f
