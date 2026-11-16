@@ -595,8 +595,8 @@ const EDGES = {
     { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout' },
     { from: ['frame', 'r'], to: ['match_won', 'l'], step: 'match_won' },
     { from: ['frame', 'r'], to: ['leg_won', 'l'], step: 'leg_won' },
-    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', src: 'leg_won', label: 'next leg', out: 44 },
-    { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', out: 36 },
+    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', src: 'leg_won', label: 'next leg', out: 44, endsHere: true },
+    { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', out: 36, bypass: ['frame', 't'] },
     { from: ['waiting', 'b'], to: ['timeout', 't'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
   ],
@@ -610,12 +610,73 @@ const EDGES = {
     { from: ['p2', 't', 50], to: ['takeout', 'b', 50], step: 'takeout' },
     { from: ['frame', 'b'], to: ['match_won', 't'], step: 'match_won' },
     { from: ['frame', 'b'], to: ['leg_won', 't'], step: 'leg_won' },
-    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', src: 'leg_won', label: 'next leg', out: 60 },
-    { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70 },
+    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', src: 'leg_won', label: 'next leg', out: 60, endsHere: true },
+    { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70, bypass: ['frame', 'l'] },
     { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
   ]
 };
+
+// --- hiding switched-off steps -------------------------------------------------
+// With "Show disabled" off, a switched-off step (or standby timer) leaves the chart: the chart closes up along its
+// main axis by the step's gap, and the arrows into and out of it become one arrow carrying the next step's transition
+// (what the lights really play, since the server skips a step that is off). `bypass` is where that joined arrow
+// starts instead; `endsHere` arrows vanish with their start step.
+const SHOW_OFF_KEY = 'autoglow_flow_show_off';
+const GAPS = {
+  horizontal: { bull_off: 235, game_start: 235, takeout: 245 },
+  vertical: { bull_off: 135, game_start: 135, takeout: 140 }
+};
+
+function showDisabled() {
+  try { return localStorage.getItem(SHOW_OFF_KEY) === '1'; } catch (err) { return false; }
+}
+
+function setShowDisabled(on) {
+  try { localStorage.setItem(SHOW_OFF_KEY, on ? '1' : '0'); } catch (err) { /* per-browser nicety only */ }
+  render();
+}
+
+function nodeHidden(id) {
+  if (id === 'timeout') return !page.overview.standby?.dim_on;
+  if (id === 'auto_off') return !page.overview.standby?.off_on;
+  const step = NODE_STEP[id] || id;
+  return !!page.draft.steps[step] && !stepMeta(step).always_on && !stepOn(step);
+}
+
+function visibleChart(view) {
+  const base = LAYOUTS[view];
+  if (showDisabled()) return { L: base, edges: EDGES[view] };
+  const hidden = Object.keys(base.nodes).filter(nodeHidden);
+  const [pos, size, total] = view === 'vertical' ? ['y', 'h', 'height'] : ['x', 'w', 'width'];
+  const cuts = hidden.filter(id => GAPS[view][id]).map(id => [base.nodes[id][pos], GAPS[view][id]]);
+  // Everything at or past a hidden step moves up by its gap; a box that spans it (the match frame) shrinks instead
+  const close = box => {
+    const start = box[pos];
+    const end = start + (box[size] || 0);
+    const moved = { ...box };
+    for (const [at, gap] of cuts) {
+      if (at <= start) moved[pos] -= gap;
+      else if (at < end) moved[size] -= gap;
+    }
+    return moved;
+  };
+  const L = {
+    ...base,
+    [total]: base[total] - cuts.reduce((sum, [, gap]) => sum + gap, 0),
+    nodes: Object.fromEntries(Object.entries(base.nodes).filter(([id]) => !hidden.includes(id)).map(([id, box]) => [id, close(box)])),
+    frame: close(base.frame), chips: close(base.chips), players: close(base.players)
+  };
+  let edges = EDGES[view];
+  for (const id of hidden) {
+    const into = edges.filter(e => e.to[0] === id);
+    const out = edges.filter(e => e.from[0] === id && !e.endsHere);
+    const joined = into.flatMap(i => out.filter(o => o.to[0] !== i.from[0]).map(({ bypass, ...o }) =>
+      ({ ...o, from: bypass || i.from, src: o.src === id ? undefined : o.src })));
+    edges = [...edges.filter(e => e.to[0] !== id && e.from[0] !== id), ...joined];
+  }
+  return { L, edges };
+}
 
 const NORMAL = { l: [-1, 0], r: [1, 0], t: [0, -1], b: [0, 1] };
 
@@ -776,7 +837,7 @@ function edgeLabel(edge) {
 
 function chart() {
   const view = currentView();
-  const L = LAYOUTS[view];
+  const { L, edges } = visibleChart(view);
   const boxes = { ...L.nodes, frame: L.frame };
   const stage = h('div', { class: `fc-stage fc-${view}` });
   stage.style.width = `${L.width}px`;
@@ -803,7 +864,7 @@ function chart() {
   svg.append(defs);
   stage.append(svg);
 
-  for (const edge of EDGES[view]) {
+  for (const edge of edges) {
     const [fromId, fs, fa = 0] = edge.from;
     const [toId, ts, ta = 0] = edge.to;
     const a = anchor(boxes[fromId], fs, fa);
@@ -838,7 +899,12 @@ function chart() {
   const scroller = h('div', { class: 'fc-scroller' }, sizer);
   // Fit wide charts into the card; below 80 % the chart scrolls sideways instead of shrinking further
   requestAnimationFrame(() => fitChart(scroller, sizer, stage, L));
-  return h('div', { class: 'fc-wrap' }, scroller);
+  const toggle = h('label', { class: 'fm-switch fc-show-off' },
+    h('span', { class: 'switch' },
+      h('input', { type: 'checkbox', checked: showDisabled(), onchange: e => setShowDisabled(e.target.checked) }),
+      h('span', { class: 'switch-slider' })),
+    h('span', {}, 'Show disabled'));
+  return h('div', { class: 'fc-wrap' }, toggle, scroller);
 }
 
 function fitChart(scroller, sizer, stage, L) {
@@ -868,7 +934,7 @@ function playersRow() {
 function hitsRow() {
   return h('div', { class: 'fc-chips' },
     h('span', { class: 'fc-row-label' }, 'Hits'),
-    ...page.overview.hits.map(meta => {
+    ...page.overview.hits.filter(meta => showDisabled() || page.draft.hits[meta.id].enabled).map(meta => {
       const hit = page.draft.hits[meta.id];
       const chip = h('button', {
         type: 'button',

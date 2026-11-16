@@ -770,9 +770,19 @@ input.ui-input.fm-player-name {
 
 /* --- Chart ------------------------------------------------------------------ */
 .fc-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.fc-show-off {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .fc-scroller {
