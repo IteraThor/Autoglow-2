@@ -107,14 +107,15 @@ fn with_overview(s: &S, extra: Obj) -> ApiResult {
     ok(Value::Object(o))
 }
 
-/// Which controllers answer, by ip (one streaming the game counts as online)
+/// Which controllers answer, by ip. A controller the engine streams to is probed too: streaming mode is also set
+/// for one that is switched off, so it proves nothing (it gets longer to answer while busy).
 async fn online(s: &S) -> Obj {
     let mut out = Obj::new();
     let mut hs = Vec::new();
     for d in s.engine.active_devices() {
         let streaming = s.engine.drivers().iter().any(|x| x.ip().trim() == d.ip.trim() && x.protocol_mode() == ProtocolMode::ActiveUdp);
         let ip = d.ip.clone();
-        hs.push((d.ip.clone(), streaming, tokio::task::spawn_blocking(move || if streaming { true } else { http::is_host_online(ip.trim(), 80, 0.3) })));
+        hs.push((d.ip.clone(), streaming, tokio::task::spawn_blocking(move || http::is_host_online(ip.trim(), 80, if streaming { 1.5 } else { 0.3 }))));
     }
     for (ip, _, h) in hs {
         out.insert(ip, json!(h.await.unwrap_or(false)));
@@ -490,13 +491,23 @@ pub async fn try_look(State(s): State<S>, req: Req) -> ApiResult {
                 let n = safe_int(non_empty(data.get("number")), 20);
                 drv.flow_locate(sid, board_position(Some(n)).unwrap_or(0.0), colour, 2.0, s.engine.segment_clockwise(&ip, sid));
             }
-            _ => {
+            "look" => {
+                // a step's look cut in at once (the "before" of a looping transition preview)
                 if !STEP_IDS.contains(&item.as_str()) {
                     return Err(AppError::validation("Unknown step."));
                 }
                 let st = flow.step(&item);
-                let t = &st.transition;
-                drv.flow_show(sid, &coloured(&st.effect, item == "turn"), &t.style, t.duration, t.accent_color.map(|c| c.tuple()), t.reverse);
+                drv.flow_show(sid, &coloured(&st.effect, item == "turn"), "instant", 0.0, None, false);
+            }
+            _ => {
+                // "turn<game_start" = Player 1 coming in from Game starts
+                let (step_id, prev) = item.split_once('<').unwrap_or((item.as_str(), ""));
+                if !STEP_IDS.contains(&step_id) {
+                    return Err(AppError::validation("Unknown step."));
+                }
+                let st = flow.step(step_id);
+                let t = st.transition_from(prev);
+                drv.flow_show(sid, &coloured(&st.effect, step_id == "turn"), &t.style, t.duration, t.accent_color.map(|c| c.tuple()), t.reverse);
             }
         }
     }

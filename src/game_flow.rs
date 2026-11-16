@@ -163,25 +163,43 @@ impl FlowIdle {
 pub struct FlowStep {
     pub effect: EffectConfig,
     pub transition: FlowTransition,
+    /// own transition when coming from one particular step (Player 1: from game_start, from leg_won)
+    pub from: std::collections::BTreeMap<String, FlowTransition>,
 }
 
 impl FlowStep {
     pub fn new(effect: EffectConfig, transition: FlowTransition) -> FlowStep {
-        FlowStep { effect: to_flow_effect(&effect), transition }
+        FlowStep { effect: to_flow_effect(&effect), transition, from: Default::default() }
     }
     pub fn enabled(&self) -> bool {
         self.effect.enabled
     }
+    /// How this step comes in after `prev`
+    pub fn transition_from(&self, prev: &str) -> &FlowTransition {
+        self.from.get(prev).unwrap_or(&self.transition)
+    }
     pub fn to_value(&self) -> Value {
-        json!({"effect": self.effect.to_value(), "transition": self.transition.to_value()})
+        let mut v = json!({"effect": self.effect.to_value(), "transition": self.transition.to_value()});
+        if !self.from.is_empty() {
+            v["from"] = Value::Object(self.from.iter().map(|(k, t)| (k.clone(), t.to_value())).collect());
+        }
+        v
     }
     pub fn from_value(d: &Value) -> FlowStep {
         let Some(o) = d.as_object() else { return FlowStep::new(EffectConfig { options: Some(Obj::new()), ..Default::default() }, FlowTransition::default()) };
         let empty = json!({});
-        FlowStep::new(
+        let mut st = FlowStep::new(
             EffectConfig::from_value(Some(non_empty(o.get("effect")).unwrap_or(&empty))),
             FlowTransition::from_value(Some(non_empty(o.get("transition")).unwrap_or(&empty))),
-        )
+        );
+        if let Some(Value::Object(m)) = o.get("from") {
+            for (k, v) in m {
+                if STEP_IDS.contains(&k.as_str()) && v.is_object() {
+                    st.from.insert(k.clone(), FlowTransition::from_value(Some(v)));
+                }
+            }
+        }
+        st
     }
 }
 

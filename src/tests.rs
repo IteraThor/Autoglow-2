@@ -415,3 +415,15 @@ fn browser_looks_match_the_strip() {
         close(&blend_flow(&a, &b, x["factor"].as_f64().unwrap(), x["style"].as_str().unwrap(), acc, x["reverse"] == json!(true), x["line"] == json!(true), x["origin"].as_f64()), m, &format!("blend {}", x));
     }
 }
+
+#[test]
+fn step_transition_depends_on_where_it_comes_from() {
+    let mut v = create_default_game_flow().to_value();
+    v["steps"]["turn"]["from"] = json!({"game_start": {"style": "wipe", "duration": 0.7}, "bogus": {"style": "wipe"}});
+    let f = GameFlow::from_value(&v, None);
+    let turn = f.step("turn");
+    assert_eq!(turn.transition_from("game_start").style, "wipe");
+    assert_eq!(turn.transition_from("takeout"), &turn.transition);
+    let back = GameFlow::from_value(&f.to_value(), None);
+    assert_eq!(back.step("turn").from.len(), 1);
+}

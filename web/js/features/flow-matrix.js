@@ -32,6 +32,13 @@ const OFF_TEXT = {
   match_won: 'the lights go back to waiting when the match ends'
 };
 
+// A transition is chosen by key: "turn" (the usual way in) or "turn<game_start" (Player 1 coming in from Game starts,
+// with a transition of its own once edited)
+const edgeKey = e => (e.src ? `${e.step}<${e.src}` : e.step);
+const trOf = key => { const [id, src] = key.split('<'); const st = page.draft.steps[id]; return (src && st.from?.[src]) || st.transition; };
+const stepOfKey = key => key.split('<')[0];
+const beforeOf = key => key.split('<')[1] || BEFORE[key];
+
 // The step that is usually showing before a step comes in (for transition previews)
 const BEFORE = { bull_off: null, game_start: 'bull_off', turn: 'takeout', takeout: 'turn', leg_won: 'turn', match_won: 'turn' };
 
@@ -212,33 +219,36 @@ function stepFrame(id) {
   };
 }
 
+// Transition preview loops: the look before for 2 s, the transition, the look after for 2 s
+const HOLD = 2;
 function transitionFrame(id) {
   return (t, n) => {
-    const step = page.draft.steps[id];
-    const tr = step.transition;
-    const before = BEFORE[id] && page.draft.steps[BEFORE[id]].effect.enabled ? stepLook(BEFORE[id]) : null;
+    const tr = trOf(id);
+    const sid = stepOfKey(id);
+    const prev = beforeOf(id);
+    const before = prev && page.draft.steps[prev].effect.enabled ? stepLook(prev) : null;
     const dur = tr.style === 'instant' ? 0 : tr.duration;
-    const cycle = 0.7 + dur + 1.0;
+    const cycle = HOLD + dur + HOLD;
     const u = t % cycle;
     const a = before ? renderFlowFrame(before, u, n, isLine()) : new Uint8ClampedArray(n * 3);
-    const b = renderFlowFrame(stepLook(id), Math.max(0, u - 0.7), n, isLine());
-    if (u < 0.7) return a;
-    if (dur <= 0 || u >= 0.7 + dur) return b;
-    return blendFlow(a, b, (u - 0.7) / dur, tr.style, tr.accent_color || null, !!tr.reverse, isLine());
+    const b = renderFlowFrame(stepLook(sid), Math.max(0, u - HOLD), n, isLine());
+    if (u < HOLD) return a;
+    if (dur <= 0 || u >= HOLD + dur) return b;
+    return blendFlow(a, b, (u - HOLD) / dur, tr.style, tr.accent_color || null, !!tr.reverse, isLine());
   };
 }
 
 function styleFrame(style, id) {
   return (t, n) => {
-    const step = page.draft.steps[id];
-    const dur = style === 'instant' ? 0 : Math.max(0.3, step.transition.duration);
+    const tr = trOf(id);
+    const dur = style === 'instant' ? 0 : Math.max(0.3, tr.duration);
     const cycle = 0.5 + dur + 0.7;
     const u = t % cycle;
     const a = new Uint8ClampedArray(n * 3).fill(30);
-    const b = renderFlowFrame(stepLook(id), 0, n, isLine());
+    const b = renderFlowFrame(stepLook(stepOfKey(id)), 0, n, isLine());
     if (u < 0.5) return a;
     if (dur <= 0 || u >= 0.5 + dur) return b;
-    return blendFlow(a, b, (u - 0.5) / dur, style, step.transition.accent_color || null, !!step.transition.reverse, isLine());
+    return blendFlow(a, b, (u - 0.5) / dur, style, tr.accent_color || null, !!tr.reverse, isLine());
   };
 }
 
@@ -442,13 +452,37 @@ async function tryOnLights(kind, id, extra = {}, { quiet = false } = {}) {
   const segments = extra.ip ? undefined : tryTargets().map(s => ({ ip: s.ip, segment_id: s.id }));
   try {
     await api.post('/api/flow/try', { flow: page.draft, kind, id, segments, ...extra });
+    return true;
   } catch (err) {
     if (!quiet) toast.error(err);
+    return false;
   }
 }
 
 // Clicking a look or a transition also plays it on the selected segment's strip
 const playOnClick = (kind, id) => () => tryOnLights(kind, id, {}, { quiet: true });
+
+// A selected transition loops on the strip: the look before for HOLD seconds, the transition, the look after for HOLD
+// seconds, again, until something else is selected
+let loopRun = 0;
+function stopTransitionLoop() { loopRun++; }
+function startTransitionLoop(key) {
+  const run = ++loopRun;
+  const alive = () => run === loopRun && isSelected('transition', key) && !document.hidden
+    && document.getElementById(LIGHTING_PANE)?.classList.contains('active');
+  const wait = sec => new Promise(r => setTimeout(r, sec * 1000));
+  (async () => {
+    while (alive()) {
+      const prev = beforeOf(key);
+      if (prev && page.draft.steps[prev]?.effect.enabled && !await tryOnLights('look', prev)) return;
+      await wait(HOLD);
+      if (!alive()) return;
+      if (!await tryOnLights('step', key)) return;
+      const tr = trOf(key);
+      await wait((tr.style === 'instant' ? 0 : tr.duration || 0.5) + HOLD);
+    }
+  })();
+}
 
 // --- status line -------------------------------------------------------------
 
@@ -485,9 +519,10 @@ const VIEW_KEY = 'autoglow_flow_view';
 // Opening a step, a hit or a transition plays what is set there on the strip
 function select(sel) {
   page.selected = sel;
+  stopTransitionLoop();
   render();
   if (sel?.kind === 'step' || sel?.kind === 'hit') playOnClick(sel.kind, sel.id)();
-  else if (sel?.kind === 'transition') playOnClick('step', sel.id)();
+  else if (sel?.kind === 'transition') startTransitionLoop(sel.id);
   else if (sel?.kind === 'waiting') previewIdle();
 }
 
@@ -553,14 +588,14 @@ const EDGES = {
   horizontal: [
     { from: ['waiting', 'r'], to: ['bull_off', 'l'], step: 'bull_off' },
     { from: ['bull_off', 'r'], to: ['game_start', 'l'], step: 'game_start' },
-    { from: ['game_start', 'r'], to: ['p1', 'l'], step: 'turn' },
+    { from: ['game_start', 'r'], to: ['p1', 'l'], step: 'turn', src: 'game_start' },
     { from: ['p1', 'r', -16], to: ['takeout', 'l', -16], step: 'takeout' },
     { from: ['takeout', 'l', 16], to: ['p1', 'r', 16], step: 'turn' },
     { from: ['takeout', 'r', -16], to: ['p2', 'l', -16], step: 'turn' },
     { from: ['p2', 'l', 16], to: ['takeout', 'r', 16], step: 'takeout' },
     { from: ['frame', 'r'], to: ['match_won', 'l'], step: 'match_won' },
     { from: ['frame', 'r'], to: ['leg_won', 'l'], step: 'leg_won' },
-    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', label: 'next leg', out: 44 },
+    { from: ['leg_won', 'b'], to: ['p1', 'b'], step: 'turn', src: 'leg_won', label: 'next leg', out: 44 },
     { from: ['match_won', 't'], to: ['waiting', 't'], fixed: 'back to waiting', out: 36 },
     { from: ['waiting', 'b'], to: ['timeout', 't'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
@@ -568,14 +603,14 @@ const EDGES = {
   vertical: [
     { from: ['waiting', 'b'], to: ['bull_off', 't'], step: 'bull_off' },
     { from: ['bull_off', 'b'], to: ['game_start', 't'], step: 'game_start' },
-    { from: ['game_start', 'b'], to: ['p1', 't'], step: 'turn', at: 0.22 },
+    { from: ['game_start', 'b'], to: ['p1', 't'], step: 'turn', src: 'game_start', at: 0.22 },
     { from: ['p1', 'b', -50], to: ['takeout', 't', -50], step: 'takeout' },
     { from: ['takeout', 't', 50], to: ['p1', 'b', 50], step: 'turn' },
     { from: ['takeout', 'b', -50], to: ['p2', 't', -50], step: 'turn' },
     { from: ['p2', 't', 50], to: ['takeout', 'b', 50], step: 'takeout' },
     { from: ['frame', 'b'], to: ['match_won', 't'], step: 'match_won' },
     { from: ['frame', 'b'], to: ['leg_won', 't'], step: 'leg_won' },
-    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', label: 'next leg', out: 60 },
+    { from: ['leg_won', 'r'], to: ['p1', 'r'], step: 'turn', src: 'leg_won', label: 'next leg', out: 60 },
     { from: ['match_won', 'l'], to: ['waiting', 'l'], fixed: 'back to waiting', out: 70 },
     { from: ['waiting', 'r'], to: ['timeout', 'l'], standby: 'dim' },
     { from: ['timeout', 'b'], to: ['auto_off', 't'], standby: 'off' }
@@ -734,7 +769,7 @@ function edgeLabel(edge) {
     const s = page.overview.standby || {};
     return edge.standby === 'dim' ? (s.dim_on ? `after ${s.dim_minutes} min inactivity` : 'off') : (s.off_on ? `after ${s.off_minutes} min inactivity` : 'off');
   }
-  const tr = page.draft.steps[edge.step].transition;
+  const tr = trOf(edgeKey(edge));
   const text = tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} ${seconds(tr.duration)}`;
   return edge.label ? `${edge.label} · ${text}` : text;
 }
@@ -778,7 +813,7 @@ function chart() {
     const nodeStep = n => NODE_STEP[n] || n;
     const ends = [nodeStep(fromId), nodeStep(toId)].filter(n => page.draft.steps[n]);
     const skipped = (edge.step && !stepOn(edge.step)) || ends.some(n => !stepOn(n));
-    const chosen = edge.step && isSelected('transition', edge.step);
+    const chosen = edge.step && isSelected('transition', edgeKey(edge));
     const cls = `fc-wire${skipped ? ' is-skipped' : ''}${chosen ? ' is-selected' : ''}${edge.fixed || edge.standby ? ' is-quiet' : ''}`;
     svg.append(svgEl('path', { d, class: cls, 'marker-end': `url(#${chosen ? 'fcArrowOn' : skipped ? 'fcArrowOff' : 'fcArrow'})` }));
 
@@ -790,7 +825,7 @@ function chart() {
     const [px, py] = mid;
     pill.style.left = `${px}px`;
     pill.style.top = `${py}px`;
-    if (edge.step && !skipped) pill.onclick = () => select({ kind: 'transition', id: edge.step });
+    if (edge.step && !skipped) pill.onclick = () => select({ kind: 'transition', id: edgeKey(edge) });
     else if (edge.standby) pill.onclick = () => select({ kind: 'standby' });
     else if (edge.fixed) pill.onclick = () => select({ kind: 'waiting' });
     else pill.disabled = true;
@@ -1047,12 +1082,19 @@ function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false
 let moreOpen = false; // keeps the "More" section open across re-renders
 
 function transitionEditor(id) {
-  const tr = page.draft.steps[id].transition;
-  const setTr = (fn, done = true) => change(d => fn(d.steps[id].transition), { rerender: done });
+  const tr = trOf(id);
+  const setTr = (fn, done = true) => change(d => {
+    const [sid, src] = id.split('<');
+    const st = d.steps[sid];
+    if (!src) return fn(st.transition);
+    st.from ||= {};
+    st.from[src] ||= clone(st.transition);
+    fn(st.from[src]);
+  }, { rerender: done });
   return [
     h('div', { class: 'fm-effects fm-transitions' }, ...page.overview.catalog.transitions.map(t => h('button', {
       type: 'button', class: `fm-effect${tr.style === t.id ? ' is-on' : ''}`, 'aria-pressed': String(tr.style === t.id),
-      onclick: () => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); playOnClick('step', id)(); }
+      onclick: () => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); startTransitionLoop(id); }
     }, strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }), h('span', { class: 'fm-effect-name' }, t.label)))),
     tr.style !== 'instant' && rangeField('Takes', {
       min: 0.1, max: 2, step: 0.1, value: tr.duration || 0.5, format: seconds,
@@ -1097,26 +1139,29 @@ function stepPanel(id) {
 }
 
 function transitionSummary(id) {
-  const tr = page.draft.steps[id].transition;
+  const tr = trOf(id);
   return tr.style === 'instant' ? 'Cut' : `${transitionLabel(tr.style)} · ${seconds(tr.duration)}`;
 }
 
-function transitionPanel(id) {
+function transitionPanel(key) {
+  const id = stepOfKey(key);
   const meta = stepMeta(id);
   const view = currentView();
-  const arrows = EDGES[view].filter(e => e.step === id).length;
-  const before = BEFORE[id] ? stepMeta(BEFORE[id]).label : 'Waiting';
+  const arrows = EDGES[view].filter(e => edgeKey(e) === key).length;
+  const prev = beforeOf(key);
+  const before = prev ? stepMeta(prev).label : 'Waiting';
   return [
     h('div', { class: 'fm-panel-head' },
-      h('div', {}, h('span', { class: 'fm-kicker' }, 'Transition'), h('h2', { class: 'fm-panel-title' }, `Into ${meta.label}`))),
-    h('p', { class: 'fm-panel-help' }, `How the strip changes to the ${meta.label.toLowerCase()} look, whatever it showed before.`
-      + (arrows > 1 ? ` This is shared by the ${arrows} arrows into ${meta.label} (they are highlighted).` : '')),
+      h('div', {}, h('span', { class: 'fm-kicker' }, 'Transition'), h('h2', { class: 'fm-panel-title' }, key.includes('<') ? `${before} → ${meta.label}` : `Into ${meta.label}`))),
+    h('p', { class: 'fm-panel-help' }, key.includes('<')
+      ? `How the strip changes from ${before.toLowerCase()} to the ${meta.label.toLowerCase()} look. Only this arrow changes.`
+      : `How the strip changes to the ${meta.label.toLowerCase()} look${arrows > 1 ? ' (the arrows from the previous player, highlighted)' : ''}.`),
     h('div', { class: 'fm-hero' },
       h('div', { class: 'fm-hero-labels' }, h('span', {}, before), h('span', {}, '→'), h('span', {}, meta.label)),
-      strip(transitionFrame(id), { leds: 60, cls: 'fm-strip fm-strip-hero', ring: true })),
-    section('Style', ...transitionEditor(id)),
+      strip(transitionFrame(key), { leds: 60, cls: 'fm-strip fm-strip-hero', ring: true })),
+    section('Style', ...transitionEditor(key)),
     h('div', { class: 'fm-panel-actions' },
-      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', id) }, tryLabel()),
+      h('button', { type: 'button', class: 'ui-btn ui-btn-primary', onclick: () => tryOnLights('step', key) }, tryLabel()),
       h('button', { type: 'button', class: 'ui-btn', onclick: () => select({ kind: 'step', id }) }, `Edit the ${meta.label} look`))
   ];
 }

@@ -359,7 +359,7 @@ impl FlowRuntime {
             let flow = self.out.flow_for(ip, *sid);
             let step = flow.step(step_id);
             let eff = self.coloured(s, &step.effect, &flow, player, step_id == "turn");
-            self.out.show(ip, *sid, &eff, &step.transition);
+            self.out.show(ip, *sid, &eff, step.transition_from(&s.step));
         }
         if let Some(p) = player {
             s.player = p;
