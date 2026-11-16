@@ -873,6 +873,20 @@ input.led-summary-seg-name:focus {
   gap: var(--space-1) var(--space-3);
 }
 
+/* Name and its Loop/Line label stay together; the LED bar is separate */
+.wz-name-group {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.wz-strip-head .wz-name-group > input.led-summary-seg-name {
+  flex: none;
+  width: 150px;
+}
+
 .wz-strip-name {
   color: var(--text-primary);
   font-size: var(--fs-md);
@@ -2515,6 +2529,13 @@ input.ui-input.sf-name-input {
   gap: var(--space-1);
   font-size: 15px;
   font-weight: 600;
+}
+
+.sf-done-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .sf-done-chips {

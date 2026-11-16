@@ -128,6 +128,9 @@ export function buildOutputs(plan) {
 // The zone the output had before the guide with exactly this range, if any
 const originalZone = (o, r) => o.orig.find(z => z.start === r.start && z.stop === r.stop) || null;
 
+// The start-position screen is for a loop that is one zone: a rotation of the whole strip would cut zones apart
+export const startApplies = o => o.kind === 'rgb' && o.shape !== 'line' && o.cuts.length === 0 && o.count > 1;
+
 // WLED segments with what each belongs to: { o, zone, range, seg } per RGB strip zone, then { o, light: true, seg } per
 // light strip. whole: one segment per RGB strip, as the light tests use. offsets: keep the effect start ("of") of
 // zones whose range did not change (the guide doesn't edit it; the advanced editor does).
@@ -138,7 +141,9 @@ export function layout(plan, { whole = false, offsets = false } = {}) {
     const ranges = whole ? [{ start: 0, stop: o.count }] : rangesFromCuts(o.count, o.cuts);
     const label = outputLabel(plan, o);
     ranges.forEach((r, zone) => {
-      const of = offsets ? (originalZone(o, r)?.of || 0) % (r.stop - r.start) : 0;
+      const len = r.stop - r.start;
+      // A whole-strip loop takes the start position set in the guide; zones keep the effect start they had
+      const of = !offsets ? 0 : startApplies(o) ? ((o.offset || 0) % len + len) % len : (originalZone(o, r)?.of || 0) % len;
       entries.push({ o, zone, range: r, seg: {
         n: ranges.length === 1 ? label : `${label} - ${zone + 1}`,
         start: base + r.start, stop: base + r.stop, of, on: true, frz: false
@@ -218,7 +223,7 @@ function newOutput(kind, pin, bus = null) {
     type: kind === 'rgb' ? (bus && !isPwmBus(bus) ? Number(bus.type) || WS281X : WS281X) : PWM_WHITE,
     // A new strip starts as GRB, the order most WS281x strips use
     order: bus && !isPwmBus(bus) ? Number(bus.order) || 0 : 0,
-    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', colorStep: 'R', track: 0, shape: 'loop'
+    bus, name: '', cuts: [], orig: [], profiles: {}, colors: 'ask', colorStep: 'R', track: 0, shape: 'loop', offset: 0
   };
 }
 
@@ -236,6 +241,8 @@ function planFromLive(ip, live, preset) {
       && o.orig.every((z, i) => i === 0 || z.start === o.orig[i - 1].stop);
     if (o.kind === 'rgb' && tiles) o.cuts = o.orig.slice(1).map(z => z.start);
     o.name = customName(inside[0]?.n);
+    // Where the strip's first LED sits, when the strip is one zone: the segment's effect start
+    o.offset = o.orig.length === 1 ? o.orig[0].of : 0;
     return o;
   });
   const arch = String(live?.info?.arch || 'esp32').toLowerCase();
@@ -330,7 +337,8 @@ export async function runControllerSetup(ip, live) {
     const steps = () => [
       { kind: 'plug', group: 'plug', title: 'Plug in' },
       ...sortedOutputs(plan).flatMap(o => (o.kind === 'rgb'
-        ? [{ kind: 'rgb', o, group: o.id, title: outputLabel(plan, o) }, { kind: 'zones', o, group: o.id, title: outputLabel(plan, o) }]
+        ? [{ kind: 'rgb', o, group: o.id, title: outputLabel(plan, o) }, { kind: 'zones', o, group: o.id, title: outputLabel(plan, o) },
+          ...(startApplies(o) ? [{ kind: 'start', o, group: o.id, title: outputLabel(plan, o) }] : [])]
         : [{ kind: 'light', o, group: o.id, title: outputLabel(plan, o) }])),
       { kind: 'done', group: 'done', title: 'Done' }
     ];
@@ -385,6 +393,15 @@ export async function runControllerSetup(ip, live) {
       ? { ...e.seg, fx: 0, col: [rgb(ZONE_COLORS[e.zone % ZONE_COLORS.length]), [0, 0, 0]] }
       : { ...e.seg, on: false })) });
 
+    // The strip dark, its first LED white and the next ones fading blue: that is where the effects start and which way they go
+    function showStart(o) {
+      const n = o.count;
+      const at = k => (((o.offset || 0) + k) % n + n) % n;
+      const trail = ['0066FF', '0044BB', '002A77', '00184A'];
+      const i = ['FFFFFF', ...trail].slice(0, Math.min(5, n)).flatMap((hex, k) => [at(k), hex]);
+      return preview(allOff(e => e.o === o, e => ({ ...e.seg, fx: 0, col: [[0, 0, 0], [0, 0, 0]], i })));
+    }
+
     const showIdle = () => preview({ on: true, bri: 255, transition: 0, seg: idleSegments(plan) });
 
     function enter(step) {
@@ -392,6 +409,7 @@ export async function runControllerSetup(ip, live) {
       if (step.kind === 'rgb') showPattern(step.o);
       else if (step.kind === 'light') blink(step.o);
       else if (step.kind === 'zones') showZones(step.o);
+      else if (step.kind === 'start') showStart(step.o);
       else if (step.kind === 'done') showIdle();
     }
 
@@ -458,7 +476,9 @@ export async function runControllerSetup(ip, live) {
         go(stepIndex + 1);
       } else if (step.kind === 'rgb') {
         go(stepIndex + 1);
-      } else if (step.kind === 'zones' || step.kind === 'light') {
+      } else if (step.kind === 'zones' && startApplies(step.o)) {
+        go(stepIndex + 1);
+      } else if (step.kind === 'zones' || step.kind === 'start' || step.kind === 'light') {
         // The strip is done: name it, then on to the next one
         if (await askName(step.o)) go(stepIndex + 1);
       } else {
@@ -496,7 +516,7 @@ export async function runControllerSetup(ip, live) {
       backBtn.title = stepIndex === 0 ? 'Close the guide and leave the controller as it is' : '';
       nextLabel.textContent = step.kind === 'done' ? `Apply to ${plan.name}` : 'Next';
       status.hidden = true;
-      const views = { plug: plugView, rgb: stripView, light: lightView, zones: zonesView, done: doneView };
+      const views = { plug: plugView, rgb: stripView, light: lightView, zones: zonesView, start: startView, done: doneView };
       body.replaceChildren(...views[step.kind](step.o).filter(Boolean));
       body.scrollTop = 0;
     }
@@ -875,6 +895,45 @@ export async function runControllerSetup(ip, live) {
       return box;
     }
 
+    // Where the strip's first LED sits: the white LED is the start of every effect; move it round until it is where
+    // the 20 begins on the board
+    function startView(o) {
+      const n = o.count;
+      const box = h('section', { class: 'sf-stage', 'aria-label': 'Start position' });
+      const input = h('input', { class: 'sf-count', type: 'number', min: 0, max: n - 1, step: 1, inputmode: 'numeric', 'aria-label': 'LEDs to move the start' });
+      const slider = h('input', { class: 'ui-range', type: 'range', min: 0, max: n - 1, step: 1, 'aria-label': 'Start position' });
+      const set = v => {
+        o.offset = ((Math.round(Number(v)) || 0) % n + n) % n;
+        if (document.activeElement !== input) input.value = o.offset;
+        slider.value = o.offset;
+        later(() => showStart(o), 120);
+      };
+      input.addEventListener('input', () => { if (input.value !== '') set(input.value); });
+      input.addEventListener('blur', () => { input.value = o.offset; });
+      slider.addEventListener('input', () => set(slider.value));
+      input.value = o.offset;
+      slider.value = o.offset;
+      box.append(
+        h('div', { class: 'sf-stage-row' },
+          input,
+          h('span', { class: 'sf-unit' }, 'LEDs from the first'),
+          h('span', { class: 'sf-nudge' },
+            h('button', { class: 'ui-btn sf-icon-btn', type: 'button', 'aria-label': 'One LED back', onclick: () => set(o.offset - 1) }, '−'),
+            h('button', { class: 'ui-btn sf-icon-btn', type: 'button', 'aria-label': 'One LED forward', onclick: () => set(o.offset + 1) }, '+')),
+          h('span', { class: 'sf-spacer' }),
+          h('span', { class: 'sf-hint-plain' }, h('span', { class: 'sf-white-led', 'aria-hidden': 'true' }), 'The white LED is where effects start')),
+        slider);
+      return [
+        h('div', { class: 'sf-head' },
+          h('h2', { class: 'sf-title' }, 'Where does the strip start?'),
+          h('span', { class: 'sf-tag' }, `${outputLabel(plan, o)} · GPIO ${o.pin}`),
+          h('span', { class: 'sf-spacer' }),
+          h('span', { class: 'sf-optional' }, 'Optional')),
+        h('span', { class: 'sf-hint sf-hint-row' }, 'Move the white LED to where the 20 starts on the board. The blue LEDs after it show which way the effects run.'),
+        box
+      ];
+    }
+
     function zonesView(o) {
       const box = h('section', { class: 'sf-stage sf-stage-zones', 'aria-label': 'Zones' });
       const evens = h('div', { class: 'sf-evens', role: 'group', 'aria-label': 'Equal zones' });
@@ -1054,7 +1113,7 @@ export async function runControllerSetup(ip, live) {
 
     function doneView() {
       const rows = sortedOutputs(plan).filter(o => validPin(o.pin)).map(o => {
-        const chips = [`GPIO ${o.pin}`, ...(o.kind === 'rgb' ? [`${o.count} LEDs`, COLOR_ORDERS[o.order & 0x0f], o.shape === 'line' ? 'Line' : 'Loop'] : ['white'])];
+        const chips = [`GPIO ${o.pin}`, ...(o.kind === 'rgb' ? [`${o.count} LEDs`, COLOR_ORDERS[o.order & 0x0f]] : ['white'])];
         let picture;
         if (o.kind === 'light') {
           picture = h('span', { class: 'sf-done-light', 'aria-hidden': 'true' });
@@ -1072,7 +1131,9 @@ export async function runControllerSetup(ip, live) {
         }
         return h('div', { class: 'sf-done-row' },
           h('span', { class: 'sf-done-name' },
-            h('span', {}, outputLabel(plan, o)),
+            h('span', { class: 'sf-done-title' },
+              h('span', {}, outputLabel(plan, o)),
+              o.kind === 'rgb' && h('span', { class: 'wz-shape', dataset: { shape: o.shape === 'line' ? 'line' : 'loop' } }, o.shape === 'line' ? 'Line' : 'Loop')),
             h('span', { class: 'sf-done-chips' }, ...chips.map(c => h('span', { class: 'sf-chipline' }, c)))),
           picture);
       });

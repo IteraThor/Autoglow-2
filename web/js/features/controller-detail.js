@@ -221,8 +221,9 @@ function stripCard(hw, busIdx, segs, firstTone) {
     whole
       ? h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },
-          segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
-          segs[0] && shapeLabel(segs[0]),
+          h('div', { class: 'wz-name-group' },
+            segs[0] ? segmentNameInput(segs[0]) : h('strong', { class: 'wz-strip-name' }, stripName(segs, busIdx)),
+            segs[0] && shapeLabel(segs[0])),
           zones))
       : h('div', { class: 'wz-strip' },
         h('div', { class: 'wz-strip-head', title: tech },

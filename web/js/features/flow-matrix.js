@@ -905,9 +905,14 @@ function flowLookGrid(effect, setEffect, forcePlayer, play) {
   }));
 }
 
-function lookEditor(effect, { setEffect, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false, play = null }) {
+function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false, play = null }) {
   const meta = effectMeta(effect.animation);
-  const parts = [flowLookGrid(effect, setEffect, forcePlayer, play)];
+  // Every finished change (an option, a colour, speed, brightness...) plays again on the strip, nothing saved
+  const setEffect = (fn, done = true) => {
+    setEffectIn(fn, done);
+    if (done) play?.();
+  };
+  const parts = [flowLookGrid(effect, setEffectIn, forcePlayer, play)];
 
   for (const opt of meta.options) {
     const [label, names] = OPTION_LABELS[opt.key] || [opt.key, {}];
@@ -1181,12 +1186,40 @@ function fillIdleColours(idle, effect) {
   }
 }
 
+// The waiting look plays on the selected segment's controller while you edit it; nothing is saved until Save.
+// One request at a time, the latest state wins.
+let idleSending = false;
+let idleAgain = false;
+async function previewIdle() {
+  const seg = currentSeg();
+  const idle = page.draft?.idle;
+  if (!seg || !idle || !isOnline(seg.ip)) return;
+  if (idleSending) { idleAgain = true; return; }
+  idleSending = true;
+  try {
+    await api.post('/api/wled/preview', {
+      ip: seg.ip, on: true, transition: 0,
+      seg: [{ id: seg.id ?? 0, on: idle.on, bri: Math.round(idle.brightness / 100 * 255), fx: idle.fx, sx: idle.speed, ix: idle.intensity, pal: 0,
+        col: idle.colors.map(c => [c[0], c[1], c[2], 0]), sel: true }]
+    });
+  } catch (err) {
+    // Best effort; saving reports errors
+  } finally {
+    idleSending = false;
+    if (idleAgain) { idleAgain = false; previewIdle(); }
+  }
+}
+function idleChange(mutator, opts) {
+  change(mutator, opts);
+  previewIdle();
+}
+
 function waitingPanel() {
   page.draft.idle ||= structuredClone(IDLE_DEFAULT);
   const idle = page.draft.idle;
   const head = [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting/Idle'),
-      onOff(idle.on, v => change(d => { d.idle.on = v; }), 'Lights on between games')),
+      onOff(idle.on, v => idleChange(d => { d.idle.on = v; }), 'Lights on between games')),
     h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every segment with these lights gets it when you save.'),
     !idle.on && h('p', { class: 'form-hint' }, 'The strips stay dark between games.')
   ];
@@ -1197,17 +1230,17 @@ function waitingPanel() {
   return [...head,
     idle.on && compact(section(null,
       h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Effect'),
-        wledEffectPicker(effects, idle.fx, effect => change(d => { d.idle.fx = effect.id; fillIdleColours(d.idle, effect); }))),
+        wledEffectPicker(effects, idle.fx, effect => idleChange(d => { d.idle.fx = effect.id; fillIdleColours(d.idle, effect); }))),
       slots.length
         ? h('div', { class: 'fm-colours' }, ...slots.map(slot => colourField(slot.label || 'Colour', idle.colors[slot.slot] || [0, 0, 0],
-          (rgb, done) => change(d => { d.idle.colors[slot.slot] = rgb; }, { rerender: done }))))
+          (rgb, done) => idleChange(d => { d.idle.colors[slot.slot] = rgb; }, { rerender: done }))))
         : h('p', { class: 'form-hint' }, 'This effect uses its own colours.'),
       rangeField('Brightness', { min: 0, max: 100, step: 1, value: idle.brightness, format: v => `${v}%`,
-        onset: (v, done) => change(d => { d.idle.brightness = v; }, { rerender: done }) }),
+        onset: (v, done) => idleChange(d => { d.idle.brightness = v; }, { rerender: done }) }),
       meta.speed && rangeField(meta.speedLabel || 'Speed', { min: 0, max: 255, step: 1, value: idle.speed, format: v => String(v),
-        onset: (v, done) => change(d => { d.idle.speed = v; }, { rerender: done }) }),
+        onset: (v, done) => idleChange(d => { d.idle.speed = v; }, { rerender: done }) }),
       meta.intensity && rangeField(meta.intensityLabel || 'Intensity', { min: 0, max: 255, step: 1, value: idle.intensity, format: v => String(v),
-        onset: (v, done) => change(d => { d.idle.intensity = v; }, { rerender: done }) })))
+        onset: (v, done) => idleChange(d => { d.idle.intensity = v; }, { rerender: done }) })))
   ].filter(Boolean);
 }
 

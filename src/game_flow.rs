@@ -149,11 +149,12 @@ impl FlowIdle {
         }
     }
 
-    /// The look as WLED segment fields (merged into a preset segment)
+    /// The look as WLED segment fields (merged into a preset segment). The palette is reset to the default so the
+    /// chosen colours are the ones shown, not those of a palette left over in the saved preset.
     pub fn wled_segment(&self) -> Obj {
         crate::obj! {
             "on" => self.on, "bri" => py_round(self.brightness as f64 / 100.0 * 255.0), "fx" => self.fx, "sx" => self.speed,
-            "ix" => self.intensity, "col" => self.colors.iter().map(|c| json!([c.r, c.g, c.b, 0])).collect::<Vec<_>>(),
+            "ix" => self.intensity, "pal" => 0, "col" => self.colors.iter().map(|c| json!([c.r, c.g, c.b, 0])).collect::<Vec<_>>(),
         }
     }
 }
