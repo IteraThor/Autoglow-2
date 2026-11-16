@@ -19,8 +19,7 @@
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-1) var(--space-3);
 }
 
 .fm-segbar-ctl {
@@ -47,7 +46,7 @@
 .fm-segbar-out {
   display: inline-flex;
   gap: 1px;
-  padding: 2px;
+  padding: 1px;
   border-radius: var(--radius-md);
   background: var(--bg-input);
 }
@@ -63,7 +62,7 @@
 
 .fm-segbar-seg {
   --tone: var(--accent-primary);
-  padding: 4px 10px;
+  padding: 1px 10px;
   border: 0;
   border-radius: 0;
   background: color-mix(in srgb, var(--tone) 18%, transparent);
@@ -103,6 +102,21 @@
   color: var(--text-secondary);
 }
 
+/* The Lighting page starts higher up and keeps its parts closer together */
+.tab-container:has(.fm-page) {
+  padding-block: var(--space-3);
+}
+
+.fm-page {
+  gap: var(--space-2);
+}
+
+.fm-head-actions .ui-btn {
+  min-height: 0;
+  height: 24px;
+  padding-block: 0;
+}
+
 /* --- Profile bar --------------------------------------------------------- */
 .fm-profile-bar {
   display: flex;
@@ -120,11 +134,12 @@
   min-width: 0;
 }
 
-/* Beside the edit panel: the bar takes the chart's column and the panel's 440px, like .fm-layout-vertical */
+/* Beside the edit panel: the bar takes the chart's column and the panel's width, like .fm-layout-vertical.
+   The panel is wide enough for four looks side by side. */
 @media (min-width: 1280px) {
   .fm-profile-bar-vertical {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-columns: minmax(0, 1fr) 530px;
     gap: var(--space-4);
   }
 }
@@ -515,6 +530,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+.fm-compact {
+  gap: var(--space-2);
+}
+
+.fm-compact .fm-field:has(> .fm-range) {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fm-compact .fm-range-value {
+  min-width: 40px;
+  text-align: right;
+}
+
+.fm-compact .fm-colours {
+  gap: var(--space-2) var(--space-4);
+}
+
 .fm-more summary {
   color: var(--text-secondary);
   font-size: var(--fs-sm);
@@ -606,13 +641,13 @@ input.ui-input.fm-player-name {
 .fm-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-3);
   align-items: start;
 }
 
 @media (min-width: 1280px) {
   .fm-layout-vertical {
-    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-columns: minmax(0, 1fr) 530px;
   }
 
   .fm-layout-vertical .fm-inspector {
@@ -1055,6 +1090,31 @@ canvas.fm-ring.fm-strip-hero {
 .fm-link-go {
   color: var(--accent-bright);
   font-size: var(--fs-sm);
+}
+
+/* Standby panel: one line per timer, label first */
+.fm-standby-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+.fm-standby-label {
+  flex: none;
+  width: 76px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.fm-standby-tests {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.fm-standby-line .fm-panel-help {
+  margin: 0;
 }
 
 /* Standby panel: on/off switch + minutes on one row */

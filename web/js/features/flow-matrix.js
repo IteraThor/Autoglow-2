@@ -527,9 +527,9 @@ const LAYOUTS = {
     };
   })(),
   vertical: (() => {
-    const W = 196, H = 66, cx = 270;
+    const W = 196, H = 66, cx = 170;
     return {
-      width: 1030, height: 1080,
+      width: 930, height: 1080,
       nodes: {
         waiting: { x: cx, y: 30, w: W, h: H },
         timeout: { x: cx + 346, y: 40, w: 124, h: 46 },
@@ -859,6 +859,9 @@ function section(title, ...children) {
   return h('section', { class: 'fm-section' }, title && h('h3', { class: 'fm-section-title' }, title), ...children);
 }
 
+// Sliders with their label on the same line (the idle panel is mostly sliders)
+const compact = el => { el.classList.add('fm-compact'); return el; };
+
 function onOff(checked, onchange, label) {
   return h('label', { class: 'fm-switch' },
     h('span', { class: 'switch' },
@@ -1059,7 +1062,7 @@ function minutesField(label, value, enabled, onset) {
   const input = h('input', { type: 'number', class: 'input-text fm-minutes', min: 1, max: 240, value, disabled: !enabled,
     'aria-label': label,
     onchange: e => { const v = Math.max(1, Math.min(240, parseInt(e.target.value, 10) || value)); if (v !== value) onset(v); else e.target.value = value; } });
-  return h('label', { class: 'fm-minutes-row' }, input, h('span', {}, 'minutes'));
+  return h('label', { class: 'fm-minutes-row' }, h('span', {}, 'after'), input, h('span', {}, 'min'));
 }
 
 // Dimmed brightness is stored 0-255 and shown as a percentage; an unchanged percentage keeps the exact value
@@ -1073,8 +1076,7 @@ function dimPercentField(s) {
       if (Number.isNaN(pct) || pct === shown) { e.target.value = shown; return; }
       saveStandby({ dim_brightness: Math.round((pct / 100) * 255) });
     } });
-  return h('div', { class: 'fm-standby-row fm-dim-level' },
-    h('label', { class: 'fm-minutes-row' }, h('span', {}, 'Light strips at'), input, h('span', {}, '%')));
+  return h('label', { class: 'fm-minutes-row', title: 'How bright the light strips are while dimmed' }, h('span', {}, 'to'), input, h('span', {}, '%'));
 }
 
 // The same actions the timers run, on the real lights right now
@@ -1089,25 +1091,21 @@ async function standbyTest(kind) {
 
 function standbyPanel() {
   const s = page.overview.standby || {};
+  const line = (label, ...cells) => h('div', { class: 'fm-standby-line' }, h('span', { class: 'fm-standby-label' }, label), ...cells);
   return [
     h('div', { class: 'fm-panel-head' }, h('div', {}, h('span', { class: 'fm-kicker' }, 'Standby'), h('h2', { class: 'fm-panel-title' }, 'When nobody plays'))),
-    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, and later switch off. These apply to every profile. Changes save right away.'),
-    section('Dim', h('div', { class: 'fm-standby-row' },
-      onOff(!!s.dim_on, v => saveStandby({ dim_on: v }), 'Dimming on or off'),
-      minutesField('Dim after minutes', s.dim_minutes, s.dim_on, v => saveStandby({ dim_minutes: v }))),
-      dimPercentField(s)),
-    section('Lights off', h('div', { class: 'fm-standby-row' },
-      onOff(!!s.off_on, v => saveStandby({ off_on: v }), 'Switching off on or off'),
-      minutesField('Switch off after minutes', s.off_minutes, s.off_on, v => saveStandby({ off_minutes: v }))),
-      h('p', { class: 'fm-panel-help' }, 'Counted from the last dart, never sooner than dimming.')),
-    section('When a match ends', h('div', { class: 'fm-standby-row' },
-      onOff(!!page.overview.match_end_to_waiting, v => saveStandby({ match_end_to_waiting: v }), 'Back to waiting when a match ends'),
-      h('span', { class: 'fm-panel-help' }, 'Go straight back to Waiting'))),
-    section('Test on my lights',
-      h('div', { class: 'fm-panel-actions' },
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('dim'), title: 'Same as when the dim timer runs out' }, 'Dim now'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('off'), title: 'Same as when the switch-off timer runs out' }, 'Switch off now'),
-        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('wake') }, 'Turn back on')))
+    h('p', { class: 'fm-panel-help' }, 'After a while without darts the lights dim, then switch off (counted from the last dart). Applies to every profile and saves right away.'),
+    section(null,
+      line('Dim', onOff(!!s.dim_on, v => saveStandby({ dim_on: v }), 'Dimming on or off'),
+        minutesField('Dim after minutes', s.dim_minutes, s.dim_on, v => saveStandby({ dim_minutes: v })), dimPercentField(s)),
+      line('Lights off', onOff(!!s.off_on, v => saveStandby({ off_on: v }), 'Switching off on or off'),
+        minutesField('Switch off after minutes', s.off_minutes, s.off_on, v => saveStandby({ off_minutes: v }))),
+      line('Match ends', onOff(!!page.overview.match_end_to_waiting, v => saveStandby({ match_end_to_waiting: v }), 'Back to waiting when a match ends'),
+        h('span', { class: 'fm-panel-help' }, 'Back to Waiting')),
+      line('Test', h('div', { class: 'fm-standby-tests' },
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('dim'), title: 'Same as when the dim timer runs out' }, 'Dim'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('off'), title: 'Same as when the switch-off timer runs out' }, 'Off'),
+        h('button', { type: 'button', class: 'ui-btn ui-btn-sm', onclick: () => standbyTest('wake') }, 'On'))))
   ];
 }
 
@@ -1172,34 +1170,44 @@ function wledEffects() {
   return null;
 }
 
+// A new effect with several colours would otherwise play its extra colours in black: give every colour it uses that is
+// still black a default of its own (colour 1 stays as chosen)
+const IDLE_EXTRA_COLOURS = [null, [255, 70, 140], [70, 130, 255]];
+function fillIdleColours(idle, effect) {
+  idle.colors ||= [[0, 255, 157], [0, 0, 0], [0, 0, 0]];
+  for (const { slot } of effect.colorSlots || []) {
+    const c = idle.colors[slot];
+    if (IDLE_EXTRA_COLOURS[slot] && (!c || (c[0] === 0 && c[1] === 0 && c[2] === 0))) idle.colors[slot] = [...IDLE_EXTRA_COLOURS[slot]];
+  }
+}
+
 function waitingPanel() {
-  const head = [
-    h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting/Idle')),
-    h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every segment with these lights gets it when you save.')
-  ];
   page.draft.idle ||= structuredClone(IDLE_DEFAULT);
   const idle = page.draft.idle;
+  const head = [
+    h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Waiting/Idle'),
+      onOff(idle.on, v => change(d => { d.idle.on = v; }), 'Lights on between games')),
+    h('p', { class: 'fm-panel-help' }, 'What the strips show between games: an effect from the controller\'s WLED library. The controller plays it on its own. Every segment with these lights gets it when you save.'),
+    !idle.on && h('p', { class: 'form-hint' }, 'The strips stay dark between games.')
+  ];
   const effects = wledEffects();
   if (!effects) return [...head, h('p', { class: 'form-hint' }, 'Loading the WLED effects…')];
   const meta = effects.find(e => e.id === idle.fx) || { id: idle.fx, name: `Effect ${idle.fx}`, colorSlots: [], speed: true, intensity: true };
   const slots = meta.colorSlots || [];
   return [...head,
-    section('Lights between games',
-      h('div', { class: 'fm-toggle-row' }, onOff(idle.on, v => change(d => { d.idle.on = v; }), 'Lights on between games')),
-      !idle.on && h('p', { class: 'form-hint' }, 'The strips stay dark between games.')),
-    idle.on && section('Effect',
+    idle.on && compact(section(null,
       h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Effect'),
-        wledEffectPicker(effects, idle.fx, effect => change(d => { d.idle.fx = effect.id; }))),
-      ...(slots.length
-        ? slots.map(slot => colourField(slot.label || 'Colour', idle.colors[slot.slot] || [0, 0, 0],
-          (rgb, done) => change(d => { d.idle.colors[slot.slot] = rgb; }, { rerender: done })))
-        : [h('p', { class: 'form-hint' }, 'This effect uses its own colours.')]),
+        wledEffectPicker(effects, idle.fx, effect => change(d => { d.idle.fx = effect.id; fillIdleColours(d.idle, effect); }))),
+      slots.length
+        ? h('div', { class: 'fm-colours' }, ...slots.map(slot => colourField(slot.label || 'Colour', idle.colors[slot.slot] || [0, 0, 0],
+          (rgb, done) => change(d => { d.idle.colors[slot.slot] = rgb; }, { rerender: done }))))
+        : h('p', { class: 'form-hint' }, 'This effect uses its own colours.'),
       rangeField('Brightness', { min: 0, max: 100, step: 1, value: idle.brightness, format: v => `${v}%`,
         onset: (v, done) => change(d => { d.idle.brightness = v; }, { rerender: done }) }),
       meta.speed && rangeField(meta.speedLabel || 'Speed', { min: 0, max: 255, step: 1, value: idle.speed, format: v => String(v),
         onset: (v, done) => change(d => { d.idle.speed = v; }, { rerender: done }) }),
       meta.intensity && rangeField(meta.intensityLabel || 'Intensity', { min: 0, max: 255, step: 1, value: idle.intensity, format: v => String(v),
-        onset: (v, done) => change(d => { d.idle.intensity = v; }, { rerender: done }) }))
+        onset: (v, done) => change(d => { d.idle.intensity = v; }, { rerender: done }) })))
   ].filter(Boolean);
 }
 
@@ -1301,13 +1309,13 @@ function segButton(dev, seg, label, cur, tone) {
 function segmentBar() {
   const o = page.overview;
   if (!allSegments().length) {
-    return h('header', { class: 'fm-segbar card' }, h('p', { class: 'fm-segbar-empty' }, 'No controller yet. ',
+    return h('div', { class: 'fm-segbar' }, h('p', { class: 'fm-segbar-empty' }, 'No controller yet. ',
       h('a', { class: 'card-link', href: '/setup/controllers', 'data-link': true }, 'Add one in Setup')));
   }
   const cur = currentSeg();
   const devs = o.lights.filter(dev => outputs(dev).length);
   const shown = devs.filter(dev => showOffline() || isOnline(dev.ip));
-  return h('header', { class: 'fm-segbar card', 'aria-label': 'Your lights' },
+  return h('div', { class: 'fm-segbar', role: 'group', 'aria-label': 'Your lights' },
     !shown.length && h('span', { class: 'fm-segbar-empty' }, 'No controller online'),
     ...shown.map(dev => h('div', { class: `fm-segbar-ctl${isOnline(dev.ip) ? '' : ' is-offline'}` },
       h('span', { class: 'fm-segbar-dev', title: isOnline(dev.ip) ? dev.ip : `${dev.ip} · offline` }, dev.name),
@@ -1380,7 +1388,8 @@ function editorHead() {
     onclick: () => toggleMenu(kind) }, label, ' ▾');
   return h('header', { class: `fm-profile-bar fm-profile-bar-${currentView()}` },
     h('div', { class: 'fm-bar-main' },
-      h('h1', { class: 'page-title fm-title', title: cur ? [cur.controller, cur.gpio].filter(Boolean).join(' · ') : null }, cur ? cur.name : page.name),
+      h('h1', { class: 'visually-hidden' }, cur ? cur.name : page.name),
+      segmentBar(),
       page.draft.origin && h('span', { class: 'fm-origin' }, page.draft.origin),
       cur && h('div', { class: 'fm-head-actions' },
         menuBtn('copy', 'Copy'), menuBtn('presets', 'Presets'),
@@ -1415,7 +1424,6 @@ function render() {
   }
   const scroll = document.getElementById('fmInspector')?.scrollTop || 0;
   root.replaceChildren(
-    segmentBar(),
     editorHead(),
     h('div', { class: `fm-layout fm-layout-${currentView()}` }, h('div', { class: 'fm-chart-card card' }, chart()), inspector()),
     h('div', { class: 'savebar', id: 'fmSavebar', hidden: !isDirty() },
