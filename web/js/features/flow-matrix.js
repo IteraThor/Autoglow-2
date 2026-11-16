@@ -878,10 +878,86 @@ function segmented(values, current, onpick, labels = {}) {
   }, labels[v] ?? String(v))));
 }
 
+// --- colour picker ------------------------------------------------------------
+// Our own picker: the browser's native one is drawn outside the page, and with the page zoom (--ui-scale) it comes
+// out cut off. oninput runs while dragging; onchange once, when the picker closes.
+function rgbToHsv([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+  let hue = 0;
+  if (d) hue = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [hue * 60, max ? d / max : 0, max];
+}
+function hsvToRgb(hue, sat, val) {
+  const f = n => { const k = (n + hue / 60) % 6; return val - val * sat * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return [f(5), f(3), f(1)].map(v => Math.round(v * 255));
+}
+
+function colourPicker({ value, label, oninput, onchange }) {
+  let [hue, sat, val] = rgbToHsv(fromHex(value));
+  let changed = false;
+  const swatch = h('button', { type: 'button', class: 'fm-colour', 'aria-label': label, 'aria-expanded': 'false' });
+  const svHandle = h('span', { class: 'fm-cp-handle' });
+  const sv = h('div', { class: 'fm-cp-sv' }, svHandle);
+  const hueHandle = h('span', { class: 'fm-cp-handle' });
+  const hueBar = h('div', { class: 'fm-cp-hue' }, hueHandle);
+  const input = h('input', { type: 'text', class: 'ui-input fm-cp-hex', maxlength: 7, spellcheck: 'false', 'aria-label': `${label} (hex)` });
+  const pop = h('div', { class: 'fm-cp-pop', hidden: true, role: 'dialog', 'aria-label': label }, sv, hueBar, input);
+  const wrap = h('span', { class: 'fm-cp' }, swatch, pop);
+
+  const current = () => hex(hsvToRgb(hue, sat, val));
+  function paint(skipInput) {
+    const c = current();
+    swatch.style.background = c;
+    sv.style.background = `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), ${hex(hsvToRgb(hue, 1, 1))}`;
+    svHandle.style.left = `${sat * 100}%`; svHandle.style.top = `${(1 - val) * 100}%`;
+    hueHandle.style.left = `${hue / 360 * 100}%`;
+    if (!skipInput) input.value = c;
+  }
+  function emit(skipInput) { changed = true; paint(skipInput); oninput?.(fromHex(current())); }
+  const drag = (el, fn) => {
+    const at = e => { const r = el.getBoundingClientRect(); fn(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))); emit(); };
+    el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture(e.pointerId); at(e); el.onpointermove = at; });
+    el.addEventListener('pointerup', () => { el.onpointermove = null; });
+  };
+  drag(sv, (x, y) => { sat = x; val = 1 - y; });
+  drag(hueBar, x => { hue = x * 359.99; });
+  input.addEventListener('input', () => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(input.value)) return;
+    [hue, sat, val] = rgbToHsv(fromHex(input.value));
+    emit(true);
+  });
+
+  function close() {
+    document.removeEventListener('pointerdown', outside, true);
+    document.removeEventListener('keydown', onKey, true);
+    pop.hidden = true;
+    swatch.setAttribute('aria-expanded', 'false');
+    if (changed) { changed = false; onchange?.(fromHex(current())); }
+  }
+  function outside(e) {
+    if (!wrap.isConnected) { document.removeEventListener('pointerdown', outside, true); return; }
+    if (!wrap.contains(e.target)) close();
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  swatch.onclick = () => {
+    if (!pop.hidden) { close(); return; }
+    // Open upwards when there is no room below
+    const r = swatch.getBoundingClientRect();
+    pop.classList.toggle('is-up', r.bottom + 260 * (r.height / swatch.offsetHeight || 1) > window.innerHeight);
+    pop.hidden = false;
+    swatch.setAttribute('aria-expanded', 'true');
+    paint();
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', onKey, true);
+  };
+  paint();
+  return wrap;
+}
+
 function colourField(label, value, onpick) {
-  const input = h('input', { type: 'color', class: 'fm-colour', value: hex(value), 'aria-label': label,
-    oninput: e => onpick(fromHex(e.target.value), false), onchange: e => onpick(fromHex(e.target.value), true) });
-  return h('label', { class: 'fm-field' }, h('span', { class: 'form-label' }, label), input);
+  const input = colourPicker({ value: hex(value), label, oninput: c => onpick(c, false), onchange: c => onpick(c, true) });
+  return h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, label), input);
 }
 
 function rangeField(label, { min, max, step, value, format, onset }) {
@@ -1140,8 +1216,9 @@ function hitPanel(id) {
 function playersPanel() {
   const rows = page.draft.players.map((p, i) => h('div', { class: 'fm-player' },
     h('span', { class: 'fm-player-num' }, String(i + 1)),
-    h('input', { type: 'color', class: 'fm-colour', value: hex(p.color), 'aria-label': `Player ${i + 1} colour`,
-      onchange: e => change(d => { d.players[i].color = fromHex(e.target.value); }) }),
+    colourPicker({ value: hex(p.color), label: `Player ${i + 1} colour`,
+      oninput: c => change(d => { d.players[i].color = c; }, { rerender: false }),
+      onchange: c => change(d => { d.players[i].color = c; }) }),
     h('input', { type: 'text', class: 'ui-input fm-player-name', value: p.name || '', placeholder: 'Any player', maxlength: 40,
       'aria-label': `Name for colour ${i + 1}`,
       oninput: e => change(d => { d.players[i].name = e.target.value; }, { rerender: false }),

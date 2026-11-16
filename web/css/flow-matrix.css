@@ -530,6 +530,61 @@
   cursor: pointer;
 }
 
+/* Colour picker (colourPicker in flow-matrix.js) */
+.fm-cp {
+  position: relative;
+  display: inline-block;
+}
+
+.fm-cp-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 220px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-modal);
+  box-shadow: var(--shadow-pop);
+}
+
+.fm-cp-pop[hidden] { display: none; }
+.fm-cp-pop.is-up { top: auto; bottom: calc(100% + 6px); }
+
+.fm-cp-sv,
+.fm-cp-hue {
+  position: relative;
+  border-radius: var(--radius-sm, 4px);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.fm-cp-sv { height: 140px; }
+
+.fm-cp-hue {
+  height: 14px;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.fm-cp-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.fm-cp-hue .fm-cp-handle { top: 50%; }
+
+.fm-cp-hex { height: 30px; text-align: center; font-family: var(--font-mono, monospace); }
+
 .fm-inline-note {
   margin: 0;
 }
