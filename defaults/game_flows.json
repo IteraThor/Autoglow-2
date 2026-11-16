@@ -534,7 +534,6 @@
           "name": ""
         }
       ],
-      "camera_friendly": true,
       "hit_locator": false,
       "preset": "classic",
       "idle": {

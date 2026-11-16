@@ -1483,7 +1483,6 @@
     "name": ""
    }
   ],
-  "camera_friendly": true,
   "hit_locator": false,
   "idle": {
    "on": true,
@@ -2060,7 +2059,6 @@
     "name": ""
    }
   ],
-  "camera_friendly": true,
   "hit_locator": false,
   "idle": {
    "on": true,

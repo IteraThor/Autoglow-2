@@ -214,7 +214,6 @@ pub struct GameFlow {
     pub steps: HashMap<String, FlowStep>,
     pub hits: HashMap<String, EffectConfig>,
     pub players: Vec<FlowPlayer>,
-    pub camera_friendly: bool,
     pub hit_locator: bool,
     /// the preset this profile started from ("Reset to preset")
     pub preset: Option<String>,
@@ -231,7 +230,6 @@ impl GameFlow {
             steps,
             hits,
             players,
-            camera_friendly: true,
             hit_locator: false,
             preset: None,
             origin: String::new(),
@@ -287,7 +285,7 @@ impl GameFlow {
         let mut o = crate::obj! {
             "name" => self.name, "steps" => steps, "hits" => hits,
             "players" => self.players.iter().map(|p| p.to_value()).collect::<Vec<_>>(),
-            "camera_friendly" => self.camera_friendly, "hit_locator" => self.hit_locator, "idle" => self.idle.to_value(),
+            "hit_locator" => self.hit_locator, "idle" => self.idle.to_value(),
         };
         if let Some(p) = self.preset.as_ref().filter(|p| !p.is_empty()) {
             o.insert("preset".into(), json!(p));
@@ -311,7 +309,6 @@ impl GameFlow {
         let players = raw_players.iter().take(MAX_PLAYERS).enumerate().map(|(i, p)| FlowPlayer::from_value(p, i)).collect();
         let n = name.filter(|n| !n.is_empty()).map(str::to_string).or_else(|| non_empty(d.get("name")).map(py_str)).unwrap_or_else(|| DEFAULT_PROFILE_NAME.into());
         let mut f = GameFlow::build(&n, steps, hits, players);
-        f.camera_friendly = get_bool(d, "camera_friendly", true);
         f.hit_locator = get_bool(d, "hit_locator", false);
         f.preset = non_empty(d.get("preset")).map(py_str);
         f.origin = non_empty(d.get("origin")).map(py_str).unwrap_or_default().chars().take(60).collect();
@@ -409,7 +406,7 @@ pub const PRESET_ORDER: [&str; 5] = ["minimal", "classic", "arena", "show", "par
 
 pub fn preset_info(id: &str) -> (&'static str, &'static str) {
     match id {
-        "minimal" => ("Minimal", "Only shows whose turn it is. Calm and camera-friendly."),
+        "minimal" => ("Minimal", "Only shows whose turn it is. Calm and quiet."),
         "arena" => ("Arena", "Bold, like a stage match, with a hit locator around the board."),
         "show" => ("Show", "Big moments feel big: score tiers, sparkle and rainbow finales."),
         "party" => ("Party", "Everything celebrates. Flashing during turns may disturb dart detection."),
@@ -511,7 +508,7 @@ fn idle(fx: i64, brightness: i64, speed: i64, colors: Option<Vec<RGBColor>>) -> 
 
 fn preset_flow(pid: &str) -> GameFlow {
     let fade = |d: f64| comes_in("crossfade", d, None);
-    let (steps, hits, camera, locator, idl) = match pid {
+    let (steps, hits, locator, idl) = match pid {
         "minimal" => (
             steps_of(vec![
                 ("bull_off", off_look("breathe", 0.0), fade(0.4)),
@@ -522,7 +519,6 @@ fn preset_flow(pid: &str) -> GameFlow {
                 ("match_won", look("breathe").player().dur(5.0).spd(1.25).eff(), fade(0.4)),
             ]),
             HashMap::new(),
-            true,
             false,
             idle(0, 50, 128, Some(vec![RGBColor::new(255, 190, 130), RGBColor::BLACK, RGBColor::BLACK])),
         ),
@@ -540,7 +536,6 @@ fn preset_flow(pid: &str) -> GameFlow {
                 ("bullseye", look("flash").c(RED).dur(1.2).opt("pulses", json!(2)).eff()),
                 ("bust", look("flash").c(GREY).dur(0.8).opt("pulses", json!(1)).eff()),
             ]),
-            true,
             true,
             idle(38, 80, 128, None),
         ),
@@ -560,7 +555,6 @@ fn preset_flow(pid: &str) -> GameFlow {
                 ("ton", look("sparkle").player().dur(2.0).opt("amount", json!("many")).eff()),
                 ("ton40", look("sparkle").c(GOLD).dur(2.5).opt("amount", json!("many")).eff()),
             ]),
-            true,
             true,
             idle(38, 100, 128, None),
         ),
@@ -583,7 +577,6 @@ fn preset_flow(pid: &str) -> GameFlow {
                 ("ton40", look("sparkle").c(GOLD).dur(2.5).opt("amount", json!("many")).eff()),
                 ("180", look("rainbow").dur(3.0).spd(2.5).opt("palette", json!("vivid")).eff()),
             ]),
-            false,
             true,
             idle(9, 100, 170, None),
         ),
@@ -600,13 +593,11 @@ fn preset_flow(pid: &str) -> GameFlow {
                 ("180", look("flash").c(GOLD).dur(1.5).opt("pulses", json!(2)).eff()),
                 ("bullseye", look("flash").c(RED).dur(1.0).opt("pulses", json!(1)).eff()),
             ]),
-            true,
             false,
             idle(9, 70, 128, None),
         ),
     };
     let mut f = GameFlow::build(DEFAULT_PROFILE_NAME, steps, hits, Vec::new());
-    f.camera_friendly = camera;
     f.hit_locator = locator;
     f.idle = idl;
     f

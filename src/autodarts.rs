@@ -927,7 +927,7 @@ impl BridgeState {
         let is_bull_off = variant.as_deref() == Some(BULL_OFF_VARIANT);
         if is_bull_off {
             self.track_bull_off_round(state);
-        } else if variant.is_some() && self.bull_off_phase.is_some() && !self.last_match_finished {
+        } else if (variant.is_some() || state.get("gameScores").map_or(false, |v| !v.is_null())) && self.bull_off_phase.is_some() && !self.last_match_finished {
             self.bull_off_phase = None;
             info!("Bull-off over, first leg begins ({}) -> emitting GAME_START", variant.unwrap_or_default());
             let e = self.ev(DartEventType::GameStart);
@@ -1311,7 +1311,14 @@ impl BridgeState {
             self.paused_match_id = None;
         }
         let Some(m) = mid else { return };
-        if mode.is_empty() || mode.to_lowercase() == "off" {
+        // a lone player has nobody to bull off against; the lobby may still carry the default mode
+        let alone = lobby.get("players").and_then(Value::as_array).map_or(false, |p| p.len() < 2);
+        if mode.is_empty() || mode.to_lowercase() == "off" || alone {
+            // no bull-off: the game starts now, without waiting for the first message of the match
+            if self.match_id.is_none() && !self.ended_match_ids.contains(&m) {
+                let b = self.first_board().unwrap_or_default();
+                self.start_match(&m, &b, &format!("Match {} started from the lobby (no bull-off)", m));
+            }
             return;
         }
         if self.match_id.as_ref() != Some(&m) {

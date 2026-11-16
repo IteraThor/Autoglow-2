@@ -24,9 +24,6 @@ use std::time::{Duration, Instant};
 
 pub const WAITING: &str = "waiting";
 const BOARD_ORDER: [i64; 20] = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-const CAMERA_FRIENDLY_STRENGTH: f64 = 0.5;
-const CAMERA_FRIENDLY_MAX_HIT: f64 = 1.0;
-const TURN_STEPS: [&str; 3] = ["turn", "takeout", "bull_off"];
 
 /// (controller ip, segment id or None, role)
 pub type Segment = (String, Option<i64>, String);
@@ -400,7 +397,6 @@ impl FlowRuntime {
             let flow = self.out.flow_for(&ip, sid);
             let Some(key) = hit_key(event, &flow) else { continue };
             let effect = flow.hit(&key);
-            let gentle = flow.camera_friendly && TURN_STEPS.contains(&s.step.as_str());
             let pos = board_position(event.segment_number);
             if effect.enabled && !streaming {
                 // The strip must be streaming before it can remember where the dart landed
@@ -413,13 +409,10 @@ impl FlowRuntime {
                 }
             }
             if effect.enabled {
-                let mut eff = self.coloured(s, effect, &flow, None, false);
-                if gentle && eff.duration > CAMERA_FRIENDLY_MAX_HIT {
-                    eff.duration = CAMERA_FRIENDLY_MAX_HIT;
-                }
-                self.out.hit(&ip, sid, &eff, if gentle { CAMERA_FRIENDLY_STRENGTH } else { 1.0 });
+                let eff = self.coloured(s, effect, &flow, None, false);
+                self.out.hit(&ip, sid, &eff, 1.0);
                 played = Some(key.clone());
-                all.push(format!("{}{}", key, if gentle { " (gentle)" } else { "" }));
+                all.push(key.clone());
             }
             if flow.hit_locator && role != "ambient" && ["single", "double", "triple", "ton", "ton40"].contains(&key.as_str()) {
                 if let Some(pos) = pos {

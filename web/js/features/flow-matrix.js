@@ -471,9 +471,6 @@ function statusNotes() {
     if (seen.has(key)) notes.push({ tone: 'warn', text: `Player ${seen.get(key) + 1} and player ${i + 1} have the same colour.`, select: { kind: 'players' } });
     else seen.set(key, i);
   });
-  if (!flow.camera_friendly && Object.values(flow.hits).some(hh => hh.enabled)) {
-    notes.push({ tone: 'warn', text: 'Hits flash at full strength during turns. On some boards this disturbs dart detection.', select: { kind: 'profile' } });
-  }
   return notes;
 }
 
@@ -1350,9 +1347,6 @@ function profilePanel() {
   return [
     h('div', { class: 'fm-panel-head' }, h('h2', { class: 'fm-panel-title' }, 'Profile settings')),
     h('p', { class: 'fm-panel-help' }, 'Click any part of the chart to change it. Changes only affect this segment.'),
-    section('Camera-friendly',
-      h('div', { class: 'fm-toggle-row' }, onOff(flow.camera_friendly, v => change(d => { d.camera_friendly = v; }), 'Camera-friendly')),
-      h('p', { class: 'form-hint' }, 'Autodarts finds darts in camera images. With this on, hits during a turn play at half strength and for at most a second, so strong flashes don\'t disturb detection. Leg and match celebrations stay full.')),
     section('Hit locator',
       h('div', { class: 'fm-toggle-row' }, onOff(flow.hit_locator, v => change(d => { d.hit_locator = v; }), 'Hit locator')),
       h('p', { class: 'form-hint' }, 'Lights the part of the strip next to the number that was hit, in the player\'s colour.'),
