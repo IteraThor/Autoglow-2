@@ -438,10 +438,14 @@ const AG1_THROW: C3 = (0, 255, 0);
 const AG1_TAKEOUT: C3 = (255, 255, 0);
 const AG1_PULLING: C3 = (255, 0, 0);
 
-pub const PRESET_ORDER: [&str; 6] = ["minimal", "classic", "arena", "show", "party", "ag1"];
+pub const PRESET_ORDER: [&str; 7] = ["it2", "minimal", "classic", "arena", "show", "party", "ag1"];
+
+/// The IT2 Wled preset (the default for a fresh install), shipped as a JSON file
+const IT2_PRESET: &str = include_str!("../defaults/it2.json");
 
 pub fn preset_info(id: &str) -> (&'static str, &'static str) {
     match id {
+        "it2" => ("IT2 Wled", "The default: meteors to bull off, a wave for the game start, player colours with wipes, yellow and red for pulling, rainbow wins."),
         "minimal" => ("Minimal", "Only shows whose turn it is. Calm and quiet."),
         "arena" => ("Arena", "Bold, like a stage match."),
         "show" => ("Show", "Big moments feel big: score tiers, sparkle and rainbow finales."),
@@ -544,6 +548,11 @@ fn idle(fx: i64, brightness: i64, speed: i64, colors: Option<Vec<RGBColor>>) -> 
 }
 
 fn preset_flow(pid: &str) -> GameFlow {
+    if pid == "it2" {
+        if let Ok(v) = serde_json::from_str::<Value>(IT2_PRESET) {
+            return GameFlow::from_value(&v, None);
+        }
+    }
     let fade = |d: f64| comes_in("crossfade", d, None);
     let (steps, hits, locator, idl) = match pid {
         "minimal" => (
@@ -811,7 +820,7 @@ impl GameFlowStorage {
                 Err(e) => warn!("Could not read the default flows {}: {}", t.display(), e),
             }
         }
-        let f = create_default_game_flow();
+        let f = build_preset("it2", None);
         let mut profiles = Obj::new();
         profiles.insert(f.name.clone(), f.to_value());
         crate::obj! {"version" => FILE_VERSION, "default" => f.name, "profiles" => profiles, "assign" => {}}

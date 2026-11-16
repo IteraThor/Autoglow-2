@@ -52,3 +52,23 @@ export function clearFieldError(input) {
   const hint = input.nextElementSibling;
   if (hint && hint.classList.contains('field-error')) hint.remove();
 }
+
+// Pin a popup (position: fixed) next to its anchor so scrolling side panels cannot clip it.
+// Opens below the anchor, or above when there is more room there; call after un-hiding the popup.
+export function placePopup(pop, anchor, { matchWidth = false, align = 'left' } = {}) {
+  const r = anchor.getBoundingClientRect();
+  Object.assign(pop.style, { position: 'fixed', right: 'auto', bottom: 'auto', maxHeight: '' });
+  if (matchWidth) pop.style.width = `${r.width}px`;
+  const gap = 6;
+  const width = pop.offsetWidth;
+  const height = pop.offsetHeight;
+  const below = window.innerHeight - r.bottom - gap - 8;
+  const above = r.top - gap - 8;
+  const up = height > below && above > below;
+  const room = up ? above : below;
+  if (height > room) pop.style.maxHeight = `${Math.max(120, room)}px`;
+  const shown = Math.min(height, Math.max(120, room));
+  const left = align === 'right' ? r.right - width : r.left;
+  pop.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
+  pop.style.top = `${up ? r.top - gap - shown : r.bottom + gap}px`;
+}

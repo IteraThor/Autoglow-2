@@ -1,22 +1,22 @@
 {
   "version": 2,
-  "default": "Classic",
+  "default": "IT2 Wled",
   "profiles": {
-    "Classic": {
-      "name": "Classic",
+    "IT2 Wled": {
+      "name": "IT2 Wled",
       "steps": {
         "bull_off": {
           "effect": {
-            "animation": "breathe",
+            "animation": "meteors",
             "color_primary": [
-              190,
-              190,
-              190
+              222,
+              255,
+              0
             ],
             "color_secondary": [
-              20,
-              20,
-              20
+              255,
+              0,
+              0
             ],
             "color_tertiary": [
               0,
@@ -32,25 +32,26 @@
             "transition": "instant",
             "transition_duration": 0.0,
             "options": {
+              "amount": "few",
               "colour_from": "custom"
             }
           },
           "transition": {
             "style": "crossfade",
-            "duration": 0.6
+            "duration": 1.0
           }
         },
         "game_start": {
           "effect": {
-            "animation": "curtain",
+            "animation": "wave",
             "color_primary": [
-              0,
-              190,
-              255
+              8,
+              255,
+              0
             ],
             "color_secondary": [
-              0,
-              0,
+              136,
+              255,
               0
             ],
             "color_tertiary": [
@@ -67,13 +68,14 @@
             "transition": "instant",
             "transition_duration": 0.0,
             "options": {
-              "sides": "both",
+              "waves": 3,
+              "edges": "soft",
               "colour_from": "custom"
             }
           },
           "transition": {
-            "style": "crossfade",
-            "duration": 0.5
+            "style": "curtain",
+            "duration": 1.0
           }
         },
         "turn": {
@@ -108,16 +110,22 @@
           },
           "transition": {
             "style": "wipe",
-            "duration": 0.6
+            "duration": 0.8
+          },
+          "from": {
+            "game_start": {
+              "style": "curtain",
+              "duration": 1.0
+            }
           }
         },
         "takeout": {
           "effect": {
             "animation": "solid",
             "color_primary": [
-              70,
-              70,
-              70
+              255,
+              229,
+              0
             ],
             "color_secondary": [
               0,
@@ -142,21 +150,56 @@
             }
           },
           "transition": {
-            "style": "crossfade",
-            "duration": 0.4
+            "style": "curtain",
+            "duration": 0.8
+          }
+        },
+        "takeout_in_progress": {
+          "effect": {
+            "animation": "solid",
+            "color_primary": [
+              255,
+              0,
+              0
+            ],
+            "color_secondary": [
+              0,
+              0,
+              0
+            ],
+            "color_tertiary": [
+              0,
+              0,
+              0
+            ],
+            "dynamic_secondary": false,
+            "duration": 0.0,
+            "speed": 1.0,
+            "fps": 50,
+            "reverse": false,
+            "enabled": true,
+            "transition": "instant",
+            "transition_duration": 0.0,
+            "options": {
+              "colour_from": "custom"
+            }
+          },
+          "transition": {
+            "style": "instant",
+            "duration": 0.0
           }
         },
         "leg_won": {
           "effect": {
-            "animation": "curtain",
+            "animation": "rainbow",
             "color_primary": [
               255,
               255,
               255
             ],
             "color_secondary": [
-              0,
-              0,
+              28,
+              255,
               0
             ],
             "color_tertiary": [
@@ -173,7 +216,7 @@
             "transition": "instant",
             "transition_duration": 0.0,
             "options": {
-              "sides": "both",
+              "palette": "vivid",
               "colour_from": "player"
             }
           },
@@ -209,7 +252,7 @@
             "transition": "instant",
             "transition_duration": 0.0,
             "options": {
-              "palette": "soft",
+              "palette": "vivid",
               "colour_from": "custom"
             }
           },
@@ -488,15 +531,15 @@
         {
           "color": [
             0,
-            110,
+            30,
             255
           ],
           "name": ""
         },
         {
           "color": [
+            3,
             255,
-            120,
             0
           ],
           "name": ""
@@ -535,31 +578,31 @@
         }
       ],
       "hit_locator": false,
-      "preset": "classic",
       "idle": {
         "on": true,
-        "fx": 9,
-        "speed": 128,
-        "intensity": 128,
-        "brightness": 70,
+        "fx": 38,
+        "speed": 12,
+        "intensity": 255,
+        "brightness": 30,
         "colors": [
+          [
+            16,
+            0,
+            255
+          ],
+          [
+            255,
+            0,
+            96
+          ],
           [
             0,
             255,
-            157
-          ],
-          [
-            0,
-            0,
-            0
-          ],
-          [
-            0,
-            0,
-            0
+            57
           ]
         ]
-      }
+      },
+      "preset": "it2"
     }
   },
   "assign": {}

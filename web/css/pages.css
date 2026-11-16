@@ -1422,6 +1422,7 @@ input.led-summary-seg-name:focus {
 }
 
 .fx-picker-list {
+  min-height: 0;
   max-height: 240px;
   margin: 0;
   padding: 0;

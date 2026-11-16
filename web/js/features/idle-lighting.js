@@ -2,7 +2,7 @@
 // Saved on the controller as WLED preset 1, which is also its boot preset. Every change previews live.
 
 import { api } from '../core/api.js';
-import { h } from '../core/dom.js';
+import { h, placePopup } from '../core/dom.js';
 import { appStore } from '../core/store.js';
 
 const SOLID = { id: 0, name: 'Solid', colorSlots: [{ slot: 0, label: 'Color' }], speed: false, intensity: false };
@@ -45,7 +45,10 @@ export function wledEffectPicker(effects, current, onPick) {
     pop.hidden = true;
     trigger.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside);
+    window.removeEventListener('resize', close);
+    document.removeEventListener('scroll', onScroll, true);
   };
+  const onScroll = event => { if (!pop.contains(event.target)) close(); };
   const outside = event => { if (!root.contains(event.target)) close(); };
   const pick = effect => {
     selected = effect.id;
@@ -75,7 +78,10 @@ export function wledEffectPicker(effects, current, onPick) {
     fill();
     pop.hidden = false;
     trigger.setAttribute('aria-expanded', 'true');
+    placePopup(pop, trigger, { matchWidth: true });
     document.addEventListener('pointerdown', outside);
+    window.addEventListener('resize', close);
+    document.addEventListener('scroll', onScroll, true);
     search.focus();
     list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   });

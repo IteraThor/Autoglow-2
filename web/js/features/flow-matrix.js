@@ -6,7 +6,7 @@
 // missing. Edits are a draft until saved.
 
 import { api } from '../core/api.js';
-import { h } from '../core/dom.js';
+import { h, placePopup } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import { blendFlow, renderFlowFrame } from './flow-looks.js';
 import { loadEffects, wledEffectPicker } from './idle-lighting.js';
@@ -1059,6 +1059,8 @@ function colourPicker({ value, label, oninput, onchange }) {
   function close() {
     document.removeEventListener('pointerdown', outside, true);
     document.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('resize', close);
+    document.removeEventListener('scroll', onScroll, true);
     pop.hidden = true;
     swatch.setAttribute('aria-expanded', 'false');
     if (changed) { changed = false; onchange?.(fromHex(current())); }
@@ -1068,16 +1070,17 @@ function colourPicker({ value, label, oninput, onchange }) {
     if (!wrap.contains(e.target)) close();
   }
   function onKey(e) { if (e.key === 'Escape') close(); }
+  function onScroll(e) { if (!pop.contains(e.target)) close(); }
   swatch.onclick = () => {
     if (!pop.hidden) { close(); return; }
-    // Open upwards when there is no room below
-    const r = swatch.getBoundingClientRect();
-    pop.classList.toggle('is-up', r.bottom + 260 * (r.height / swatch.offsetHeight || 1) > window.innerHeight);
     pop.hidden = false;
+    placePopup(pop, swatch);
     swatch.setAttribute('aria-expanded', 'true');
     paint();
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('keydown', onKey, true);
+    window.addEventListener('resize', close);
+    document.addEventListener('scroll', onScroll, true);
   };
   paint();
   return wrap;
