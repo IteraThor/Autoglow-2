@@ -1367,7 +1367,7 @@ function waitingPanel() {
 }
 
 function locatorCheck() {
-  const rings = allSegments().filter(s => s.role !== 'ambient');
+  const rings = tryTargets().filter(s => s.role !== 'ambient');
   if (!rings.length) return h('p', { class: 'form-hint' }, 'Add a controller to check the hit locator.');
   return h('div', { class: 'fm-locator' },
     h('p', { class: 'form-hint' }, 'Check it once: "Show 20" should light the top of the board, "Show 6" the right side. If 6 lights up on the left, switch the direction. Strips that cover only part of the board: choose Off.'),

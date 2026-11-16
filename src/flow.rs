@@ -735,19 +735,23 @@ pub fn composite(base: &[u8], layer: &[u8], mask: &[u8], scale: f64) -> Vec<u8> 
 
 pub fn draw_locator(base: &[u8], count: usize, position: f64, color: Rgb, level: f64) -> Vec<u8> {
     let mut out = base.to_vec();
-    let half = LOCATOR_WIDTH / 2.0;
-    let edge = pmax(LOCATOR_WIDTH / 2.0, 1.0 / count.max(1) as f64);
-    let col = [color.r, color.g, color.b];
-    for i in 0..count {
-        let d = (pymod((i as f64 + 0.5) / count as f64 - position + 0.5, 1.0) - 0.5).abs();
-        if d >= half + edge {
-            continue;
-        }
-        let a = level * if d <= half { 1.0 } else { 1.0 - (d - half) / edge };
-        let j = i * 3;
+    if count == 0 {
+        return out;
+    }
+    let (hi, lo) = (color.r.max(color.g).max(color.b), color.r.min(color.g).min(color.b));
+    let col: [i64; 3] = if hi - lo < 40 {
+        [255; 3]
+    } else {
+        [hi + lo - color.r, hi + lo - color.g, hi + lo - color.b]
+    };
+    // one dart section wide, in whole LEDs (45 LEDs -> 2), centred on the hit
+    let n = ((count as f64 * LOCATOR_WIDTH).round() as i64).max(1);
+    let first = (position * count as f64 - n as f64 / 2.0).round() as i64;
+    for k in 0..n {
+        let j = (first + k).rem_euclid(count as i64) as usize * 3;
         for c in 0..3 {
             let v = out[j + c] as f64;
-            out[j + c] = byte((v + (col[c] as f64 - v) * a + 0.5) as i64);
+            out[j + c] = byte((v + (col[c] as f64 - v) * level + 0.5) as i64);
         }
     }
     out

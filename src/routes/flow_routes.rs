@@ -489,7 +489,9 @@ pub async fn try_look(State(s): State<S>, req: Req) -> ApiResult {
             "locator" => {
                 drv.flow_show(sid, &coloured(&turn.effect, true), "instant", 0.0, None, false);
                 let n = safe_int(non_empty(data.get("number")), 20);
-                drv.flow_locate(sid, board_position(Some(n)).unwrap_or(0.0), colour, 2.0, s.engine.segment_clockwise(&ip, sid));
+                if !drv.flow_locate(sid, board_position(Some(n)).unwrap_or(0.0), colour, 2.0, s.engine.segment_clockwise(&ip, sid)) {
+                    return Err(AppError::validation("The controller is not streaming live yet, so the locator cannot show. Try again in a moment."));
+                }
             }
             "look" => {
                 // a step's look cut in at once (the "before" of a looping transition preview)
