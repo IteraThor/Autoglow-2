@@ -341,18 +341,37 @@ function eventTab() {
 }
 
 const head = (title, note) => h('div', { class: 'stu-title' }, h('div', {}, h('h2', {}, title), h('small', {}, note)));
-const TABS = [['presets', 'Presets', presetsTab], ['content', 'Content', contentTab], ['look', 'Look', lookTab], ['ticker', 'Ticker', tickerTab], ['event', 'Event', eventTab]];
+// id, label, builder, icon, hover note
+const TABS = [
+  ['presets', 'Presets', presetsTab, 'tv', 'Ready-made screens'],
+  ['content', 'Content', contentTab, 'eye', 'Which scenes show, and for how long'],
+  ['look', 'Look', lookTab, 'palette', 'Colours of the TVs'],
+  ['ticker', 'Ticker', tickerTab, 'shuffle', 'Messages along the bottom'],
+  ['event', 'Event', eventTab, 'trophy', 'Name and logo']
+];
 
 // --- The page ------------------------------------------------------------------------------------
 function build(host) {
   const panel = h('div', { class: 'stu-panel dsh-panel' });
   const frame = h('iframe', { src: 'about:blank', title: 'Dashboard preview', tabindex: '-1' });
   const dots = statusChips();
-  const tabs = h('div', { class: 'dsh-tabs', role: 'tablist' }, ...TABS.map(([id, label]) => {
-    const b = h('button', { type: 'button', role: 'tab', 'data-id': id }, label);
-    b.addEventListener('click', () => { tab = id; refresh(true); });
-    return b;
-  }));
+  const tabs = h('div', { class: 'stu-group dsh-rail', role: 'tablist', 'aria-label': 'Dashboard' }, h('span', { class: 'stu-pill' }),
+    ...TABS.map(([id, label, , ico, note]) => {
+      const b = h('button', { type: 'button', role: 'tab', class: 'stu-stage', 'data-id': id, title: note }, icon(ico, 22), h('span', {}, label));
+      b.addEventListener('click', () => { tab = id; refresh(true); });
+      return b;
+    }));
+  const placePill = () => {
+    const btn = tabs.querySelector('.stu-stage.is-on');
+    tabs.classList.toggle('has-pill', !!btn);
+    if (!btn) return;
+    const pill = tabs.querySelector('.stu-pill');
+    pill.style.left = `${btn.offsetLeft}px`;
+    pill.style.width = `${btn.offsetWidth}px`;
+    // On a narrow screen the tabs scroll sideways: keep the chosen one in view
+    if (tabs.scrollWidth > tabs.clientWidth) tabs.scrollTo({ left: btn.offsetLeft - tabs.clientWidth / 2 + btn.offsetWidth / 2, behavior: 'smooth' });
+  };
+  new ResizeObserver(placePill).observe(tabs);
   const holdNote = h('p', { class: 'stu-hint' });
   const holdSeg = segmented(HOLDS, S.hold?.scene || '', async v => {
     draftChannel?.postMessage({ type: 'hold', scene: v });
@@ -388,7 +407,8 @@ function build(host) {
 
   // fresh: a new tab (animated in); otherwise the tab is rebuilt quietly after a change
   const refresh = (fresh = false) => {
-    tabs.querySelectorAll('button').forEach(b => { const on = b.dataset.id === tab; b.classList.toggle('is-on', on); b.setAttribute('aria-selected', String(on)); });
+    tabs.querySelectorAll('.stu-stage').forEach(b => { const on = b.dataset.id === tab; b.classList.toggle('is-on', on); b.setAttribute('aria-selected', String(on)); });
+    placePill();
     const focused = document.activeElement;
     const typing = panel.contains(focused) && focused.matches('input[type=text], input[type=number], textarea');
     if (typing && !fresh) return;    // keep the field being typed in

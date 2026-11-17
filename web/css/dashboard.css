@@ -14,11 +14,9 @@
 .dashboard-page [hidden] { display: none !important; }
 .dsh-page { display: flex; flex-direction: column; gap: 14px; }
 
-/* Tabs under the top row */
-.dsh-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--st-line); }
-.dsh-tabs button { margin-bottom: -1px; padding: 9px 16px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: color var(--st-fast), border-color var(--st-fast); }
-.dsh-tabs button:hover { color: var(--text-primary); }
-.dsh-tabs button.is-on { color: var(--text-primary); border-bottom-color: var(--accent-primary); }
+/* The tabs are Studio's icon bar (stu-group in studio.css), as wide as the page */
+.dsh-rail { width: 100%; }
+@media (max-width: 900px) { .dsh-rail { overflow-x: auto; } .dsh-rail .stu-stage { flex: none; } }
 
 /* A rebuilt tab after a change stays still; a newly opened one slides in (studio.css) */
 .dsh-panel.is-quiet > * { animation: none; }
