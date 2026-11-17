@@ -75,7 +75,7 @@
     return txt ? JSON.parse(txt) : null;
   }
 
-  /** game: {settings: {base_score, in_mode, out_mode, legs, sets, bull_off}, players: [{name, account}]} */
+  /** game: {settings: {base_score, in_mode, out_mode, legs, sets, bull_off}, players: [{name}]} */
   async function startGame(game, finished) {
     const board = localStorage.getItem('selectedBoard');
     if (!board) throw new Error('No board picked in Autodarts yet. Pick your board on the Play page once.');
@@ -88,17 +88,9 @@
     });
     try {
       const me = lobby.host || {};
-      const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
-      let friends = null;
+      // Local players are always guests: they are added by name, never with an Autodarts account
       for (const p of game.players) {
-        let user = p.account && same(p.name, me.name) ? me : null;
-        if (p.account && !user) {
-          friends = friends || (await call('GET', '/as/v0/friends')) || [];
-          user = (friends.find((f) => f.user && same(f.user.name, p.name)) || {}).user || null;
-        }
-        await call('POST', `/gs/v0/lobbies/${lobby.id}/players`, user
-          ? { name: user.name, userId: user.id, boardId: board }
-          : { name: p.name.trim().toUpperCase(), hostId: me.id, boardId: board });
+        await call('POST', `/gs/v0/lobbies/${lobby.id}/players`, { name: p.name.trim().toUpperCase(), hostId: me.id, boardId: board });
       }
       await call('POST', `/gs/v0/lobbies/${lobby.id}/start`);
     } catch (e) {

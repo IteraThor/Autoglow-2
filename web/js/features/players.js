@@ -13,7 +13,7 @@ import { avatar, deletePlayer, icon, imageUrl, loadSettings, PROFILE, savePlayer
 const $ = id => document.getElementById(id);
 const roster = () => core.settings?.players || [];
 
-let view = { tab: 'members', member: null, editing: false, query: '', period: 'all', board: 'season' };
+let view = { tab: 'members', sort: 'name', dir: '', mode: '', member: null, editing: false, query: '', period: 'all', board: 'season' };
 let club = { role: 'alone', can_edit: true };   // /api/club/state
 let sums = {};                                  // member id → summary stats
 let seq = 0;                                    // drops answers of views the user already left
@@ -172,7 +172,23 @@ function card(p, i) {
   return b;
 }
 
-const SORTS = { name: (a, b) => a.name.localeCompare(b.name), average: (a, b) => (sums[b.id]?.average || 0) - (sums[a.id]?.average || 0), games: (a, b) => (sums[b.id]?.games || 0) - (sums[a.id]?.games || 0), last: (a, b) => (sums[b.id]?.last_at || 0) - (sums[a.id]?.last_at || 0) };
+// Sortable columns: label, value getter, and the direction a first click uses (text up, numbers down)
+const COLS = {
+  name: ['Player', p => p.name.toLowerCase(), 'asc'],
+  average: ['Average', p => sums[p.id]?.average || 0, 'desc'],
+  first9: ['First 9', p => sums[p.id]?.first9 || 0, 'desc'],
+  games: ['Games', p => sums[p.id]?.games || 0, 'desc'],
+  win_pct: ['Win %', p => sums[p.id]?.win_pct || 0, 'desc'],
+  t180: ['180s', p => sums[p.id]?.t180 || 0, 'desc'],
+  best_checkout: ['Best checkout', p => sums[p.id]?.best_checkout || 0, 'desc'],
+  last: ['Last played', p => sums[p.id]?.last_at || 0, 'desc']
+};
+const sortList = list => {
+  const key = COLS[view.sort] ? view.sort : 'name', get = COLS[key][1];
+  const dir = (view.dir || COLS[key][2]) === 'asc' ? 1 : -1;
+  return list.sort((a, b) => { const x = get(a), y = get(b); return (x < y ? -1 : x > y ? 1 : 0) * dir || a.name.localeCompare(b.name); });
+};
+const savedMode = () => { try { return localStorage.getItem('ag.players.mode') === 'table' ? 'table' : 'cards'; } catch { return 'cards'; } };
 
 // --- Demo players: a fixed Norse set to try features with; one button adds them, the same button removes them
 const DEMO = [
@@ -203,25 +219,54 @@ async function toggleDemo() {
   } catch (err) { toast.error(err.message); }
 }
 
+// The results: the card grid or the sortable table (headers sort; a second click flips the direction)
+function results(list, q) {
+  if (view.mode === 'table') {
+    const heads = Object.entries(COLS).map(([k, [label]]) => {
+      const on = view.sort === k, dir = view.dir || COLS[k][2];
+      return h('th', { class: k === 'name' ? '' : 'is-num', 'aria-sort': on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none' },
+        h('button', { type: 'button', class: on ? 'is-on' : '', onclick: () => { view.dir = on ? (dir === 'asc' ? 'desc' : 'asc') : COLS[k][2]; view.sort = k; render(); } }, label, on ? h('span', { class: 'pl-arrow' }, dir === 'asc' ? '▲' : '▼') : null));
+    });
+    const rows = list.map(p => {
+      const s = sums[p.id];
+      const tr = h('tr', { tabindex: '0', title: 'Open' },
+        h('td', {}, h('span', { class: 'pl-trow-who' }, avatar(p), h('span', {}, h('b', {}, p.name), p.nickname ? h('small', {}, `“${p.nickname}”`) : null))),
+        h('td', { class: 'is-num' }, fmt(s?.average)), h('td', { class: 'is-num' }, fmt(s?.first9)), h('td', { class: 'is-num' }, int(s?.games)),
+        h('td', { class: 'is-num' }, s?.games ? `${Math.round(s.win_pct)}%` : '–'), h('td', { class: 'is-num' }, int(s?.t180)), h('td', { class: 'is-num' }, int(s?.best_checkout)),
+        h('td', { class: 'is-num' }, s?.last_at ? when(s.last_at) : '–'));
+      tr.addEventListener('click', () => open(p.id));
+      tr.addEventListener('keydown', e => { if (e.key === 'Enter') open(p.id); });
+      return tr;
+    });
+    return h('div', { class: 'pl-results' }, h('div', { class: 'pl-table-wrap' }, h('table', { class: 'pl-table' }, h('thead', {}, h('tr', {}, ...heads)), h('tbody', {}, ...rows))),
+      list.length || !q ? null : h('p', { class: 'pl-empty' }, `Nobody matches “${view.query}”.`));
+  }
+  const add = club.can_edit && !q ? h('button', { type: 'button', class: 'pl-card pl-add', onclick: () => open(null, true) }, h('span', { class: 'stu-avatar' }, icon('plus', 22)), h('span', { class: 'pl-card-name' }, 'New member')) : null;
+  return h('div', { class: 'pl-results' }, h('div', { class: 'pl-grid' }, ...list.map(card), add),
+    list.length || !q ? null : h('p', { class: 'pl-empty' }, `Nobody matches “${view.query}”.`));
+}
+
 function membersView() {
+  view.mode = view.mode || savedMode();
   const q = view.query.trim().toLowerCase();
-  const list = roster()
-    .filter(p => !q || [p.name, p.nickname, p.alias, p.club].some(v => (v || '').toLowerCase().includes(q)))
-    .sort(SORTS[view.sort || 'name']);
+  const filtered = () => sortList(roster().filter(p => !q || [p.name, p.nickname, p.alias, p.club].some(v => (v || '').toLowerCase().includes(q))));
   const search = h('input', { class: 'pl-search', type: 'search', placeholder: 'Search members', value: view.query, 'aria-label': 'Search members' });
   search.addEventListener('input', () => {
     view.query = search.value;
-    $('playersPage').querySelector('.pl-grid').replaceWith(membersView().querySelector('.pl-grid'));
+    const qq = view.query.trim().toLowerCase();
+    const list = sortList(roster().filter(p => !qq || [p.name, p.nickname, p.alias, p.club].some(v => (v || '').toLowerCase().includes(qq))));
+    $('playersPage').querySelector('.pl-results').replaceWith(results(list, qq));
   });
-  const sort = h('select', { class: 'pl-sort', 'aria-label': 'Sort by', onchange: e => { view.sort = e.target.value; render(); } },
-    [['name', 'Name'], ['average', 'Average'], ['games', 'Games'], ['last', 'Last played']].map(([v, t]) => h('option', { value: v, selected: (view.sort || 'name') === v }, `Sort: ${t}`)));
-  const add = club.can_edit ? h('button', { type: 'button', class: 'pl-card pl-add', onclick: () => open(null, true) }, h('span', { class: 'stu-avatar' }, icon('plus', 22)), h('span', { class: 'pl-card-name' }, 'New member')) : null;
+  const sort = h('select', { class: 'pl-sort', 'aria-label': 'Sort by', onchange: e => { view.sort = e.target.value; view.dir = ''; render(); } },
+    Object.entries(COLS).map(([v, [t]]) => h('option', { value: v, selected: (view.sort || 'name') === v }, `Sort: ${t === 'Player' ? 'Name' : t}`)));
+  const modes = h('div', { class: 'pl-seg pl-modes', role: 'group', 'aria-label': 'View' },
+    [['cards', 'grid', 'Cards'], ['table', 'list', 'Table']].map(([k, ic, label]) =>
+      h('button', { type: 'button', class: view.mode === k ? 'is-on' : '', title: label, 'aria-pressed': String(view.mode === k), onclick: () => { view.mode = k; try { localStorage.setItem('ag.players.mode', k); } catch {} render(); } }, label)));
   const demoBtn = club.can_edit ? h('button', { type: 'button', class: 'stu-btn', onclick: toggleDemo }, roster().some(isDemo) ? 'Remove demo players' : 'Add demo players') : null;
   const qrBtn = h('button', { type: 'button', class: 'stu-btn', title: 'Players scan this with their phone to add themselves', onclick: showJoinQr }, 'Join QR code');
   return h('div', {},
-    h('div', { class: 'pl-tools' }, search, sort, qrBtn, demoBtn, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
-    h('div', { class: 'pl-grid' }, ...list.map(card), q ? null : add),
-    list.length || !q ? null : h('p', { class: 'pl-empty' }, `Nobody matches “${view.query}”.`),
+    h('div', { class: 'pl-tools' }, search, sort, modes, qrBtn, demoBtn, h('span', { class: 'pl-count' }, `${roster().length} member${roster().length === 1 ? '' : 's'}`)),
+    results(filtered(), q),
     h('p', { class: 'pl-note' }, icon('info', 16), h('span', {},
       'A player in an Autodarts game counts as a member when the name there matches their name or their Autodarts name, for example the guest ',
       h('b', {}, 'SASCHA'), '. Capitals don’t matter, and a close spelling still matches. Every finished local game is saved to their stats.')));

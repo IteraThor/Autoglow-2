@@ -3,7 +3,7 @@
 
 import { h } from '../core/dom.js';
 import * as core from './studio-core.js';
-import { change, focusText, icon, THEMES, themeSwatch, avatar } from './studio-core.js';
+import { change, focusText, icon, THEMES, themeSwatch } from './studio-core.js';
 
 const S = () => core.settings;
 
@@ -163,19 +163,6 @@ export function textsEditor(names, { onLeave = () => focusText(null) } = {}) {
     root.append(h('div', { class: 'stu-texts-foot' }, reset));
   }
   return root;
-}
-
-// --- Players: they live on the Players page now; the Studio shows who it knows -------------------------
-export function playersPanel() {
-  const ps = S().players;
-  const go = h('button', { type: 'button', class: 'stu-btn is-primary' }, icon('users', 16), 'Edit on the Players page');
-  go.addEventListener('click', () => window.router.navigate('/players'));
-  return h('div', { class: 'stu-players-panel' },
-    ps.length
-      ? h('div', { class: 'stu-players' }, ...ps.slice(0, 12).map(p => h('span', { class: 'stu-player' }, avatar(p), h('span', { class: 'stu-player-name' }, p.name))))
-      : h('p', { class: 'stu-hint' }, 'No players yet.'),
-    h('p', { class: 'stu-hint' }, `${ps.length} player${ps.length === 1 ? '' : 's'}. Pictures, nicknames and profiles are edited on the Players page; the screens show them when the Autodarts name matches.`),
-    go);
 }
 
 // --- Readiness dots; a missing one pulses and opens its fix ----------------------------------------

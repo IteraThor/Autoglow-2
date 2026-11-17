@@ -94,6 +94,8 @@
   .ff .w{grid-column:1/-1}.ff select,.ff input{width:100%}.ff input[type=checkbox]{width:16px;flex:none}.ff label.ck{flex-direction:row;align-items:center;gap:8px;color:#e3e5ea;font-size:13px}
   .lobby{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
   @media (max-width:860px){.lobby{grid-template-columns:1fr}}
+  .lobby .side{display:flex;flex-direction:column;gap:16px}
+  .qrbox{background:#fff;border-radius:12px;padding:8px;margin:0 auto;max-width:220px}.qrbox svg{display:block;width:100%;height:auto}
   .lobby .card{padding:20px}.lobby h3{display:flex;align-items:center;gap:10px;margin-bottom:14px}.lobby h3 .chip{font-family:var(--sans)}
   .addbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.addbar input#pnew{flex:1;min-width:160px}
   .sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:#e3e5ea;font-weight:700;font-size:13px;user-select:none}
@@ -371,6 +373,7 @@
     badge();
     toast();
     callout();
+    takePhoneSignups();
     if (window.autoglowMatch) window.autoglowMatch(data);
     if (!isOpen()) return;
     const json = JSON.stringify(data) + error;
@@ -562,7 +565,7 @@
         if (!a || a.match !== m.id) throw new Error('The host did not hand this match over. Try again.');
       }
       picked = null;
-      const players = a.players.map(p => ({ name: (p.ad_name || p.name).trim(), account: !!p.account }));
+      const players = a.players.map(p => ({ name: (p.ad_name || p.name).trim() }));
       const id = await startViaApi({ settings: a.settings, players }, finished);
       api('started', { match: a.match, ad_match: id }).catch(() => {});
       // Autodarts may still ask "End this game?" on a running match: then the cover goes so it can be answered
@@ -829,7 +832,8 @@
     const s = t.lobby || {};
     lob = { tid: t.id, name: s.name || t.name, format: s.format || 'single_ko', groups: s.groups || 0, advance: s.advance || 2, swiss_rounds: s.swiss_rounds || 0,
       return_round: !!s.return_round, ko_legs: s.ko_legs || 0, semi_legs: s.semi_legs || 0, final_legs: s.final_legs || 0, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
-      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', account: !!p.account, visitor: !!p.visitor, member: p.member || '' })), roster: null, visitor: false, rulesOpen: false };
+      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, visitor: false, rulesOpen: false,
+      phone_signup: !!s.phone_signup, phoneSeen: s.phone_count || 0, qr: null };
     clubApi('members').then(r => { lob.roster = r.players || []; }, () => { lob.roster = []; }).then(() => { if (!typing()) { lastJson = ''; render(); } });
     return lob;
   }
@@ -838,7 +842,22 @@
     return { name: l.name, format: l.format, groups: +l.groups, advance: +l.advance, swiss_rounds: +l.swiss_rounds,
       settings: { ...l.settings, base_score: +l.settings.base_score, legs: +l.settings.legs, sets: +l.settings.sets },
       semi_legs: +l.semi_legs, final_legs: +l.final_legs, ko_legs: +l.ko_legs, return_round: !!l.return_round,
-      players: l.players.map((p, i) => ({ name: p.name, ad_name: p.ad_name, account: !!p.account, visitor: !!p.visitor, member: p.member, seed: i + 1 })) };
+      phone_signup: !!l.phone_signup, phone_seen: l.phoneSeen,
+      players: l.players.map((p, i) => ({ name: p.name, ad_name: p.ad_name, visitor: !!p.visitor, member: p.member, phone: p.phone || 0, seed: i + 1 })) };
+  }
+  /** Players who signed up on their phone go into the organizer's list (once: a removed one stays out) */
+  function takePhoneSignups() {
+    const t = T();
+    if (!lob || !t || t.status !== 'lobby' || lob.tid !== t.id || data.role !== 'host') return;
+    const fresh = ((t.lobby || {}).players || []).filter(p => p.phone > lob.phoneSeen).sort((a, b) => a.phone - b.phone);
+    if (!fresh.length) return;
+    for (const p of fresh) {
+      lob.phoneSeen = Math.max(lob.phoneSeen, p.phone);
+      if (!lob.players.some(q => q.name.trim().toLowerCase() === p.name.trim().toLowerCase())) addPlayer(p.name, { phone: p.phone });
+    }
+    flash(`${fresh.map(p => p.name).join(', ')} signed up by phone`);
+    lastJson = '';
+    saveLobby(true);
   }
   let saveTimer = 0;
   /** Send the lobby to AutoGlow (joined boards see it too); text fields wait until typing pauses */
@@ -867,7 +886,7 @@
     return `<div class="ph"><div><input class="title-in" data-l="name" value="${esc(l.name)}" title="Click to rename" maxlength="60"><div class="sub">Lobby on ${esc(data.node.name)} · boards on your network can join now</div></div>
         <div class="r"><button class="btn sec sm" data-act="help">How it works</button><button class="btn danger sm" data-act="lcancel">Close lobby</button></div></div>
       ${rulesCard(l)}
-      <div class="lobby">${playersCard(l)}<div class="card" id="lboards">${lobbyBoards(t, true)}</div></div>
+      <div class="lobby">${playersCard(l)}<div class="side"><div class="card" id="lboards">${lobbyBoards(t, true)}</div>${phoneCard(l)}</div></div>
       <div class="card startbar" id="lstart">${startBar(t)}</div>`;
   }
 
@@ -898,7 +917,7 @@
     const free = (l.roster || []).filter(m => !taken.has(m.name.trim().toLowerCase()));
     const tag = (p, i) => (p.member ? '<span class="tag mem" title="Club member: the games count for their stats">★ Member</span>'
       : `<button class="tag ${p.visitor ? 'vis' : ''}" data-act="pvis" data-i="${i}" title="${p.visitor ? 'Visitor: no club profile. Click to give them one.' : 'Gets a club profile when the tournament starts. Click to make them a visitor.'}">${p.visitor ? 'Visitor' : 'New profile'}</button>`);
-    const sub = p => [p.ad_name && p.ad_name.toUpperCase() !== p.name.toUpperCase() ? `in Autodarts: ${esc(p.ad_name)}` : '', p.account ? 'Autodarts account' : ''].filter(Boolean).join(' · ');
+    const sub = p => [p.ad_name && p.ad_name.toUpperCase() !== p.name.toUpperCase() ? `in Autodarts: ${esc(p.ad_name)}` : '', p.phone ? 'signed up by phone' : ''].filter(Boolean).join(' · ');
     return `<div class="card"><h3>Players <span class="chip">${l.players.length} / 32</span></h3>
       <div class="addbar"><input id="pnew" placeholder="Type a name and press Enter"><label class="sw" title="Visitors get no club profile"><input type="checkbox" id="pvisnew" ${l.visitor ? 'checked' : ''}><span></span>Visitor</label><button class="btn" data-act="padd">Add</button><button class="btn sec sm" data-act="ppaste">Paste a list…</button></div>
       ${l.roster && l.roster.length && free.length ? `<div class="club"><span class="lbl">From the club</span>${free.map(m => `<button class="pick" data-act="radd" data-v="${esc(m.id)}">${avatar(m.name)}${esc(m.name)}${m.summary && m.summary.games ? ` <span class="muted">${m.summary.average.toFixed(1)}</span>` : ''}</button>`).join('')}
@@ -908,6 +927,18 @@
         : '<div class="muted" style="padding:28px 0;text-align:center">No players yet. Type a name above or pick club members.</div>'}</div>
       ${l.players.length > 1 ? `<div class="seedbar">Seeding is the list order<span style="flex:1"></span><button class="btn sec sm" data-act="pshuffle">Shuffle</button>${l.roster && l.roster.length ? '<button class="btn sec sm" data-act="rseed">By club average</button>' : ''}</div>` : ''}
       </div>`;
+  }
+
+  /** Optional: a QR code players scan to put themselves on the list (phone on the same network) */
+  function phoneCard(l) {
+    if (l.phone_signup && !l.qr) {
+      l.qr = 'loading';
+      api('signup-qr').then(r => { l.qr = r; }, e => { l.qr = null; flash(e.message || 'Could not make the QR code'); })
+        .then(() => { if (!typing()) { lastJson = ''; render(); } });
+    }
+    const qr = l.qr && l.qr.svg ? `<div class="qrbox" role="img" aria-label="QR code to sign up">${l.qr.svg}</div><div class="small muted" style="text-align:center;margin-top:8px">Scan with a phone on the same network.<br>${esc(l.qr.url)}</div>` : '';
+    return `<div class="card"><h3 style="margin-bottom:${l.phone_signup ? 14 : 0}px">Phone sign-up<span style="flex:1"></span><label class="sw" title="Players scan a QR code to put themselves on the list"><input type="checkbox" data-l="phone_signup" ${l.phone_signup ? 'checked' : ''}><span></span></label></h3>
+      ${l.phone_signup ? qr : '<div class="small muted" style="margin-top:8px">Show a QR code: players scan it and put themselves on the list.</div>'}</div>`;
   }
 
   /** Who has joined, like a game lobby. The host can switch a board's playing on or off, or remove it */
@@ -954,7 +985,7 @@
     if (lob.players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) { flash(`${n} is already in`); return false; }
     // A typed name that is a club member is that member
     const m = !extra.member && (lob.roster || []).find(x => x.name.trim().toLowerCase() === n.toLowerCase());
-    lob.players.push({ name: n, ad_name: '', account: false, visitor: false, member: '', ...extra, ...(m ? { member: m.id, visitor: false, ad_name: m.alias || '' } : {}) });
+    lob.players.push({ name: n, ad_name: '', visitor: false, member: '', ...extra, ...(m ? { member: m.id, visitor: false, ad_name: m.alias || '' } : {}) });
     return true;
   }
 
@@ -1228,7 +1259,6 @@
     <li><b>A board is gone?</b> A match it had not started goes to another board after a minute offline (at once when it presses Leave). A match it was playing shows up on top of the host's page: enter the result there, or press <b>Play again</b>.</li>
     <li><b>The host PC is gone?</b> Boards keep playing and search the network for it. After a while a board can <b>Take over as host</b> from its copy of the tournament; the others follow, and the old host becomes a board when it's back.</li>
     <li><b>A result is wrong or missing?</b> On the host, tap the match in the bracket, tap the winner and Save. <b>Walkover</b> is for a player who can't play. The TV dashboard and End tournament are under <b>⋯</b>.</li></ol>
-    <div class="note">Players and Autodarts accounts can be mixed: guests are added by name, account players with their account.</div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="close">Got it</button></div>`;
 
   // ---------------------------------------------------------------------------
@@ -1345,8 +1375,7 @@
       const i = +el.dataset.i, p = lob.players[i];
       dialog(`<h3>Edit player</h3><div class="ff">
         ${p.member ? '' : `<label class="w">Name<input id="pe-name" value="${esc(p.name)}"></label>`}
-        <label class="w">Name in Autodarts<input id="pe-ad" value="${esc(p.ad_name)}" placeholder="${esc(p.name.toUpperCase())}"><span class="small muted" style="font-weight:500">Guests: Autodarts writes their name in capitals, which is fine. Account players: their account name.</span></label>
-        <label class="w ck"><input type="checkbox" id="pe-acc" ${p.account ? 'checked' : ''}> Plays with their Autodarts account</label>
+        <label class="w">Name in Autodarts<input id="pe-ad" value="${esc(p.ad_name)}" placeholder="${esc(p.name.toUpperCase())}"><span class="small muted" style="font-weight:500">Guests: Autodarts writes their name in capitals, which is fine.</span></label>
         ${p.member ? '' : `<label class="w ck"><input type="checkbox" id="pe-vis" ${p.visitor ? 'checked' : ''}> Visitor: no club profile, games not in the club stats</label>`}</div>
         <div class="row" style="margin-top:14px"><button class="btn" data-act="pedit-ok" data-i="${i}">Save</button><button class="btn sec" data-act="close">Cancel</button></div>`);
     }
@@ -1356,7 +1385,6 @@
       if (!name || lob.players.some(o => o !== p && o.name.trim().toLowerCase() === name.toLowerCase())) { flash(name ? `${name} is already in` : 'The name is empty'); return; }
       p.name = name;
       p.ad_name = root.getElementById('pe-ad').value.trim();
-      p.account = root.getElementById('pe-acc').checked;
       if (vis) p.visitor = vis.checked;
       dialog('');
       changed();

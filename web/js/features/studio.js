@@ -1,4 +1,4 @@
-// AutoGlow 2 - Studio page: the broadcast as a timeline. Setup (look, players, cameras) comes first, then
+// AutoGlow 2 - Studio page: the broadcast as a timeline. Setup (look, cameras) comes first, then
 // the match in the order it plays on the TV. Picking a step plays it in the preview and lists only what
 // that step shows. Changes save by themselves; "Show on TVs" plays the step on every screen.
 // The broadcast itself is web/studio/live.html; it reads the same settings from /api/studio.
@@ -7,7 +7,7 @@ import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
 import { cue, endDraft, flush, focusText, icon, loadSettings, play, saveMark } from './studio-core.js';
-import { layoutPicker, lookPicker, playersPanel, popover, section, statusDots, switchRow, textsEditor } from './studio-parts.js';
+import { layoutPicker, lookPicker, popover, section, statusDots, switchRow, textsEditor } from './studio-parts.js';
 import { camerasPanel, stopCameras } from './studio-cameras.js';
 import { matchPanel } from './studio-match.js';
 
@@ -25,7 +25,6 @@ const STAGES = [
 ];
 const SETUP = [
   { id: 'look', label: 'Look', icon: 'palette', note: 'Colours of every screen' },
-  { id: 'players', label: 'Players', icon: 'users', note: 'Shown when their Autodarts name matches' },
   { id: 'cameras', label: 'Cameras', icon: 'video', note: 'Board and player, as the screens show them', wide: true }
 ];
 // Moments that interrupt the live scoreboard
@@ -155,7 +154,7 @@ function build(host) {
         section('Texts', textsEditor(stage.groups, { onLeave: () => showStage(stage) }))].filter(Boolean));
     } else {
       play('idle');
-      panel.replaceChildren(head, item.id === 'look' ? lookPicker() : item.id === 'players' ? playersPanel() : camerasPanel());
+      panel.replaceChildren(head, item.id === 'look' ? lookPicker() : camerasPanel());
     }
   };
 

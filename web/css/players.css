@@ -164,3 +164,22 @@
 .pl-offer .stu-icon { flex: none; }
 .pl-offer b { color: var(--text-primary); }
 .pl-offer .stu-icon { color: var(--status-info); }
+
+/* Table view */
+.pl-tools { flex-wrap: wrap; }
+.pl-modes button { padding: 6px 10px; }
+.pl-table-wrap { overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 14px; }
+.pl-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.pl-table th, .pl-table td { padding: 8px 12px; text-align: left; white-space: nowrap; }
+.pl-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.pl-table thead th { position: sticky; top: 0; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); }
+.pl-table th button { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.pl-table th button:hover, .pl-table th button.is-on { color: var(--text-primary); }
+.pl-arrow { margin-left: 4px; font-size: 9px; }
+.pl-table tbody tr { cursor: pointer; border-bottom: 1px solid var(--border-subtle); }
+.pl-table tbody tr:last-child { border-bottom: 0; }
+.pl-table tbody tr:hover, .pl-table tbody tr:focus-visible { background: var(--bg-card-hover); outline: none; }
+.pl-trow-who { display: inline-flex; align-items: center; gap: 10px; }
+.pl-trow-who .stu-avatar { width: 28px; height: 28px; font-size: 11px; flex: none; }
+.pl-trow-who b { display: block; }
+.pl-trow-who small { display: block; color: var(--text-muted); font-size: 11px; }
