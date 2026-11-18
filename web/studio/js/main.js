@@ -6,7 +6,7 @@
 
 import './tv-compat.js';
 import { ctx, displayName, t, tn, el } from './ctx.js';
-import { initCameras, applyCameras, setLayout, setBlur, setMockupPlayer } from './cameras.js';
+import { initCameras, applyCameras, setLayout, setBlur } from './cameras.js';
 import { onDarts, outputDelay } from './darts.js';
 import { renderBoard, renderVisit, renderPlayerCard } from './scoreboard.js';
 import { MiniBoard } from './dartboard.js';
@@ -275,8 +275,6 @@ function renderLive(state) {
   renderVisit(state);
   const turn = state.turn || {};
   const owner = state.players[turn.player] || state.players[state.active];
-  // The mockup camera shows whoever is at the board
-  setMockupPlayer(state.players[state.active] || owner);
   const show = ctx.settings?.show_dartboard !== false && owner;
   $('miniBoard').hidden = !show;
   if (show) {
@@ -405,7 +403,6 @@ function onState(state) {
     lastState = state;
   } else {
     if (!emptySince) emptySince = Date.now();
-    setMockupPlayer(null);
   }
   renderIdleStatus(state);
   if (!busy) direct(state);

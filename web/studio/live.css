@@ -169,29 +169,6 @@ body[data-chroma="green"] .stage { background: #00b140; }
   filter: brightness(0.5) saturate(1.15);
 }
 
-/* Mockup camera: a photo, framed like any camera (whole picture at zoom 1); without one, a player card */
-.mockup-in { animation: mockup-in 0.6s ease-out; }
-
-.mockup-card {
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 0 520px;
-  background: radial-gradient(ellipse at 50% 40%, #243049 0%, #0b0f18 75%);
-  text-align: center;
-}
-
-.mockup-card .mockup-pic { width: 420px; height: 420px; object-fit: contain; filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.6)); }
-.mockup-card span.mockup-pic { border-radius: 50%; font-size: 160px; }
-.mockup-name { font-family: var(--font-cond); font-size: 72px; font-weight: 800; text-transform: uppercase; color: #fff; }
-.mockup-card small { font-size: 20px; color: rgba(255, 255, 255, 0.4); }
-
-@keyframes mockup-in { from { opacity: 0; } }
-
 .cam-divider {
   position: absolute;
   left: 958px;

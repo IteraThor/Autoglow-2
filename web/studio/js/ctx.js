@@ -52,12 +52,6 @@ export function pictureUrl(player) {
   return player.avatar_url || '';
 }
 
-// Photo shown by the "mockup" player camera for this player, if one was uploaded
-export function mockupUrl(player) {
-  const sp = player && studioPlayer(player);
-  return sp?.mockup ? `/api/studio/images/${encodeURIComponent(sp.mockup)}` : '';
-}
-
 export function avatar(player, cls = 'avatar') {
   const src = pictureUrl(player);
   const fallback = () => el('span', `avatar ${cls}`, initials(displayName(player)));

@@ -17,7 +17,7 @@ pub const PROFILE_FIELDS: [(&str, usize); 12] = [
     ("alias", MAX_NAME_LENGTH), ("country", 3), ("nickname", 40), ("club", 60), ("hometown", 60), ("hand", 10), ("dart_weight", 10),
     ("favourite_double", 10), ("playing_since", 10), ("stat_average", 10), ("stat_180s", 10), ("stat_best_checkout", 10),
 ];
-const PICTURE_SLOTS: [&str; 2] = ["image", "mockup"];
+const PICTURE_SLOTS: [&str; 1] = ["image"];
 const THEMES: [&str; 13] = ["autodarts", "tv", "arena", "neon", "velocity", "glass", "pub", "daylight", "mono", "gazette", "blueprint", "pop", "worldcup"];
 const LAYOUTS: [&str; 3] = ["split", "board", "player"];
 const MAX_TEXT_LENGTH: usize = 80;
@@ -180,7 +180,7 @@ fn clean_camera(raw: Option<&Value>) -> Obj {
     let mut cam = default_camera();
     let Some(r) = raw.and_then(Value::as_object) else { return cam };
     let kind = get_str(r, "kind", "none");
-    cam.insert("kind".into(), json!(if ["none", "server", "device", "url", "mockup"].contains(&kind.as_str()) { kind } else { "none".into() }));
+    cam.insert("kind".into(), json!(if ["none", "server", "device", "url"].contains(&kind.as_str()) { kind } else { "none".into() }));
     cam.insert("device_id".into(), json!(s_trunc(r.get("device_id"), "", 256)));
     cam.insert("label".into(), json!(s_trunc(r.get("label"), "", 200)));
     cam.insert("url".into(), json!(s_trunc(r.get("url"), "", 500)));
@@ -367,13 +367,13 @@ impl Studio {
     }
 
     /// Create a player (no id) or update one; a picture left as None stays as it is
-    pub fn upsert_player(&self, player_id: Option<&str>, name: &str, profile: &Obj, image: Option<Vec<u8>>, mockup: Option<Vec<u8>>) -> Result<Obj, PlayerError> {
+    pub fn upsert_player(&self, player_id: Option<&str>, name: &str, profile: &Obj, image: Option<Vec<u8>>) -> Result<Obj, PlayerError> {
         let name: String = name.trim().chars().take(MAX_NAME_LENGTH).collect();
         if name.is_empty() {
             return Err(PlayerError::Invalid("Player name is required".into()));
         }
         let mut uploads = Vec::new();
-        for (slot, data) in [("image", image), ("mockup", mockup)] {
+        for (slot, data) in [("image", image)] {
             if let Some(d) = data {
                 let ext = picture_type(&d).map_err(PlayerError::Invalid)?;
                 uploads.push((slot, d, ext));
@@ -386,7 +386,7 @@ impl Studio {
             Some(id) => players.iter().position(|p| p["id"] == json!(id)).ok_or(PlayerError::NotFound)?,
             None => {
                 let id = hex::encode(rand::random::<[u8; 6]>());
-                players.push(crate::obj! {"id" => id, "image" => "", "mockup" => ""});
+                players.push(crate::obj! {"id" => id, "image" => ""});
                 players.len() - 1
             }
         };

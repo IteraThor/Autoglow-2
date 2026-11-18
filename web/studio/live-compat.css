@@ -3,7 +3,6 @@
    Grid gaps (.sp-facts, .lc-grid) work everywhere. Keep this list in step with the flex `gap` values in
    live.css and looks.css. */
 /* Columns: spacing downwards */
-.no-flex-gap .mockup-card > * + * { margin-top: 18px; }
 .no-flex-gap .cam-empty > * + * { margin-top: 12px; }
 .no-flex-gap .dock > * + * { margin-top: 8px; }
 .no-flex-gap .lb-col > * + * { margin-top: 10px; }

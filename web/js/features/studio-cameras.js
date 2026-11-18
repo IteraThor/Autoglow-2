@@ -97,11 +97,6 @@ async function showPreview(slot) {
     } catch (err) {
       box.append(previewNote(`Camera not available: ${err.message || err.name}`));
     }
-  } else if (cam.kind === 'mockup') {
-    const withPhoto = S().players.find(p => p.mockup);
-    box.append(withPhoto
-      ? h('img', { src: imageUrl(withPhoto.mockup), alt: '', class: 'mockup' })
-      : previewNote('Shows the mockup photo of the player at the board. Add one per player under Players.'));
   } else if (cam.kind === 'url' && cam.url) {
     const isVideo = /\.(mp4|webm|ogg|m3u8)(\?|$)/i.test(cam.url);
     const media = isVideo ? h('video', { src: cam.url, autoplay: true, loop: true, playsinline: true }) : h('img', { src: cam.url, alt: '' });
@@ -382,10 +377,7 @@ function sourceSelect(slot, cam) {
     ) : null,
     cam.kind === 'device' && cam.device_id && !devices.some(d => d.deviceId === cam.device_id)
       ? h('option', { value: `device:${cam.device_id}`, selected: true }, `${cam.label || 'Browser camera'} (this browser only)`) : null,
-    h('option', { value: 'url', selected: cam.kind === 'url' }, 'Network camera (stream URL)…'),
-    // No player camera yet: show each player's mockup photo while they are at the board
-    slot.id === 'player' || cam.kind === 'mockup'
-      ? h('option', { value: 'mockup', selected: cam.kind === 'mockup' }, 'Mockup – photo of the player at the board') : null
+    h('option', { value: 'url', selected: cam.kind === 'url' }, 'Network camera (stream URL)…')
   );
   if (cam.kind === 'none') select.value = 'none';
   return select;

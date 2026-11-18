@@ -103,10 +103,6 @@
     if (sp == null ? void 0 : sp.image) return `/api/studio/images/${encodeURIComponent(sp.image)}`;
     return player.avatar_url || "";
   }
-  function mockupUrl(player) {
-    const sp = player && studioPlayer(player);
-    return (sp == null ? void 0 : sp.mockup) ? `/api/studio/images/${encodeURIComponent(sp.mockup)}` : "";
-  }
   function avatar(player, cls = "avatar") {
     const src = pictureUrl(player);
     const fallback = () => el("span", `avatar ${cls}`, initials(displayName(player)));
@@ -1093,32 +1089,6 @@ void main() {
     boxes = { board: cams.querySelector("#camBoard"), player: cams.querySelector("#camPlayer") };
     blurCanvas = canvas;
   }
-  var mockupPlayer = null;
-  function renderMockup(box) {
-    const player = mockupPlayer || studioPlayersAsPlayers().find((p) => mockupUrl(p)) || studioPlayersAsPlayers()[0] || null;
-    const key2 = player ? `${player.name}|${mockupUrl(player)}` : "";
-    if (key2 === box.dataset.mockup && box.firstChild) return;
-    box.dataset.mockup = key2;
-    const src = player && mockupUrl(player);
-    let content;
-    if (src) {
-      content = el("img", "mockup");
-      content.src = src;
-      content.alt = "";
-    } else {
-      content = el("div", "mockup-card");
-      if (player) content.append(avatar(player, "mockup-pic"), el("div", "mockup-name", displayName(player)));
-      content.append(el("small", null, "Mockup camera \u2013 upload a mockup photo in AutoGlow \u203A Studio \u203A Players"));
-    }
-    content.classList.add("mockup-in");
-    setMedia(box, content);
-  }
-  function setMockupPlayer(player) {
-    mockupPlayer = player || null;
-    for (const box of Object.values(boxes)) {
-      if (box.dataset.kind === "mockup") renderMockup(box);
-    }
-  }
   function setLayout(layout) {
     const name = LAYOUTS.includes(layout) ? layout : "split";
     if (camsBox.dataset.layout !== name) camsBox.dataset.layout = name;
@@ -1262,10 +1232,7 @@ void main() {
       box.replaceChildren();
       return;
     }
-    if (cam.kind === "mockup") {
-      delete box.dataset.mockup;
-      renderMockup(box);
-    } else if (cam.kind === "server" && cam.device_id) {
+    if (cam.kind === "server" && cam.device_id) {
       serverCamera(box, cam, title, cameraKey);
     } else if (cam.kind === "device" && cam.device_id) {
       browserCamera(box, cam, title);
@@ -2653,7 +2620,6 @@ void main() {
     renderVisit(state);
     const turn = state.turn || {};
     const owner = state.players[turn.player] || state.players[state.active];
-    setMockupPlayer(state.players[state.active] || owner);
     const show = ((_a = ctx.settings) == null ? void 0 : _a.show_dartboard) !== false && owner;
     $4("miniBoard").hidden = !show;
     if (show) {
@@ -2790,7 +2756,6 @@ void main() {
       lastState = state;
     } else {
       if (!emptySince) emptySince = Date.now();
-      setMockupPlayer(null);
     }
     renderIdleStatus(state);
     if (!busy) direct(state);

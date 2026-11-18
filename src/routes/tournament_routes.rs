@@ -100,7 +100,7 @@ async fn profiles(s: &S, players: &[crate::tournament::engine::Player]) -> (Vec<
             }
             fields.insert("alias".into(), json!(alias));
             let (st, name) = (Arc::clone(&s.studio), p.name.clone());
-            tokio::task::spawn_blocking(move || st.upsert_player(None, &name, &fields, None, None).map(|_| ()).map_err(|_| "could not save".to_string())).await.unwrap_or_else(|e| Err(e.to_string()))
+            tokio::task::spawn_blocking(move || st.upsert_player(None, &name, &fields, None).map(|_| ()).map_err(|_| "could not save".to_string())).await.unwrap_or_else(|e| Err(e.to_string()))
         };
         match r {
             Ok(()) => added.push(p.name.clone()),

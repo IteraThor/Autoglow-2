@@ -1,7 +1,7 @@
 // AutoGlow Studio output - the two camera views, their layouts and the blurred idle background.
 // Layouts (split / board / player) move the views with transform + clip-path only, which TVs animate smoothly.
 
-import { ctx, el, avatar, displayName, mockupUrl, studioPlayersAsPlayers } from './ctx.js';
+import { ctx, el } from './ctx.js';
 import { applyFraming } from './framing.js';
 import { drawSoft, isReady, setMedia } from './fill.js';
 import { outputDelay, resetDartZoom } from './darts.js';
@@ -21,38 +21,6 @@ export function initCameras(cams, canvas) {
   camsBox = cams;
   boxes = { board: cams.querySelector('#camBoard'), player: cams.querySelector('#camPlayer') };
   blurCanvas = canvas;
-}
-
-// --- Mockup camera: a photo of the player at the board instead of a live camera ---------------
-let mockupPlayer = null;
-
-function renderMockup(box) {
-  // Without a match, the first Studio player with a mockup photo stands in
-  const player = mockupPlayer || studioPlayersAsPlayers().find(p => mockupUrl(p)) || studioPlayersAsPlayers()[0] || null;
-  const key = player ? `${player.name}|${mockupUrl(player)}` : '';
-  if (key === box.dataset.mockup && box.firstChild) return;
-  box.dataset.mockup = key;
-  const src = player && mockupUrl(player);
-  let content;
-  if (src) {
-    content = el('img', 'mockup');
-    content.src = src;
-    content.alt = '';
-  } else {
-    // No photo uploaded: a card with the player's picture and name
-    content = el('div', 'mockup-card');
-    if (player) content.append(avatar(player, 'mockup-pic'), el('div', 'mockup-name', displayName(player)));
-    content.append(el('small', null, 'Mockup camera – upload a mockup photo in AutoGlow › Studio › Players'));
-  }
-  content.classList.add('mockup-in');
-  setMedia(box, content);
-}
-
-export function setMockupPlayer(player) {
-  mockupPlayer = player || null;
-  for (const box of Object.values(boxes)) {
-    if (box.dataset.kind === 'mockup') renderMockup(box);
-  }
 }
 
 export function setLayout(layout) {
@@ -197,10 +165,7 @@ function startCamera(box, cam, title, chroma) {
   applyFraming(box, cam);
   box.dataset.kind = cam.kind || 'none';
   if (chroma) { box.replaceChildren(); return; }
-  if (cam.kind === 'mockup') {
-    delete box.dataset.mockup;
-    renderMockup(box);
-  } else if (cam.kind === 'server' && cam.device_id) {
+  if (cam.kind === 'server' && cam.device_id) {
     serverCamera(box, cam, title, cameraKey);
   } else if (cam.kind === 'device' && cam.device_id) {
     browserCamera(box, cam, title);

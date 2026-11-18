@@ -286,3 +286,14 @@
   .pl-bar-row.is-split { justify-content: flex-start; }
   .pl-hbar { grid-template-columns: 90px 1fr auto; }
 }
+
+/* --- Profile editor layout: sections instead of one long field wall --- */
+.pl-editor { padding: 22px; background: var(--bg-card, rgba(255,255,255,.03)); border: 1px solid var(--st-line); border-radius: 14px; gap: 28px; }
+.pl-editor .stu-pcard-name { font-size: 24px; padding-bottom: 10px; margin-bottom: 18px; }
+.pl-fgroups { display: flex; flex-direction: column; gap: 18px; }
+.pl-fgroup h4 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-primary); }
+.pl-editor .stu-pfields { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.pl-editor .stu-pfields label { font-size: 12px; gap: 5px; }
+.pl-editor .stu-pfields input, .pl-editor .stu-pfields select { padding: 9px 11px; font-size: 14px; }
+.pl-editor .stu-pcard-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--st-line); }
+@media (max-width: 700px) { .pl-editor { padding: 14px; gap: 16px; } }

@@ -11,7 +11,7 @@ import { toast } from './toast.js';
 import { initShell } from '../components/shell.js';
 import { initControllers } from '../features/controllers.js';
 import { initFlowMatrix } from '../features/flow-matrix.js';
-import { initReadiness } from '../features/readiness.js';
+// import { initReadiness } from '../features/readiness.js';
 import { initLightingGuard } from '../features/lighting-guard.js';
 import { initSettings } from '../features/settings.js';
 import { initStudio } from '../features/studio.js';
@@ -35,7 +35,7 @@ Object.assign(window, {
 
 initShell();
 initControllers();
-initReadiness();
+// Hidden for now (flawed, planned for later): initReadiness();
 initSettings();
 initStudio();
 initDashboard();

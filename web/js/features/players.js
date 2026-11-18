@@ -72,26 +72,31 @@ const matchedNames = p => [...new Set([p.name, p.alias].filter(Boolean).map(n =>
 // --- The profile editor (a new member when p is null) -------------------------------------------------
 function editor(p, done, prefill = '') {
   const picture = picturePicker('stu-avatar', p?.image, icon('camera', 28), 'Picture', 'Click or drop a picture');
-  // Shown by the "Mockup" player camera in the Studio while this player is at the board
-  const mockup = picturePicker('is-wide', p?.mockup, icon('video', 22), 'Mockup camera', 'Photo the Studio mockup player camera shows while this player is at the board');
   // Autodarts shows guests in capitals; a member's name reads better as "Sascha K"
   const nice = prefill.toLowerCase().replace(/(^|[\s-])\S/g, c => c.toUpperCase());
   const name = h('input', { class: 'stu-pcard-name', value: p?.name || nice, placeholder: 'Player name', maxlength: 40, 'aria-label': 'Player name' });
-  const inputs = PROFILE.map(([k, label, placeholder, max]) => k === 'hand'
+  const field = ([k, label, placeholder, max]) => k === 'hand'
     ? h('label', {}, label, h('select', { 'data-k': k }, [['', '–'], ['Right', 'Right-handed'], ['Left', 'Left-handed']].map(([v, t]) => h('option', { value: v, selected: (p?.hand || '') === v }, t))))
-    : h('label', {}, label, h('input', { 'data-k': k, value: p?.[k] || '', placeholder, maxlength: max })));
+    : h('label', {}, label, h('input', { 'data-k': k, value: p?.[k] || '', placeholder, maxlength: max }));
+  const GROUPS = [
+    ['Identity', ['alias', 'nickname', 'country', 'club', 'hometown'], {}],
+    ['Darts', ['hand', 'dart_weight', 'favourite_double', 'playing_since'], {}],
+    ['Before AutoGlow', ['stat_average', 'stat_180s', 'stat_best_checkout'], { stat_average: 'Average', stat_180s: '180s', stat_best_checkout: 'Best checkout' }]
+  ];
+  const inputs = GROUPS.map(([title, keys, rename]) => h('section', { class: 'pl-fgroup' }, h('h4', {}, title),
+    h('div', { class: 'stu-pfields' }, keys.map(k => { const f = PROFILE.find(x => x[0] === k); return field(rename[k] ? [f[0], rename[k], f[2], f[3]] : f); }))));
   const save = h('button', { type: 'button', class: 'stu-btn is-primary' }, icon('check', 16), p ? 'Save' : 'Add member');
   const close = h('button', { type: 'button', class: 'stu-btn' }, 'Cancel');
   const root = h('div', { class: 'stu-pcard pl-editor' },
-    h('div', { class: 'stu-pcard-pics' }, picture.el, mockup.el),
-    h('div', { class: 'stu-pcard-main' }, name, h('div', { class: 'stu-pfields' }, inputs), h('div', { class: 'stu-pcard-actions' }, save, close)));
+    h('div', { class: 'stu-pcard-pics' }, picture.el),
+    h('div', { class: 'stu-pcard-main' }, name, h('div', { class: 'pl-fgroups' }, inputs), h('div', { class: 'stu-pcard-actions' }, save, close)));
   save.addEventListener('click', async () => {
     if (!name.value.trim()) { name.focus(); name.animate([{ transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'none' }], { duration: 220 }); return; }
     const fields = { name: name.value };
     root.querySelectorAll('[data-k]').forEach(i => { fields[i.dataset.k] = i.value; });
     save.disabled = true;
     try {
-      await savePlayer(p?.id, fields, { image: picture.file(), mockup: mockup.file() });
+      await savePlayer(p?.id, fields, { image: picture.file() });
       const saved = roster().find(x => x.name.trim().toLowerCase() === name.value.trim().toLowerCase());
       toast.success(p ? 'Member saved.' : 'Member added.');
       done(saved?.id || p?.id || null);

@@ -82,18 +82,13 @@ async fn save_player_inner(s: S, id: Option<String>, req: Req) -> ApiResult {
         fields.insert(k.into(), json!(""));
     }
     let mut image = None;
-    let mut mockup = None;
     for part in parse_multipart(&req) {
-        if (part.name == "image" || part.name == "mockup") && part.filename.is_some() {
+        if part.name == "image" && part.filename.is_some() {
             if part.data.len() > studio::MAX_IMAGE_BYTES {
                 return Err(AppError::validation("Picture is larger than 5 MB"));
             }
             let d = if part.data.is_empty() { None } else { Some(part.data) };
-            if part.name == "image" {
-                image = d;
-            } else {
-                mockup = d;
-            }
+            image = d;
         } else if fields.contains_key(&part.name) {
             let t: String = String::from_utf8_lossy(&part.data).chars().take(200).collect();
             fields.insert(part.name, json!(t));
@@ -101,7 +96,7 @@ async fn save_player_inner(s: S, id: Option<String>, req: Req) -> ApiResult {
     }
     let name = py_str(&fields.shift_remove("name").unwrap_or(json!("")));
     let st = Arc::clone(&s.studio);
-    let r = tokio::task::spawn_blocking(move || st.upsert_player(id.as_deref(), &name, &fields, image, mockup)).await.map_err(|_| AppError::internal("Player save failed"))?;
+    let r = tokio::task::spawn_blocking(move || st.upsert_player(id.as_deref(), &name, &fields, image)).await.map_err(|_| AppError::internal("Player save failed"))?;
     let p = r.map_err(player_err)?;
     ok(json!({"status": "ok", "player": p}))
 }

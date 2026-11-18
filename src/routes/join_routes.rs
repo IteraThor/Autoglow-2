@@ -77,7 +77,7 @@ pub async fn join(State(s): State<S>, req: Req) -> ApiResult {
         return Err(AppError::validation("That name is already on the list. Ask the club to link your account if it is you."));
     }
     let st = Arc::clone(&s.studio);
-    let r = tokio::task::spawn_blocking(move || st.upsert_player(None, &name, &fields, image, None)).await.map_err(|_| AppError::internal("Could not save"))?;
+    let r = tokio::task::spawn_blocking(move || st.upsert_player(None, &name, &fields, image)).await.map_err(|_| AppError::internal("Could not save"))?;
     let p = r.map_err(|e| match e {
         PlayerError::Invalid(m) => AppError::validation(m),
         PlayerError::NotFound => AppError::not_found("Player not found"),
