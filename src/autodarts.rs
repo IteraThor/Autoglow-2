@@ -26,7 +26,7 @@ const SOURCE_LOST_GRACE_SECONDS: f64 = 60.0;
 const MAX_HTTP_SNAPSHOTS: usize = 8;
 const LOBBY_END_EVENTS: [&str; 6] = ["delete", "deleted", "start", "started", "finish", "finished"];
 const LOBBY_START_EVENTS: [&str; 2] = ["start", "started"];
-const BULL_OFF_VARIANT: &str = "Bull-off";
+pub const BULL_OFF_VARIANT: &str = "Bull-off";
 const BULL_OFF_GAME_KEYS: [&str; 16] = [
     "variant", "settings", "gameScores", "gameFinished", "gameWinner", "scores", "stats", "state", "turns", "turnScore", "turnBusted", "skippedPlayers",
     "player", "round", "leg", "set",
@@ -292,6 +292,8 @@ pub struct BridgeState {
     pub active_player_idx: i64,
     pub last_match_state: Option<Obj>,
     pub last_match_state_at: f64,
+    /// Every dart of the match on screen, for the club stats
+    pub match_darts: crate::club::stats::DartLog,
     pub bull_off: Option<Obj>,
     pub board_states: BTreeMap<String, Obj>,
     boards_cache: Vec<Value>,
@@ -812,6 +814,9 @@ impl BridgeState {
             }
             _ => st,
         });
+        if let Some(m) = &self.last_match_state {
+            self.match_darts.note(m);
+        }
         self.last_match_state_at = now();
     }
 

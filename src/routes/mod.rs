@@ -237,6 +237,8 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/club/state", get(club_routes::state))
         .route("/api/club/members", get(club_routes::members))
         .route("/api/club/member", get(club_routes::member))
+        .route("/api/club/coach", get(club_routes::coach))
+        .route("/api/club/game", get(club_routes::game))
         .route("/api/club/leaderboards", get(club_routes::leaderboards))
         .route("/api/club/unassigned", get(club_routes::unassigned))
         .route("/api/club/assign", post(club_routes::assign))

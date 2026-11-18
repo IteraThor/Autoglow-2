@@ -9,6 +9,7 @@
 //! changes, or when it hands over to another PC), send member edits there, and get a nudge from the
 //! club PC when the roster changes. A PC that is alone offers to join the club PC it finds.
 
+pub mod coach;
 pub mod stats;
 #[cfg(test)]
 mod tests;
@@ -212,6 +213,9 @@ impl Club {
         }
         if let Ok(text) = std::fs::read_to_string(dir.join("games.jsonl")) {
             inner.games = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+            for g in inner.games.iter_mut() {
+                stats::bests_from_darts(&mut g.players);
+            }
         }
         if let Some(Value::Array(o)) = crate::storage::read_json_file(&dir.join("outbox.json")).and_then(|v| v.get("games").cloned()) {
             inner.outbox = o.into_iter().filter_map(|g| serde_json::from_value(g).ok()).collect();
@@ -312,6 +316,9 @@ impl Club {
         let state = b.lock().last_match_state.clone();
         let Some(state) = state else { return };
         let Some(id) = state.get("id").map(py_str).filter(|s| !s.is_empty()) else { return };
+        // The darts are copied once, when the match is over (the bridge notes them on every message)
+        let take = crate::autodarts::is_match_over(&state) && !self.lock().set.seen.contains(&id);
+        let log = if take { b.lock().match_darts.clone() } else { stats::DartLog::default() };
         let mut g = self.lock();
         if g.current.as_deref() != Some(id.as_str()) {
             g.current = Some(id.clone());
@@ -322,7 +329,7 @@ impl Club {
             return;
         }
         let (node, board) = self.tournaments.node();
-        let Some(mut game) = stats::game_from_state(&state, &g.bests, &board, &node, now() as i64) else { return };
+        let Some(mut game) = stats::game_from_state(&state, &g.bests, &log, &board, &node, now() as i64) else { return };
         g.set.seen.push(id.clone());
         let n = g.set.seen.len();
         g.set.seen.drain(..n.saturating_sub(SEEN_KEEP));
@@ -799,6 +806,24 @@ impl Club {
         let g = self.lock();
         let names: Vec<String> = g.set.aliases.iter().filter(|(_, m)| m.as_str() == id).map(|(n, _)| n.clone()).collect();
         Ok(json!({"player": p, "names": names, "stats": stats::member_stats(&g.games, id, &members_of(&roster), period_start(period))}))
+    }
+
+    /// The coach tabs of one member
+    pub fn coach(&self, id: &str, period: &str) -> Result<Value, String> {
+        let roster = self.roster();
+        if !roster.iter().any(|p| py_str(&p["id"]) == id) {
+            return Err("Member not found".into());
+        }
+        let g = self.lock();
+        Ok(coach::coach(&g.games, id, &members_of(&roster), period_start(period)))
+    }
+
+    /// One game leg by leg
+    pub fn game(&self, id: &str) -> Result<Value, String> {
+        let roster = self.roster();
+        let g = self.lock();
+        let game = g.games.iter().find(|x| x.id == id).ok_or("Game not found")?;
+        Ok(coach::game_report(game, &members_of(&roster)))
     }
 
     pub fn leaderboards(&self, period: &str) -> Value {

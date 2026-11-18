@@ -43,6 +43,19 @@ pub async fn member(State(s): State<S>, req: Req) -> ApiResult {
     view(&s, format!("member?id={}&period={}", id, period), move || club.member(&id, &period)).await
 }
 
+pub async fn coach(State(s): State<S>, req: Req) -> ApiResult {
+    let id = req.q_or("id", "").to_string();
+    let period = req.q_or("period", "all").to_string();
+    let club = Arc::clone(&s.club);
+    view(&s, format!("coach?id={}&period={}", id, period), move || club.coach(&id, &period)).await
+}
+
+pub async fn game(State(s): State<S>, req: Req) -> ApiResult {
+    let id = req.q_or("id", "").to_string();
+    let club = Arc::clone(&s.club);
+    view(&s, format!("game?id={}", id), move || club.game(&id)).await
+}
+
 pub async fn leaderboards(State(s): State<S>, req: Req) -> ApiResult {
     let period = req.q_or("period", "season").to_string();
     let club = Arc::clone(&s.club);

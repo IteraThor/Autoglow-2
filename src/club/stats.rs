@@ -54,6 +54,156 @@ pub struct GamePlayer {
     /// Fewest darts in a leg this player won; 0 when they won none
     #[serde(default)]
     pub best_leg: i64,
+    /// Autodarts' scoring average until 170 left (pure scoring, no finishing)
+    #[serde(default)]
+    pub avg170: f64,
+    /// Every dart this player threw in the match, in order (games from v0.47.0 on)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub throws: Vec<Dart>,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// One dart as the board saw it. Short names keep a game line small.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Dart {
+    /// Where it landed: 1.0 is the outer edge of the double ring (170 mm), +x right, +y towards the 20.
+    /// None when the score was typed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<f64>,
+    /// Segment number (25 = bull, 0 = outside) and multiplier (0 = miss)
+    pub n: i64,
+    pub m: i64,
+    /// X01: score left before this dart; 0 in other variants
+    #[serde(default)]
+    pub r: i64,
+    /// Leg as set*100 + leg
+    #[serde(default)]
+    pub l: i64,
+    /// Visit (round) in the leg, from 1
+    #[serde(default)]
+    pub v: i64,
+    /// Dart in the visit: 0, 1 or 2
+    #[serde(default)]
+    pub i: i64,
+    /// Order in the whole match (all players), so the darts of both players can be put side by side
+    #[serde(default)]
+    pub q: u64,
+    /// The visit busted
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub b: bool,
+}
+
+impl Dart {
+    pub fn points(&self) -> i64 {
+        self.n * self.m
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct Noted {
+    /// The Autodarts player id: the list of players doesn't always come in the same order
+    player: String,
+    turn: String,
+    dart: Dart,
+}
+
+/// Every dart of the match on screen, gathered from each match-state message. Autodarts sends
+/// only the current visit, so the darts are noted while they are visible. Keyed by throw id: a
+/// frame seen twice or a corrected dart is kept once.
+#[derive(Clone, Debug, Default)]
+pub struct DartLog {
+    pub match_id: String,
+    darts: BTreeMap<String, Noted>,
+    turn_start: BTreeMap<String, i64>,
+    seq: u64,
+}
+
+impl DartLog {
+    pub fn note(&mut self, state: &Obj) {
+        let id = state.get("id").map(py_str).unwrap_or_default();
+        if id.is_empty() {
+            return;
+        }
+        if id != self.match_id {
+            *self = DartLog { match_id: id, ..Default::default() };
+        }
+        let variant = state.get("variant").map(py_str).unwrap_or_default();
+        if variant.is_empty() || variant == crate::autodarts::BULL_OFF_VARIANT {
+            return;
+        }
+        let x01 = variant.eq_ignore_ascii_case("x01");
+        let players = state.get("players").and_then(Value::as_array).cloned().unwrap_or_default();
+        let game_scores = state.get("gameScores").and_then(Value::as_array).cloned().unwrap_or_default();
+        let leg = int(state.get("set")).max(0) * 100 + int(state.get("leg")).max(1);
+        for turn in state.get("turns").and_then(Value::as_array).into_iter().flatten() {
+            let pid = turn.get("playerId").map(py_str).unwrap_or_default();
+            let Some(p) = players.iter().position(|x| x.get("id").map(py_str).as_deref() == Some(pid.as_str())) else { continue };
+            let tid = turn.get("id").map(py_str).unwrap_or_default();
+            if tid.is_empty() {
+                continue;
+            }
+            let throws = turn.get("throws").and_then(Value::as_array).cloned().unwrap_or_default();
+            let busted = turn.get("busted") == Some(&json!(true));
+            // Score left when the visit began: what Autodarts shows before the first dart (and after a
+            // bust, which puts it back), else what is left plus the points of the visit so far
+            let start = match self.turn_start.get(&tid) {
+                Some(s) => *s,
+                None if !x01 => 0,
+                None => {
+                    let s = if throws.is_empty() || busted { int(game_scores.get(p)) } else { int(turn.get("score")) + int(turn.get("points")) };
+                    self.turn_start.insert(tid.clone(), s);
+                    s
+                }
+            };
+            let mut left = start;
+            for (k, t) in throws.iter().enumerate() {
+                let seg = t.get("segment").cloned().unwrap_or(Value::Null);
+                let coords = t.get("coords").filter(|c| c.is_object());
+                let xy = |key: &str| coords.and_then(|c| c.get(key)).and_then(Value::as_f64).map(|v| (v * 1000.0).round() / 1000.0);
+                let key = t.get("id").map(py_str).filter(|s| !s.is_empty()).unwrap_or_else(|| format!("{}:{}", tid, k));
+                let mut d = Dart {
+                    x: xy("x"),
+                    y: xy("y"),
+                    n: int(seg.get("number")),
+                    m: int(seg.get("multiplier")),
+                    r: if x01 { left } else { 0 },
+                    l: leg,
+                    v: int(turn.get("round")).max(1),
+                    i: k as i64,
+                    q: 0,
+                    b: busted,
+                };
+                left -= d.points();
+                match self.darts.get_mut(&key) {
+                    Some(old) => {
+                        d.l = old.dart.l;
+                        d.q = old.dart.q;
+                        old.dart = d;
+                    }
+                    None => {
+                        self.seq += 1;
+                        d.q = self.seq;
+                        self.darts.insert(key, Noted { player: pid.clone(), turn: tid.clone(), dart: d });
+                    }
+                }
+            }
+            // A dart taken back in Autodarts disappears from the visit
+            let n = throws.len() as i64;
+            self.darts.retain(|_, x| x.turn != tid || x.dart.i < n);
+        }
+    }
+
+    /// The darts of one player (Autodarts player id) in the order they were thrown
+    pub fn of(&self, player: &str) -> Vec<Dart> {
+        let mut v: Vec<Dart> = self.darts.values().filter(|x| x.player == player).map(|x| x.dart.clone()).collect();
+        v.sort_by_key(|d| d.q);
+        v
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -149,8 +299,33 @@ impl LegBests {
     }
 }
 
+/// Highest checkout and fewest darts in a won leg, from one player's X01 darts (0 when none)
+pub fn leg_bests_from(darts: &[Dart]) -> (i64, i64) {
+    let (mut finish, mut fewest) = (0, 0);
+    for d in darts.iter().filter(|d| d.r > 0 && !d.b && d.m == 2 && d.r == d.points()) {
+        let start = darts.iter().find(|e| e.l == d.l && e.v == d.v && e.i == 0).map_or(d.r, |e| e.r);
+        finish = finish.max(start);
+        let n = darts.iter().filter(|e| e.l == d.l).count() as i64;
+        if fewest == 0 || n < fewest {
+            fewest = n;
+        }
+    }
+    (finish, fewest)
+}
+
+/// Raises best checkout / best leg to what the saved darts show (games saved before v0.47.0 have none)
+pub fn bests_from_darts(players: &mut [GamePlayer]) {
+    for p in players.iter_mut() {
+        let (finish, darts) = leg_bests_from(&p.throws);
+        p.best_checkout = p.best_checkout.max(finish);
+        if darts > 0 && (p.best_leg == 0 || darts < p.best_leg) {
+            p.best_leg = darts;
+        }
+    }
+}
+
 /// The finished match as a club game; None while it isn't finished or has no players
-pub fn game_from_state(state: &Obj, bests: &LegBests, board: &str, node: &str, at: i64) -> Option<Game> {
+pub fn game_from_state(state: &Obj, bests: &LegBests, log: &DartLog, board: &str, node: &str, at: i64) -> Option<Game> {
     if !crate::autodarts::is_match_over(state) {
         return None;
     }
@@ -163,6 +338,7 @@ pub fn game_from_state(state: &Obj, bests: &LegBests, board: &str, node: &str, a
     let stats = state.get("stats").and_then(Value::as_array).cloned().unwrap_or_default();
     let settings = state.get("settings").and_then(Value::as_object).cloned().unwrap_or_default();
     let winner = crate::tournament::agent::winner_pos(state);
+    let same_match = log.match_id == id;
     let mut out = Vec::new();
     for (i, p) in players.iter().enumerate() {
         let ms = stats.get(i).and_then(|s| s.get("matchStats")).cloned().unwrap_or(Value::Null);
@@ -186,8 +362,12 @@ pub fn game_from_state(state: &Obj, bests: &LegBests, board: &str, node: &str, a
             t100: int(m("plus100")),
             best_checkout: bests.finish.get(i).copied().unwrap_or(0),
             best_leg: bests.darts.get(i).copied().unwrap_or(0),
+            avg170: round2(num(m("averageUntil170"))),
+            throws: if same_match { log.of(&p.get("id").map(py_str).unwrap_or_default()) } else { Vec::new() },
         });
     }
+    // Checkouts and short legs from the darts too: the leg stats may miss the deciding leg
+    bests_from_darts(&mut out);
     // A winner's deciding leg can arrive only in this last frame
     if let Some(w) = winner {
         let best_other = out.iter().enumerate().filter(|(j, _)| *j != w).map(|(_, p)| p.legs).max().unwrap_or(0);
@@ -282,7 +462,17 @@ pub fn summaries(games: &[Game], members: &BTreeMap<String, String>) -> BTreeMap
             t.entry(p.member.clone()).or_default().add(p, g.at);
         }
     }
-    t.into_iter().map(|(k, v)| (k, v.json())).collect()
+    let ratings = super::coach::ratings(games, members);
+    t.into_iter()
+        .map(|(k, v)| {
+            let mut j = v.json();
+            if let Some((r, n)) = ratings.get(&k) {
+                j["rating"] = json!(r.round());
+                j["rating_games"] = json!(n);
+            }
+            (k, j)
+        })
+        .collect()
 }
 
 /// Everything the member page shows
@@ -336,7 +526,27 @@ pub fn leaderboards(games: &[Game], members: &BTreeMap<String, String>, from: i6
             t.entry(p.member.clone()).or_default().add(p, g.at);
         }
     }
-    let rows: Vec<(String, Value)> = t.iter().map(|(k, v)| (k.clone(), v.json())).collect();
+    // Ratings are all-time; the dart numbers come from every game in the period (bot games too)
+    let ratings = super::coach::ratings(games, members);
+    let mut accs: BTreeMap<String, super::coach::Acc> = BTreeMap::new();
+    for g in games.iter().filter(|g| g.at >= from) {
+        for (i, p) in g.players.iter().enumerate().filter(|(_, p)| members.contains_key(&p.member)) {
+            accs.entry(p.member.clone()).or_default().add_game(g, i);
+        }
+    }
+    let rows: Vec<(String, Value)> = t
+        .iter()
+        .map(|(k, v)| {
+            let mut j = v.json();
+            let rating = ratings.get(k).filter(|(_, n)| *n >= super::coach::RATING_PROVISIONAL);
+            j["rating"] = json!(rating.map(|r| r.0.round()));
+            let a = accs.get(k);
+            j["spread"] = json!(a.and_then(|a| a.group_radius()).map(|r| (r * 10.0).round() / 10.0));
+            j["treble_pct"] = json!(a.and_then(|a| a.treble_pct()));
+            j["double_pct"] = json!(a.and_then(|a| a.double_pct()));
+            (k.clone(), j)
+        })
+        .collect();
     let table = |key: &str, min_games: usize, lower_better: bool| -> Value {
         let mut r: Vec<(&String, f64, usize)> = rows
             .iter()
@@ -359,6 +569,10 @@ pub fn leaderboards(games: &[Game], members: &BTreeMap<String, String>, from: i6
         "best_checkout": table("best_checkout", 1, false),
         "best_leg": table("best_leg", 1, true),
         "games": table("games", 1, false),
+        "rating": table("rating", 1, false),
+        "spread": table("spread", 1, true),
+        "treble_pct": table("treble_pct", 1, false),
+        "double_pct": table("double_pct", 1, false),
         "min_games": MIN_GAMES,
         // Every member who played in the period, for the players table
         "rows": rows.iter().map(|(k, v)| {

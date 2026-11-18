@@ -9,11 +9,13 @@ import { esc, h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
 import { avatar, deletePlayer, icon, imageUrl, loadSettings, PROFILE, savePlayer } from './studio-core.js';
+import { coachCard, compareView, doublesView, gameReport, gamesView, heatView, progressView, ratingTile, recordsPanel } from './players-coach.js';
 
 const $ = id => document.getElementById(id);
 const roster = () => core.settings?.players || [];
 
-let view = { tab: 'members', sort: 'name', dir: '', mode: '', member: null, editing: false, query: '', period: 'all', board: 'season' };
+let view = { tab: 'members', sort: 'name', dir: '', mode: '', member: null, editing: false, query: '', period: 'all', board: 'season', mtab: 'overview', game: null };
+let cache = { key: '', member: null, coach: null };   // the open member's stats, kept while switching tabs
 let club = { role: 'alone', can_edit: true };   // /api/club/state
 let sums = {};                                  // member id → summary stats
 let seq = 0;                                    // drops answers of views the user already left
@@ -109,8 +111,8 @@ const back = () => h('button', { type: 'button', class: 'pl-back', onclick: () =
 const panel = (title, ...body) => h('div', { class: 'pl-panel' }, title ? h('h3', { class: 'stu-h' }, title) : null, ...body);
 const muted = text => h('p', { class: 'pl-muted' }, text);
 
-function segmented(items, current, onPick) {
-  return h('div', { class: 'pl-seg', role: 'tablist' }, items.map(([k, label]) =>
+function segmented(items, current, onPick, cls = '') {
+  return h('div', { class: `pl-seg ${cls}`, role: 'tablist' }, items.map(([k, label]) =>
     h('button', { type: 'button', role: 'tab', class: k === current ? 'is-on' : '', 'aria-selected': String(k === current), onclick: () => onPick(k) }, label)));
 }
 
@@ -181,6 +183,7 @@ const COLS = {
   win_pct: ['Win %', p => sums[p.id]?.win_pct || 0, 'desc'],
   t180: ['180s', p => sums[p.id]?.t180 || 0, 'desc'],
   best_checkout: ['Best checkout', p => sums[p.id]?.best_checkout || 0, 'desc'],
+  rating: ['Rating', p => sums[p.id]?.rating || 0, 'desc'],
   last: ['Last played', p => sums[p.id]?.last_at || 0, 'desc']
 };
 const sortList = list => {
@@ -232,7 +235,7 @@ function results(list, q) {
       const tr = h('tr', { tabindex: '0', title: 'Open' },
         h('td', {}, h('span', { class: 'pl-trow-who' }, avatar(p), h('span', {}, h('b', {}, p.name), p.nickname ? h('small', {}, `“${p.nickname}”`) : null))),
         h('td', { class: 'is-num' }, fmt(s?.average)), h('td', { class: 'is-num' }, fmt(s?.first9)), h('td', { class: 'is-num' }, int(s?.games)),
-        h('td', { class: 'is-num' }, s?.games ? `${Math.round(s.win_pct)}%` : '–'), h('td', { class: 'is-num' }, int(s?.t180)), h('td', { class: 'is-num' }, int(s?.best_checkout)),
+        h('td', { class: 'is-num' }, s?.games ? `${Math.round(s.win_pct)}%` : '–'), h('td', { class: 'is-num' }, int(s?.t180)), h('td', { class: 'is-num' }, int(s?.best_checkout)), h('td', { class: 'is-num' }, int(s?.rating)),
         h('td', { class: 'is-num' }, s?.last_at ? when(s.last_at) : '–'));
       tr.addEventListener('click', () => open(p.id));
       tr.addEventListener('keydown', e => { if (e.key === 'Enter') open(p.id); });
@@ -273,30 +276,43 @@ function membersView() {
 }
 
 // --- One member ------------------------------------------------------------------------------------------
-function statsBlock(st) {
+function statsBlock(st, c) {
   const t = st.totals;
-  const box = h('div', {});
+  const box = h('div', { class: 'pl-stats' });
   box.append(panel(null,
     h('div', { class: 'pl-tiles is-wide' },
       tile('Average', fmt(t.average, 2), 'per 3 darts'), tile('First 9', fmt(t.first9, 2)), tile('Checkout', t.checkout_pct ? `${fmt(t.checkout_pct)}%` : '–'),
       tile('180s', String(t.t180 || 0)), tile('140+', String(t.t140 || 0)), tile('100+', String(t.t100 || 0)),
       tile('Best checkout', int(t.best_checkout)), tile('Best leg', t.best_leg ? `${t.best_leg} darts` : '–'),
-      tile('Games', String(t.games || 0), t.games ? `${t.wins} won · ${Math.round(t.win_pct)}%` : ''))));
-  const recent = st.recent.length
-    ? h('table', { class: 'pl-table' }, h('thead', {}, h('tr', {}, ['Date', 'Opponent', 'Result', 'Average', 'Board'].map(x => h('th', {}, x)))),
-      h('tbody', {}, st.recent.map(g => h('tr', { class: g.counts ? '' : 'is-muted', title: g.counts ? '' : (g.bot ? 'Against a bot: not counted' : 'Not counted') },
-        h('td', {}, when(g.at)), h('td', {}, g.opponents.join(', ') || 'Solo'),
-        h('td', {}, h('span', { class: `pl-res ${g.won ? 'is-won' : ''}` }, g.won ? 'W' : 'L'), ` ${g.score[0]}–${g.score[1]}`),
-        h('td', {}, fmt(g.average, 2)), h('td', {}, g.board)))))
-    : muted('No games in this period.');
+      tile('Games', String(t.games || 0), t.games ? `${t.wins} won · ${Math.round(t.win_pct)}%` : ''), ratingTile(c))));
   const h2h = st.head_to_head.length
     ? h('table', { class: 'pl-table' }, h('thead', {}, h('tr', {}, ['Opponent', 'Games', 'Won', ''].map(x => h('th', {}, x)))),
       h('tbody', {}, st.head_to_head.slice(0, 12).map(o => h('tr', {}, h('td', {}, o.name), h('td', {}, o.games), h('td', {}, o.wins),
         h('td', {}, h('span', { class: 'pl-bar' }, h('i', { style: `width:${Math.round((o.wins / o.games) * 100)}%` })))))))
     : muted('Nobody played yet.');
+  box.append(h('div', { class: 'pl-cols' }, coachCard(c), recordsPanel(c, openGame)));
   box.append(h('div', { class: 'pl-cols' }, panel('Form · average of the last games', formChart(st.form)), panel('Head-to-head', h2h)));
-  box.append(h('div', { class: 'pl-cols' }, panel('Recent games', recent)));
   return box;
+}
+
+function openGame(id) {
+  view.mtab = 'games';
+  view.game = id;
+  render();
+}
+
+const MEMBER_TABS = [['overview', 'Overview'], ['progress', 'Progress'], ['heat', 'Heat map'], ['doubles', 'Doubles'], ['games', 'Games'], ['compare', 'Compare']];
+
+// The open member's tab, from the cached stats
+async function memberTab(p, r, c) {
+  switch (view.mtab) {
+    case 'progress': return progressView(c);
+    case 'heat': return heatView(c);
+    case 'doubles': return doublesView(c);
+    case 'games': return view.game ? gameReport(view.game, p.id, roster(), () => { view.game = null; render(); }) : gamesView(r.stats.recent, openGame);
+    case 'compare': return compareView(p, c, roster(), view.period, id => { view.mtab = 'overview'; open(id); });
+    default: return statsBlock(r.stats, c);
+  }
 }
 
 function memberView(p) {
@@ -317,24 +333,30 @@ function memberView(p) {
   const names = h('div', { class: 'pl-matched' }, h('span', {}, 'Recognised in Autodarts as'), ...matchedNames(p).map(n => h('span', { class: 'pl-chip' }, n)));
   const statsBox = h('div', { class: 'pl-stats' }, muted('Loading stats…'));
   const mine = ++seq;
-  api(`/api/club/member?id=${encodeURIComponent(p.id)}&period=${view.period}`).then(r => {
+  const key = `${p.id}|${view.period}`;
+  const load = cache.key === key && cache.member
+    ? Promise.resolve([cache.member, cache.coach])
+    : Promise.all([api(`/api/club/member?id=${encodeURIComponent(p.id)}&period=${view.period}`), api(`/api/club/coach?id=${encodeURIComponent(p.id)}&period=${view.period}`, { timeout: 20000 })]);
+  load.then(async ([r, c]) => {
     if (mine !== seq) return;
+    cache = { key, member: r, coach: c };
     for (const n of r.names || []) {
       if (matchedNames(p).includes(n)) continue;
       const chip = h('span', { class: 'pl-chip is-extra', title: 'Given to this member from the unassigned names' }, n);
       if (club.can_edit) chip.append(h('button', { type: 'button', 'aria-label': `Forget ${n}`, onclick: async () => { await post('forget-name', { name: n }); render(); } }, '×'));
       names.append(chip);
     }
-    statsBox.replaceChildren(statsBlock(r.stats));
+    const el = await memberTab(p, r, c);
+    if (mine === seq) statsBox.replaceChildren(el);
   }).catch(err => { if (mine === seq) statsBox.replaceChildren(h('p', { class: 'pl-note is-warn' }, icon('info', 16), err.message)); });
   return h('div', {}, back(),
     h('div', { class: 'pl-panel pl-profile' },
       avatar(p, 'pl-big'),
       h('div', { class: 'pl-who' }, h('h2', {}, p.name), p.nickname ? h('div', { class: 'pl-nick' }, `“${p.nickname}”`) : null, names),
       h('div', { class: 'pl-actions' }, ...actions)),
-    h('div', { class: 'pl-bar-row' }, segmented(PERIODS, view.period, k => { view.period = k; render(); })),
+    h('div', { class: 'pl-bar-row is-split' }, segmented(MEMBER_TABS, view.mtab, k => { view.mtab = k; view.game = null; render(); }, 'pl-mtabs'), segmented(PERIODS, view.period, k => { view.period = k; render(); })),
     statsBox,
-    h('div', { class: 'pl-cols' },
+    view.mtab !== 'overview' ? null : h('div', { class: 'pl-cols' },
       panel('Profile', facts.length ? h('dl', { class: 'pl-facts' }, ...facts.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])) : muted('Nothing filled in yet.')),
       panel('Stats from before AutoGlow', imported.length ? h('div', { class: 'pl-tiles' }, ...imported.map(([k, v]) => tile(k, v))) : muted('None entered.'),
         muted('Typed in by hand. The Studio shows them until the member has played here.'))));
@@ -344,7 +366,9 @@ function memberView(p) {
 const BOARDS = [
   ['average', 'Average', v => v.toFixed(2)], ['first9', 'First 9 average', v => v.toFixed(2)], ['checkout_pct', 'Checkout %', v => `${v.toFixed(1)}%`],
   ['win_pct', 'Win %', v => `${v.toFixed(0)}%`], ['t180', '180s', String], ['best_checkout', 'Best checkout', String],
-  ['best_leg', 'Best leg', v => `${v} darts`], ['games', 'Most games', String]
+  ['best_leg', 'Best leg', v => `${v} darts`], ['games', 'Most games', String],
+  ['rating', 'Club rating', v => v.toFixed(0)], ['spread', 'Tightest group', v => `${v.toFixed(1)} mm`],
+  ['treble_pct', 'Treble %', v => `${v.toFixed(1)}%`], ['double_pct', 'At a double %', v => `${v.toFixed(1)}%`]
 ];
 
 function leaderboardsView() {
@@ -357,7 +381,8 @@ function leaderboardsView() {
       lb[k]?.length ? h('ol', { class: 'pl-rank' }, lb[k].map((r, i) => h('li', { class: i === 0 ? 'is-top' : '', onclick: () => open(r.member) },
         h('span', { class: 'pl-pos' }, i + 1), byId[r.member] ? avatar(byId[r.member]) : null,
         h('span', { class: 'pl-rname' }, r.name || '?', h('small', {}, `${r.games} game${r.games === 1 ? '' : 's'}`)), h('b', {}, f(r.value)))))
-        : muted(['average', 'first9', 'checkout_pct', 'win_pct'].includes(k) ? `Needs ${lb.min_games} games per member.` : 'No games yet.'))));
+        : muted(['average', 'first9', 'checkout_pct', 'win_pct'].includes(k) ? `Needs ${lb.min_games} games per member.`
+          : ['spread', 'treble_pct', 'double_pct'].includes(k) ? 'Needs games with dart detail (v0.47.0 on).' : k === 'rating' ? 'Needs 5 games per member.' : 'No games yet.'))));
   }).catch(err => { if (mine === seq) box.replaceChildren(h('p', { class: 'pl-note is-warn' }, icon('info', 16), err.message)); });
   return h('div', {},
     h('div', { class: 'pl-bar-row' }, segmented([['season', 'This year'], ['month', 'This month'], ['all', 'All time']], view.board, k => { view.board = k; render(); })),
@@ -418,6 +443,8 @@ async function post(path, body) {
 }
 
 function open(id, editing = false) {
+  if (id !== view.member) { view.mtab = 'overview'; view.game = null; }
+  cache.key = '';
   view.member = id;
   view.editing = editing;
   render();
@@ -463,6 +490,7 @@ async function refresh() {
 
 async function renderPlayers() {
   try {
+    cache.key = '';
     await refresh();
     if (view.member && !roster().some(x => x.id === view.member)) view.member = null;
     if (!club.can_edit && view.tab === 'unassigned') view.tab = 'members';
