@@ -25,7 +25,7 @@ const LOGIN_LOCKOUT_SECONDS: f64 = 30.0;
 /// The club PC answers its boards on /api/club/roster, /api/club/games and the player pictures;
 /// it nudges them on /api/club/nudge and hands over on /api/club/takeover; any PC renames another
 /// on /api/club/name (Settings)
-pub const PUBLIC_API_PATHS: [&str; 10] = ["/api/join", "/api/auth/status", "/api/auth/login", crate::tournament::PEER_WS_PATH, "/api/tournament/end-remote", "/api/club/roster", "/api/club/games", "/api/club/nudge", "/api/club/takeover", "/api/club/name"];
+pub const PUBLIC_API_PATHS: [&str; 11] = ["/api/join", "/api/tournament/signup", "/api/auth/status", "/api/auth/login", crate::tournament::PEER_WS_PATH, "/api/tournament/end-remote", "/api/club/roster", "/api/club/games", "/api/club/nudge", "/api/club/takeover", "/api/club/name"];
 /// The Chrome extension relays Autodarts game data here; only Chrome on this computer may connect
 pub const BRIDGE_WS_PATH: &str = "/ws/autodarts-bridge";
 /// The extension's WLED menu switches controllers off and on; same rule as the bridge

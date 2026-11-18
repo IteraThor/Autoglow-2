@@ -44,6 +44,8 @@ pub struct Player {
     pub visitor: bool,
     /// The club member this player was picked from; empty for a name typed in
     pub member: String,
+    /// Put themselves on the list by scanning the lobby's QR code: their sign-up number (0 = no)
+    pub phone: i64,
 }
 
 /// One side of a match: a known player, a bye, or where the player will come from
@@ -167,6 +169,11 @@ pub struct Spec {
     pub swiss_rounds: i64,
     /// Groups and league: play every pairing twice
     pub return_round: bool,
+    /// Lobby: players may add themselves from a phone (QR code)
+    pub phone_signup: bool,
+    /// Phone sign-ups so far (the server counts) and the last one the organizer's page has taken in
+    pub phone_count: i64,
+    pub phone_seen: i64,
 }
 
 fn is_final_label(l: &str) -> bool {

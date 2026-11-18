@@ -8,7 +8,26 @@ const JOIN_FIELDS: [&str; 2] = ["nickname", "country"];
 
 /// The address the QR code opens: this PC in the local network
 pub async fn qr(State(s): State<S>) -> ApiResult {
-    let url = format!("http://{}:{}/join", studio_routes::lan_ip(), s.tournaments.port());
+    qr_for(&s, "/join")
+}
+
+/// The tournament lobby's QR: players put themselves on the list (/signup)
+pub async fn signup_qr(State(s): State<S>) -> ApiResult {
+    qr_for(&s, "/signup")
+}
+
+pub async fn signup_status(State(s): State<S>) -> ApiResult {
+    ok(s.tournaments.signup_view())
+}
+
+pub async fn signup(State(s): State<S>, req: Req) -> ApiResult {
+    let b = req.json()?;
+    let name = s.tournaments.phone_signup(&b.get("name").map(crate::py::py_str).unwrap_or_default()).map_err(AppError::validation)?;
+    ok(json!({"status": "ok", "name": name}))
+}
+
+fn qr_for(s: &S, path: &str) -> ApiResult {
+    let url = format!("http://{}:{}{}", studio_routes::lan_ip(), s.tournaments.port(), path);
     let svg = qrcode::QrCode::new(url.as_bytes())
         .map_err(|_| AppError::internal("Could not make the QR code"))?
         .render::<qrcode::render::svg::Color>()

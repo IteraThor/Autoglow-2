@@ -106,6 +106,8 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
     r = r.route("/studio/live", get(move || no_store_file(live.clone())));
     let join = web_dir.join("join.html");
     r = r.route("/join", get(move || no_store_file(join.clone())));
+    let signup = web_dir.join("signup.html");
+    r = r.route("/signup", get(move || no_store_file(signup.clone())));
     let tv = web_dir.join("studio").join("tournament.html");
     r = r.route("/tournament/live", get(move || no_store_file(tv.clone())));
     let js_dir = web_dir.join("studio").join("js");
@@ -233,6 +235,8 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/tournament/import", post(tournament_routes::import))
         .route(crate::tournament::PEER_WS_PATH, get(tournament_routes::peer_ws))
         .route("/api/join", post(join_routes::join))
+        .route("/api/tournament/signup-qr", get(join_routes::signup_qr))
+        .route("/api/tournament/signup", get(join_routes::signup_status).post(join_routes::signup))
         .route("/api/club/join-qr", get(join_routes::qr))
         .route("/api/club/state", get(club_routes::state))
         .route("/api/club/members", get(club_routes::members))

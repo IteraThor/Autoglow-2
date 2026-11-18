@@ -510,11 +510,20 @@ impl Tournaments {
     }
 
     /// The organizer changed the rules or players in the lobby
-    pub fn update_lobby(&self, spec: Spec) -> Result<(), String> {
+    pub fn update_lobby(&self, mut spec: Spec) -> Result<(), String> {
         let renamed = self.with_host(|g| {
             let t = g.hosted.as_mut().unwrap();
             if t.status != "lobby" {
                 return Err("The tournament has already started".into());
+            }
+            // Phone sign-ups the page has not taken in yet stay on the list
+            if let Some(prev) = &t.lobby {
+                spec.phone_count = prev.phone_count;
+                for p in prev.players.iter().filter(|p| p.phone > spec.phone_seen) {
+                    if spec.players.len() < 32 && !spec.players.iter().any(|q| q.name.trim().eq_ignore_ascii_case(p.name.trim())) {
+                        spec.players.push(engine::Player { seed: spec.players.len() as i64 + 1, ..p.clone() });
+                    }
+                }
             }
             let old = t.name.clone();
             lobby_fields(t, &spec);
@@ -525,6 +534,39 @@ impl Tournaments {
             self.advertise();
         }
         Ok(())
+    }
+
+    /// What the phone sign-up page shows: is the list open, and the tournament's name
+    pub fn signup_view(&self) -> Value {
+        let g = self.lock();
+        match g.hosted.as_ref().filter(|t| t.status == "lobby").and_then(|t| t.lobby.as_ref().map(|s| (t, s))) {
+            Some((t, s)) => json!({"open": s.phone_signup && s.players.len() < 32, "name": t.name, "players": s.players.len()}),
+            None => json!({"open": false}),
+        }
+    }
+
+    /// A player put themselves on the lobby's list from their phone
+    pub fn phone_signup(&self, name: &str) -> Result<String, String> {
+        let name: String = name.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(40).collect();
+        if name.is_empty() {
+            return Err("Please enter your name".into());
+        }
+        self.with_host(|g| {
+            let t = g.hosted.as_mut().unwrap();
+            let spec = t.lobby.as_mut().filter(|s| t.status == "lobby" && s.phone_signup).ok_or("Sign-up is closed")?;
+            if spec.players.len() >= 32 {
+                return Err("The list is full".into());
+            }
+            if spec.players.iter().any(|p| p.name.trim().eq_ignore_ascii_case(&name)) {
+                return Err(format!("{} is already on the list", name));
+            }
+            spec.phone_count += 1;
+            spec.players.push(engine::Player { name: name.clone(), seed: spec.players.len() as i64 + 1, phone: spec.phone_count, ..Default::default() });
+            let spec = spec.clone();
+            lobby_fields(t, &spec);
+            info!("Tournament: {} signed up by phone", name);
+            Ok(name)
+        })
     }
 
     /// Build the bracket from the lobby and start handing out matches. Returns the players, so

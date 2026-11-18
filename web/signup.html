@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tournament sign-up</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--fg:#f2f4f8;--mute:#9aa3b2;--acc:#2ecc71;--err:#ff6b6b}
+@media(prefers-color-scheme:light){:root{--bg:#f2f4f8;--card:#fff;--fg:#14171c;--mute:#5b6472}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 system-ui,sans-serif;display:grid;place-items:start center;min-height:100vh;padding:16px}
+main{width:100%;max-width:420px;background:var(--card);border-radius:16px;padding:22px}
+h1{margin:0 0 4px;font-size:24px}p{color:var(--mute);margin:0 0 18px}
+label{display:block;font-size:14px;color:var(--mute);margin:14px 0 4px}
+input[type=text]{width:100%;padding:12px;font-size:17px;border-radius:10px;border:1px solid #8884;background:transparent;color:var(--fg)}
+button{margin-top:22px;width:100%;padding:14px;font-size:18px;font-weight:600;border:0;border-radius:12px;background:var(--acc);color:#04210f}
+button:disabled{opacity:.5}.msg{margin-top:14px;min-height:1.4em}.err{color:var(--err)}
+.done{text-align:center}.done b{font-size:26px;display:block;margin:8px 0}
+</style></head><body><main>
+<form id="f" hidden><h1 id="tn">Tournament</h1><p>Put yourself on the player list.</p>
+<label for="name">Your name *</label><input id="name" name="name" type="text" maxlength="40" required autocomplete="name">
+<button id="go">Sign up</button><div class="msg err" id="msg"></div></form>
+<div class="done" id="done" hidden><div style="font-size:56px">✅</div><b id="who"></b><p>You are on the list. Good luck!</p></div>
+<div class="done" id="closed" hidden><div style="font-size:56px">🔒</div><b>Sign-up is closed</b><p>Ask the organizer to add you.</p></div>
+</main><script>
+const $=id=>document.getElementById(id);
+fetch('/api/tournament/signup').then(r=>r.json()).then(j=>{
+  if(!j.open){$('closed').hidden=false;return}
+  $('tn').textContent=j.name||'Tournament';$('f').hidden=false;$('name').focus()
+}).catch(()=>{$('closed').hidden=false});
+$('f').onsubmit=async e=>{e.preventDefault();$('go').disabled=true;$('msg').textContent='';
+  try{const r=await fetch('/api/tournament/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('name').value})}),j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.error?.message||j.message||'Could not sign up, try again');
+    $('who').textContent=j.name;$('f').hidden=true;$('done').hidden=false}
+  catch(x){$('msg').textContent=x.message;$('go').disabled=false}};
+</script></body></html>
