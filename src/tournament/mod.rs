@@ -458,29 +458,6 @@ impl Tournaments {
         self.save(g);
     }
 
-    pub fn create(&self, spec: &Spec, host_plays: bool) -> Result<(), String> {
-        {
-            let mut g = self.lock();
-            if g.hosted.as_ref().map_or(false, |t| t.status == "running" || t.status == "lobby") {
-                return Err("This PC already hosts a running tournament".into());
-            }
-            if g.join.is_some() {
-                return Err("This PC is a board of another tournament. Leave it first.".into());
-            }
-            let id = format!("{:x}", rand::random::<u64>());
-            let mut t = engine::create(spec, &id, now())?;
-            t.host_node = g.node_id.clone();
-            t.host_name = g.node_name.clone();
-            t.boards.push(engine::Board { node_id: g.node_id.clone(), name: g.node_name.clone(), number: 1, approved: true, plays: host_plays, online: true, left: false, offline_since: 0.0, pick: String::new() });
-            info!("Hosting tournament '{}' ({}, {} players)", t.name, t.format, t.players.len());
-            g.hosted = Some(t);
-            g.agent = Agent { done_ad: std::mem::take(&mut g.agent.done_ad), ..Default::default() };
-            self.host_changed(&mut g);
-        }
-        self.advertise();
-        Ok(())
-    }
-
     /// "Host a tournament": open its lobby at once, so boards can join while the organizer sets
     /// up the rules and players. Nothing is played until start_lobby builds the bracket.
     pub fn open_lobby(&self, format: &str) -> Result<(), String> {

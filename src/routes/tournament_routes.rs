@@ -36,11 +36,6 @@ pub async fn preview(State(s): State<S>, req: Req) -> ApiResult {
     ok(crate::tournament::engine::view(&t))
 }
 
-pub async fn create(State(s): State<S>, req: Req) -> ApiResult {
-    let (spec, host_plays) = crate::tournament::spec_from(&req.json()?).map_err(AppError::validation)?;
-    done(s.tournaments.create(&spec, host_plays), &s)
-}
-
 /// "Host a tournament": the lobby opens at once and boards can join
 pub async fn lobby_open(State(s): State<S>, req: Req) -> ApiResult {
     let b = req.json()?;

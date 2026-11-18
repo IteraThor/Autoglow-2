@@ -19,9 +19,6 @@ export const COLOR_ORDERS = [
   { value: 5, label: 'GBR' }
 ];
 
-// Pins tried first when an output is added (common free ESP32 pins)
-const CANDIDATE_PINS = [16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33, 4, 5, 12, 13, 14, 15];
-
 const int = (value, fallback = 0) => {
   const n = parseInt(value, 10);
   return Number.isNaN(n) ? fallback : n;
@@ -180,99 +177,8 @@ export function recalc(draft) {
   return draft;
 }
 
-export function duplicatePins(draft) {
-  const pins = draft.outputs.map(pinOf);
-  return new Set(pins.filter((p, i) => pins.indexOf(p) !== i));
-}
-
 // Segment names used more than once on the controller (case and spacing ignored), as typed the second time
 export const nameKey = name => String(name || '').trim().replace(/\s+/g, ' ').toLowerCase();
-export function duplicateNames(draft) {
-  const seen = new Set();
-  const dupes = new Set();
-  for (const seg of draft.segments) {
-    const key = nameKey(seg.name);
-    if (!key) continue;
-    if (seen.has(key)) dupes.add(key);
-    seen.add(key);
-  }
-  return dupes;
-}
-
-export function setOutputType(draft, busIdx, type) {
-  const hw = draft.outputs[busIdx];
-  if (!hw) return;
-  hw.type = int(type, 22);
-  const own = draft.segments.filter(s => s.busIdx === busIdx);
-  if (isPwmOutput(hw)) {
-    hw.len = 1;
-    if (own[0]) own[0].name = `Light strip (GPIO ${pinOf(hw)})`;
-  } else {
-    if (!hw.len || hw.len <= 1) hw.len = 45;
-    // The single light strip segment now covers the whole RGB strip
-    own.forEach(s => {
-      s.stop = int(hw.start) + hw.len;
-      if (/pwm|light strip/i.test(s.name)) s.name = `RGB strip (GPIO ${pinOf(hw)})`;
-    });
-  }
-  recalc(draft);
-}
-
-// Changing an RGB strip's length moves its last segment's end with it
-export function setOutputLength(draft, busIdx, len) {
-  const hw = draft.outputs[busIdx];
-  if (!hw || isPwmOutput(hw)) return;
-  hw.len = Math.max(1, int(len, 1));
-  const own = draft.segments.filter(s => s.busIdx === busIdx);
-  const last = own[own.length - 1];
-  if (last) last.stop = int(hw.start) + hw.len;
-  recalc(draft);
-}
-
-export function addOutput(draft) {
-  const used = new Set(draft.outputs.map(pinOf));
-  const pin = CANDIDATE_PINS.find(p => !used.has(p)) ?? Array.from({ length: 39 }, (_, i) => i + 1).find(p => !used.has(p)) ?? 17;
-  const last = draft.outputs[draft.outputs.length - 1];
-  draft.outputs.push({ pin, type: 41, start: last ? last.start + last.len : 0, len: 1, order: 0, rev: false, skip: 0 });
-  recalc(draft);
-}
-
-// Outputs are removed last to first, so the LED numbers of the others never move
-export function removeLastOutput(draft) {
-  if (draft.outputs.length < 2) return;
-  const busIdx = draft.outputs.length - 1;
-  draft.outputs.pop();
-  draft.segments = draft.segments.filter(s => s.busIdx !== busIdx);
-  recalc(draft);
-}
-
-// A new segment takes the LEDs after the output's last segment (or the whole output when it is full)
-export function addSegment(draft, busIdx) {
-  const hw = draft.outputs[busIdx];
-  if (!hw || isPwmOutput(hw)) return;
-  const start = int(hw.start);
-  const end = start + Math.max(1, int(hw.len, 1));
-  const own = draft.segments.filter(s => s.busIdx === busIdx);
-  const lastStop = own.length ? int(own[own.length - 1].stop) : start;
-  const segStart = lastStop < end ? lastStop : start;
-  const at = own.length ? draft.segments.indexOf(own[own.length - 1]) + 1 : draft.segments.length;
-  draft.segments.splice(at, 0, { busIdx, name: `Segment ${draft.segments.length}`, start: segStart, stop: end, of: 0, on: true, bri: 255 });
-  draft.segments.forEach((s, i) => { s.id = i; });
-}
-
-export function removeSegment(draft, segIdx) {
-  draft.segments.splice(segIdx, 1);
-  recalc(draft);
-}
-
-// first and last are the 1-based, inclusive LED numbers the page shows
-export function setSegmentRange(draft, segIdx, first, last) {
-  const seg = draft.segments[segIdx];
-  if (!seg) return;
-  seg.start = Math.max(0, int(first, 1) - 1);
-  seg.stop = Math.max(seg.start + 1, int(last, seg.start + 1));
-  recalc(draft);
-}
 
 // Body of POST /api/wled/update
 export function toPayload(ip, draft) {

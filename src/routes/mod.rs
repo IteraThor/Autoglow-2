@@ -210,7 +210,6 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/tournament/demo", get(tournament_routes::demo))
         .route("/api/tournament/discover", get(tournament_routes::discover))
         .route("/api/tournament/preview", post(tournament_routes::preview))
-        .route("/api/tournament/create", post(tournament_routes::create))
         .route("/api/tournament/lobby-open", post(tournament_routes::lobby_open))
         .route("/api/tournament/lobby", post(tournament_routes::lobby))
         .route("/api/tournament/lobby-start", post(tournament_routes::lobby_start))
