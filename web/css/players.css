@@ -297,3 +297,5 @@
 .pl-editor .stu-pfields input, .pl-editor .stu-pfields select { padding: 9px 11px; font-size: 14px; }
 .pl-editor .stu-pcard-actions { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--st-line); }
 @media (max-width: 700px) { .pl-editor { padding: 14px; gap: 16px; } }
+
+.pl-report-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }

@@ -10,6 +10,7 @@
 //! club PC when the roster changes. A PC that is alone offers to join the club PC it finds.
 
 pub mod coach;
+pub mod demo;
 pub mod stats;
 #[cfg(test)]
 mod tests;
@@ -71,6 +72,9 @@ struct Settings {
     /// Matches already recorded
     #[serde(default)]
     seen: Vec<String>,
+    /// Matches deleted from the history: they are not taken in again (a board may still hold a copy)
+    #[serde(default)]
+    deleted: Vec<String>,
 }
 
 /// What a board knows from its club PC
@@ -350,7 +354,7 @@ impl Club {
 
     /// Keep a game unless it's already there; true when new
     fn store(&self, g: &mut Inner, mut game: Game, roster: &[Value]) -> bool {
-        if game.id.is_empty() || g.games.iter().any(|x| x.id == game.id) {
+        if game.id.is_empty() || g.set.deleted.contains(&game.id) || g.games.iter().any(|x| x.id == game.id) {
             return false;
         }
         recognise(&mut game, roster, &g.set.aliases);
@@ -880,6 +884,50 @@ impl Club {
         self.rewrite_games(&g);
         self.save_settings(&g);
         Ok(())
+    }
+
+    /// Take a match out of the history, so it no longer counts in anybody's statistics
+    pub fn delete_game(&self, id: &str) -> Result<(), String> {
+        let mut g = self.lock();
+        let before = g.games.len();
+        g.games.retain(|x| x.id != id);
+        if g.games.len() == before {
+            return Err("Match not found".into());
+        }
+        g.outbox.retain(|x| x.id != id);
+        if !g.set.deleted.iter().any(|d| d == id) {
+            g.set.deleted.push(id.to_string());
+        }
+        info!("Club: match {} deleted from the history", id);
+        self.rewrite_games(&g);
+        self.save_outbox(&g);
+        self.save_settings(&g);
+        Ok(())
+    }
+
+    /// Demo players: add made-up games between the demo members present in the roster, or take them away
+    pub fn demo_games(&self, on: bool) -> Result<usize, String> {
+        let roster = self.roster();
+        let names: Vec<(String, f64)> = demo::PLAYERS.iter().filter(|(n, _)| roster.iter().any(|p| py_str(&p["name"]) == *n)).map(|(n, a)| (n.to_string(), *a)).collect();
+        let mut g = self.lock();
+        g.games.retain(|x| !x.id.starts_with(demo::ID_PREFIX));
+        let mut n = 0;
+        if on {
+            if names.len() < 2 {
+                return Err("Add the demo players first".into());
+            }
+            let list = demo::games(&names, now() as i64);
+            n = list.len();
+            g.games.extend(list);
+            let roster = roster.clone();
+            let aliases = g.set.aliases.clone();
+            for game in g.games.iter_mut().filter(|x| x.id.starts_with(demo::ID_PREFIX)) {
+                recognise(game, &roster, &aliases);
+            }
+            g.games.sort_by_key(|x| x.at);
+        }
+        self.rewrite_games(&g);
+        Ok(n)
     }
 
     /// Hide a name from the unassigned list (a guest), or show it again

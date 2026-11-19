@@ -408,7 +408,7 @@ export function doublesView(c) {
 
 // --- Games and the report per game ------------------------------------------------------------------------
 export function gamesView(recent, openGame) {
-  if (!recent.length) return panel('Recent games', muted('No games in this period.'));
+  if (!recent.length) return panel('Match history', muted('No matches in this period.'));
   const rows = recent.map(g => {
     const tr = h('tr', { class: g.counts ? '' : 'is-muted', tabindex: '0', title: 'Open the report' },
       h('td', {}, when(g.at)), h('td', {}, g.opponents.join(', ') || 'Solo'),
@@ -418,12 +418,12 @@ export function gamesView(recent, openGame) {
     tr.addEventListener('keydown', e => { if (e.key === 'Enter') openGame(g.id); });
     return tr;
   });
-  return panel('Recent games', h('div', { class: 'pl-table-wrap' }, h('table', { class: 'pl-table' },
+  return panel('Match history', h('div', { class: 'pl-table-wrap' }, h('table', { class: 'pl-table' },
     h('thead', {}, h('tr', {}, ['Date', 'Opponent', 'Result', 'Average', 'Game', 'Board'].map(x => h('th', x === 'Average' ? { class: 'is-num' } : {}, x)))), h('tbody', {}, rows))),
-  muted('Open a game for its legs, doubles and where the darts landed.'));
+  muted('Open a match for its legs, doubles and where the darts landed.'));
 }
 
-export async function gameReport(id, memberId, members, close) {
+export async function gameReport(id, memberId, members, close, remove) {
   const box = h('div', { class: 'pl-stats' }, muted('Loading the game…'));
   try {
     const r = await api(`/api/club/game?id=${encodeURIComponent(id)}`);
@@ -446,7 +446,8 @@ export async function gameReport(id, memberId, members, close) {
             h('td', { class: 'is-num' }, fmt(x.average, 1)),
             h('td', { class: 'is-num' }, x.finish ? `out ${x.finish}` : x.at_double ? `${x.hit}/${x.at_double} D` : '')])))))) : muted(NO_DARTS);
       box.replaceChildren(
-        h('button', { type: 'button', class: 'pl-back', onclick: close }, '← Games'),
+        h('div', { class: 'pl-report-bar' }, h('button', { type: 'button', class: 'pl-back', onclick: close }, '← Match history'),
+          remove ? h('button', { type: 'button', class: 'stu-btn stu-del', onclick: () => remove(id) }, icon('trash', 16), 'Delete match') : null),
         panel(`${r.variant}${r.base ? ` ${r.base}` : ''} · ${when(r.at)} · ${r.board}`, head),
         h('div', { class: 'pl-tiles is-wide' },
           tile('Average', fmt(p.average, 2)), tile('First 9', fmt(p.first9, 2)), tile('Until 170', fmt(p.avg170, 2)),
@@ -460,7 +461,7 @@ export async function gameReport(id, memberId, members, close) {
     };
     draw();
   } catch (err) {
-    box.replaceChildren(h('button', { type: 'button', class: 'pl-back', onclick: close }, '← Games'), h('p', { class: 'pl-note is-warn' }, icon('info', 16), err.message));
+    box.replaceChildren(h('button', { type: 'button', class: 'pl-back', onclick: close }, '← Match history'), h('p', { class: 'pl-note is-warn' }, icon('info', 16), err.message));
   }
   return box;
 }

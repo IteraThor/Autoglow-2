@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 /// Members need this many games before they appear on the average-type leaderboards
 pub const MIN_GAMES: usize = 3;
 const FORM_GAMES: usize = 20;
-const RECENT_GAMES: usize = 15;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GamePlayer {
@@ -508,8 +507,7 @@ pub fn member_stats(games: &[Game], member: &str, members: &BTreeMap<String, Str
     }
     let n = form.len();
     let form: Vec<Value> = form.into_iter().skip(n.saturating_sub(FORM_GAMES)).collect();
-    let n = recent.len();
-    let mut recent: Vec<Value> = recent.into_iter().skip(n.saturating_sub(RECENT_GAMES)).collect();
+    // The whole match history, newest first
     recent.reverse();
     let mut h2h: Vec<Value> = h2h.into_iter().map(|(k, (name, games, wins))| json!({"key": k, "name": name, "games": games, "wins": wins})).collect();
     h2h.sort_by_key(|v| std::cmp::Reverse(v["games"].as_u64().unwrap_or(0)));

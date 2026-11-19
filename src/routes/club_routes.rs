@@ -72,6 +72,18 @@ pub async fn assign(State(s): State<S>, req: Req) -> ApiResult {
     change(&s, "assign", req, |b| club.assign(&str_of(b, "name"), &str_of(b, "member"), crate::py::get_bool(b, "remember", true))).await
 }
 
+/// Delete one match from the history
+pub async fn delete_game(State(s): State<S>, req: Req) -> ApiResult {
+    let club = Arc::clone(&s.club);
+    change(&s, "delete-game", req, |b| club.delete_game(&str_of(b, "id"))).await
+}
+
+/// The demo players' made-up games: on adds them, off takes them away
+pub async fn demo(State(s): State<S>, req: Req) -> ApiResult {
+    let club = Arc::clone(&s.club);
+    change(&s, "demo", req, |b| club.demo_games(crate::py::get_bool(b, "on", true)).map(|_| ())).await
+}
+
 pub async fn ignore(State(s): State<S>, req: Req) -> ApiResult {
     let club = Arc::clone(&s.club);
     change(&s, "ignore", req, |b| club.ignore(&str_of(b, "name"), crate::py::get_bool(b, "ignore", true))).await

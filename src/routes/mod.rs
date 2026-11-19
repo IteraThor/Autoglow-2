@@ -246,6 +246,8 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/club/unassigned", get(club_routes::unassigned))
         .route("/api/club/assign", post(club_routes::assign))
         .route("/api/club/ignore", post(club_routes::ignore))
+        .route("/api/club/delete-game", post(club_routes::delete_game))
+        .route("/api/club/demo", post(club_routes::demo))
         .route("/api/club/forget-name", post(club_routes::forget_name))
         .route("/api/club/role", post(club_routes::role))
         .route("/api/club/discover", get(club_routes::discover))

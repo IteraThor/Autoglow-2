@@ -215,15 +215,18 @@ async function toggleDemo() {
   const present = roster().filter(isDemo);
   try {
     if (present.length) {
+      await api('/api/club/demo', { body: { on: false } }); // their made-up games go first
       for (const p of present) await deletePlayer(p.id);
     } else {
       for (const d of DEMO) {
         await savePlayer(null, { name: d[0], ...Object.fromEntries(['nickname', 'club', 'hometown', 'hand', 'dart_weight', 'favourite_double', 'playing_since', 'stat_average', 'stat_180s', 'stat_best_checkout'].map((k, i) => [k, d[i + 1]])) });
       }
+      await refresh();
+      await api('/api/club/demo', { body: { on: true } }); // some made-up games for them to have stats
     }
     await refresh();
     render();
-    toast.success(present.length ? 'Demo players removed.' : 'Demo players added.');
+    toast.success(present.length ? 'Demo players removed.' : 'Demo players added, with some made-up games.');
   } catch (err) { toast.error(err.message); }
 }
 
@@ -300,13 +303,24 @@ function statsBlock(st, c) {
   return box;
 }
 
+// Take a match out of the history, e.g. one where something went wrong, so it stops counting in the statistics
+async function deleteMatch(id) {
+  const ok = await confirmDialog({ title: 'Delete this match?', body: 'It is removed from the match history and the statistics of every player in it. This cannot be undone.', confirmLabel: 'Delete', danger: true });
+  if (!ok || !await post('delete-game', { id })) return;
+  view.game = null;
+  cache.key = '';
+  await refresh();
+  render();
+  toast.success('Match deleted.');
+}
+
 function openGame(id) {
   view.mtab = 'games';
   view.game = id;
   render();
 }
 
-const MEMBER_TABS = [['overview', 'Overview'], ['progress', 'Progress'], ['heat', 'Heat map'], ['doubles', 'Doubles'], ['games', 'Games'], ['compare', 'Compare']];
+const MEMBER_TABS = [['overview', 'Overview'], ['progress', 'Progress'], ['heat', 'Heat map'], ['doubles', 'Doubles'], ['games', 'Match history'], ['compare', 'Compare']];
 
 // The open member's tab, from the cached stats
 async function memberTab(p, r, c) {
@@ -314,7 +328,7 @@ async function memberTab(p, r, c) {
     case 'progress': return progressView(c);
     case 'heat': return heatView(c);
     case 'doubles': return doublesView(c);
-    case 'games': return view.game ? gameReport(view.game, p.id, roster(), () => { view.game = null; render(); }) : gamesView(r.stats.recent, openGame);
+    case 'games': return view.game ? gameReport(view.game, p.id, roster(), () => { view.game = null; render(); }, club.can_edit ? deleteMatch : null) : gamesView(r.stats.recent, openGame);
     case 'compare': return compareView(p, c, roster(), view.period, id => { view.mtab = 'overview'; open(id); });
     default: return statsBlock(r.stats, c);
   }
