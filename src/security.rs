@@ -28,8 +28,9 @@ const LOGIN_LOCKOUT_SECONDS: f64 = 30.0;
 pub const PUBLIC_API_PATHS: [&str; 11] = ["/api/join", "/api/tournament/signup", "/api/auth/status", "/api/auth/login", crate::tournament::PEER_WS_PATH, "/api/tournament/end-remote", "/api/club/roster", "/api/club/games", "/api/club/nudge", "/api/club/takeover", "/api/club/name"];
 /// The Chrome extension relays Autodarts game data here; only Chrome on this computer may connect
 pub const BRIDGE_WS_PATH: &str = "/ws/autodarts-bridge";
-/// The extension's WLED menu switches controllers off and on; same rule as the bridge
-pub const EXTENSION_POST_PATHS: [&str; 2] = ["/api/power/test_off", "/api/power/test_wake"];
+/// The extension's WLED menu switches controllers off and on, and its lobby menu makes a new local
+/// player (a name only); same rule as the bridge
+pub const EXTENSION_POST_PATHS: [&str; 3] = ["/api/power/test_off", "/api/power/test_wake", "/api/studio/players"];
 /// The Local Tournament page in Autodarts (drawn by the extension); same rule as the bridge
 pub const EXTENSION_POST_PREFIX: &str = "/api/tournament/";
 

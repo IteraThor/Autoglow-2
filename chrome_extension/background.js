@@ -248,7 +248,25 @@ async function clubApi(path) {
   return data;
 }
 
+// A quick new local player: just a name, through the same route the Players page uses
+async function clubCreate(body) {
+  const name = String((body && body.name) || '').trim().slice(0, 60);
+  if (!name) throw new Error('Type a name first');
+  const form = new FormData();
+  form.append('name', name);
+  const res = await fetch(`${SERVER_URL}/api/studio/players`, { method: 'POST', body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data.error && data.error.message) || data.message || `HTTP ${res.status}`);
+  return data;
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'clubCreate') {
+    clubCreate(msg.body)
+      .then(data => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message || err) }));
+    return true; // Answered asynchronously
+  }
   if (msg && msg.type === 'club') {
     clubApi(msg.path)
       .then(data => sendResponse({ ok: true, data }))

@@ -214,5 +214,34 @@ function placeWledButton() {
   if (!profileBtn) return;
   if (wledHost.nextElementSibling !== profileBtn) profileBtn.before(wledHost);
 }
-setInterval(placeWledButton, 1000);
+
+// The menu is centred in the header and our button widens the right-hand side, so on a narrow
+// window they meet. Then the logo goes and the menu moves to the left edge to make room.
+const tightStyle = document.createElement('style');
+tightStyle.textContent = 'header[data-autoglow-tight] > a:first-child { visibility: hidden !important; } '
+  + 'html[data-autoglow-home] main [class*="container/card"] { display: none !important; } ' // the account holder's stats card on the start page
+  + 'header[data-autoglow-tight] > nav { left: var(--ag-nav-left, 16px) !important; transform: none !important; translate: none !important; }';
+document.documentElement.appendChild(tightStyle);
+function fitHeader() {
+  const header = document.querySelector('header');
+  const nav = header && header.querySelector(':scope > nav');
+  const right = wledHost.parentElement;
+  if (!nav || !right || !nav.offsetParent) return;
+  header.removeAttribute('data-autoglow-tight');
+  const last = [...nav.children].filter(c => c.offsetWidth).pop();
+  const navEnd = last ? last.getBoundingClientRect().right : nav.getBoundingClientRect().right;
+  // our button is the left-most thing on the right-hand side
+  const free = wledTrigger.getBoundingClientRect().left - 12;
+  if (navEnd > free) {
+    // centre the menu in the room the right-hand side leaves, not in the window
+    header.style.setProperty('--ag-nav-left', `${Math.max(16, Math.round((16 + free - nav.offsetWidth) / 2))}px`);
+    header.setAttribute('data-autoglow-tight', '');
+  }
+}
+function markHome() {
+  document.documentElement.toggleAttribute('data-autoglow-home', location.pathname === '/');
+}
+setInterval(() => { placeWledButton(); fitHeader(); markHome(); }, 500);
+markHome();
+window.addEventListener('resize', fitHeader);
 document.addEventListener('DOMContentLoaded', placeWledButton);

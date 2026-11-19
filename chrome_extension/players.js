@@ -14,10 +14,10 @@
   /** "Updated" only when it was: any other failure means the extension's background did not answer */
   const bridgeError = m => (/context invalidated/i.test(m || '') ? 'AutoGlow Bridge was updated. Reload this page.' : 'AutoGlow Bridge did not answer. Restart the browser, or reload the extension in chrome://extensions.');
 
-  function api(path) {
+  function api(path, body) {
     return new Promise((resolve, reject) => {
       try {
-        chrome.runtime.sendMessage({ type: 'club', path }, (r) => {
+        chrome.runtime.sendMessage(body ? { type: 'clubCreate', body } : { type: 'club', path }, (r) => {
           if (chrome.runtime.lastError) return reject(new Error(bridgeError(chrome.runtime.lastError.message)));
           if (r && r.ok) resolve(r.data); else reject(new Error(r ? r.error : 'AutoGlow is not reachable'));
         });
@@ -269,7 +269,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Lobby: a "Club members" menu next to Shuffle. Autodarts forgets guests after a while; picking a
+  // Lobby: a "Club members" menu between Add player and Add bot. Autodarts forgets guests after a while; picking a
   // member here adds them through Autodarts' own "Add player" dialog (the user chose this on
   // 2026-11-13, knowing Autodarts' terms are against software operating the site).
   // ---------------------------------------------------------------------------
@@ -278,24 +278,36 @@
   lobbyHost.setAttribute('data-autoglow', 'lobby-members');
   const lobbyRoot = lobbyHost.attachShadow({ mode: 'open' });
   lobbyRoot.innerHTML = `<style>${CSS}
-    .lm-pop{position:fixed;z-index:41;width:340px;max-height:min(520px,70vh);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 60px #000c;color:var(--text);font:500 14px/1.4 "Manrope Variable",Manrope,system-ui,sans-serif}
-    .lm-head{padding:12px 14px 8px;display:flex;flex-direction:column;gap:8px}.lm-head b{font-size:15px}
-    .lm-head input{width:100%;height:34px}
-    .lm-list{overflow:auto;padding:0 6px 8px}
-    .lm-row{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:0;border-radius:10px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-    .lm-row:hover:not(:disabled){background:#ffffff0d}.lm-row:disabled{cursor:default;opacity:.55}
-    .lm-row .nm{flex:1;min-width:0}.lm-row .nm b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lm-row .nm small{color:var(--muted);font-size:12px}
-    .lm-row .st{font-size:12px;font-weight:700;color:var(--muted)}.lm-row .st.add{color:var(--blue2)}.lm-row .st.ok{color:var(--green)}
-    .lm-foot{padding:8px 14px 12px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+    .lm-pop{position:fixed;z-index:60;left:50%;top:50%;transform:translate(-50%,-50%);width:min(672px,calc(100vw - 32px));height:85vh;display:flex;flex-direction:column;gap:16px;background:#121228;border-radius:12px;box-shadow:0 0 0 1px #ffffff1a,0 0 0 100vmax #000a;color:#fff;font:500 14px/1.4 "Manrope Variable",Manrope,system-ui,sans-serif;overflow:hidden}
+    .lm-pop[hidden]{display:none}
+    .lm-title{margin:0;padding:24px 56px 0 24px;font:400 26px/1.1 "Bebas Neue",sans-serif;letter-spacing:.01em;text-transform:uppercase}
+    .lm-x{position:absolute;top:16px;right:16px;width:32px;height:32px;border:0;border-radius:10px;background:none;color:#fff;cursor:pointer;display:grid;place-items:center}.lm-x:hover{background:#fff;color:#0b2a7a}
+    .lm-body{flex:1;min-height:0;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:16px}
+    .lm-body input{width:100%;box-sizing:border-box;padding:16px;border:0;border-radius:16px;background:#f7f8fa;color:#1b1f27;font:700 16px/1.2 "Manrope Variable",Manrope,system-ui,sans-serif;outline:none}
+    .lm-body input::placeholder{color:#7b8190}.lm-body input:focus{box-shadow:0 0 0 3px #1451ce80}
+    .lm-row{display:flex;align-items:center;gap:8px}
+    .lm-who{flex:1;min-width:0;display:flex;align-items:center}
+    .lm-av{position:relative;z-index:2;flex:none;width:42px;height:42px;margin-right:-10px;border-radius:50%;border:2px solid #121228;background:linear-gradient(135deg,#1c3f9e,#0a1840);display:grid;place-items:center;font:400 18px/1 "Bebas Neue",sans-serif;color:#cfd8ee}
+    .lm-tag{position:relative;z-index:1;min-width:0;height:32px;padding:0 22px 0 16px;display:flex;align-items:center;background:#171d24;clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%);font:400 18px/1 "Bebas Neue",sans-serif;text-transform:uppercase;color:#d4dae3;white-space:nowrap}
+    .lm-tag span{overflow:hidden;text-overflow:ellipsis}.lm-tag small{margin-left:8px;color:#7c8696;font:700 12px/1 "Manrope Variable",Manrope,system-ui,sans-serif}
+    .lm-btn{flex:none;min-width:64px;height:32px;padding:0 10px;border:0;border-radius:8px;background:#1451ce;color:#e3ecff;font:700 12px/1 "Manrope Variable",Manrope,system-ui,sans-serif;cursor:pointer}
+    .lm-btn:hover:not(:disabled){opacity:.9}.lm-btn:active:not(:disabled){background:#0f3fa3}
+    .lm-btn:disabled{background:#2b2f37;color:#8b919c;cursor:default}
+    .lm-new{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:40px;border:1px solid #1451ce;border-radius:10px;background:none;color:#8fb2ff;font:700 14px/1 "Manrope Variable",Manrope,system-ui,sans-serif;cursor:pointer}.lm-new:hover{background:#1451ce26}
+    .lm-go{width:100%;height:40px;font-size:14px;border-radius:10px}
+    .lm-empty{color:#8b919c;padding:8px 2px}
   </style><div class="lm-pop" id="lmPop" hidden></div>`;
-  // The button itself is one of Autodarts' own: it sits in the Players card header next to
-  // Shuffle and wears Shuffle's classes, so it looks and behaves like its neighbours
+  // The button itself is one of Autodarts' own: it sits between Add player and Add bot
+  // and wears Add player's classes, so it looks and behaves like its neighbours
   const lmBtn = document.createElement('button');
   lmBtn.type = 'button';
   lmBtn.setAttribute('data-autoglow', 'club-members');
-  lmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Club members';
+  lmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span></span>';
   const lmPop = lobbyRoot.getElementById('lmPop');
-  let lm = { members: [], lobby: [], query: '', busy: '', done: new Set(), autoShown: '' };
+  // Autodarts' language decides ours: its Add player button reads German or English
+  let de = false;
+  const lmWords = () => de ? { add: 'Lokalen Spieler hinzufügen', search: 'Lokale Spieler suchen', local: 'Lokaler Spieler', create: 'Neuen lokalen Spieler erstellen', name: 'Name', createBtn: 'Erstellen und hinzufügen', back: 'Zurück', addBtn: 'Hinzufügen', added: 'Hinzugefügt', none: 'Niemand gefunden.', empty: 'Noch keine lokalen Spieler. Lege sie in AutoGlow unter Spieler an.' } : { add: 'Add local player', search: 'Search local players', local: 'Local Player', create: 'Create new local player', name: 'Name', createBtn: 'Create and add', back: 'Back', addBtn: 'Add', added: 'Added', none: 'Nobody matches.', empty: 'No local players yet. Add them in AutoGlow under Players.' };
+  let lm = { creating: false, draft: '', members: [], lobby: [], query: '', busy: '', done: new Set(), autoShown: '' };
 
   const textIs = (el, re) => re.test((el.textContent || '').trim());
   const mainButtons = () => [...document.querySelectorAll('main button')].filter(b => b.checkVisibility && b.checkVisibility());
@@ -320,6 +332,13 @@
 
   /** Add one guest through Autodarts' own "Add player" dialog */
   async function addToLobby(name) {
+    // Autodarts' own dialog and backdrop work unseen behind ours, so nothing flashes
+    const hide = document.createElement('style');
+    hide.textContent = '[role="dialog"], [role="presentation"].fixed { opacity: 0 !important; animation: none !important; transition: none !important; }';
+    document.head.appendChild(hide);
+    try { await addToLobbyDialog(name); } finally { hide.remove(); }
+  }
+  async function addToLobbyDialog(name) {
     const open = addPlayerButton();
     if (!open) throw new Error('Open a local game lobby first');
     open.click();
@@ -347,16 +366,26 @@
 
   function renderMenu() {
     const q = lm.query.trim().toLowerCase();
-    const list = lm.members.filter(m => !q || [m.name, m.nickname, m.alias].some(v => (v || '').toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name));
+    const list = lm.members.filter(m => !(lm.holder && adName(m).toUpperCase() === lm.holder.toUpperCase())).filter(m => !q || [m.name, m.nickname, m.alias].some(v => (v || '').toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name));
     const typing = lobbyRoot.activeElement && lobbyRoot.activeElement.id === 'lmQ';
-    lmPop.innerHTML = `<div class="lm-head"><b>Club members</b><input id="lmQ" placeholder="Search members" value="${esc(lm.query)}"></div>
-      <div class="lm-list">${list.length ? list.map(m => {
+    const W = lmWords();
+    if (lm.creating) {
+      lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <h2 class="lm-title">${W.create}</h2>
+        <div class="lm-body"><input id="lmName" placeholder="${W.name}" value="${esc(lm.draft)}" maxlength="60" autocomplete="off">
+          <button class="lm-btn lm-go" id="lmCreate" ${lm.busy ? 'disabled' : ''}>${lm.busy ? '…' : W.createBtn}</button>
+          <button class="lm-new" id="lmBack">${W.back}</button></div>`;
+      const n = lobbyRoot.getElementById('lmName');
+      if (n && !lm.busy) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+      return;
+    }
+    lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <h2 class="lm-title">${W.add}</h2>
+      <div class="lm-body"><input id="lmQ" placeholder="${W.search}" value="${esc(lm.query)}" autocomplete="off"><button class="lm-new" id="lmNew"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>${W.create}</button>${list.length ? list.map(m => {
         const here = inLobby(m), busy = lm.busy === m.id;
-        return `<button class="lm-row" data-m="${esc(m.id)}" ${here || lm.busy ? 'disabled' : ''}><span class="av">${esc(initials(m.name))}</span>
-          <span class="nm"><b>${esc(m.name)}</b><small>${m.summary && m.summary.games ? `${fmt(m.summary.average)} avg · ` : ''}${esc(adName(m).toUpperCase())}</small></span>
-          <span class="st ${here ? 'ok' : 'add'}">${busy ? 'Adding…' : here ? '✓ In lobby' : '+ Add'}</span></button>`;
-      }).join('') : `<div class="muted small" style="padding:10px">${lm.members.length ? 'Nobody matches.' : 'No members yet. Add them in AutoGlow under Players.'}</div>`}</div>
-      <div class="lm-foot">Adds the member as a guest with their Autodarts name, through Autodarts' own Add player dialog.</div>`;
+        return `<div class="lm-row"><div class="lm-who"><span class="lm-av">${esc(initials(m.name))}</span><span class="lm-tag"><span>${esc(adName(m))}</span>${m.summary && m.summary.games ? `<small>${fmt(m.summary.average)} avg</small>` : ''}</span></div>
+          <button class="lm-btn" data-m="${esc(m.id)}" ${here || lm.busy ? 'disabled' : ''}>${busy ? '…' : here ? W.added : W.addBtn}</button></div>`;
+      }).join('') : `<div class="lm-empty">${lm.members.length ? W.none : W.empty}</div>`}</div>`;
     if (typing) { const i = lobbyRoot.getElementById('lmQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
 
@@ -370,23 +399,46 @@
   }
   const inLobbyByState = m => lm.lobby.some(n => n.trim().toUpperCase() === adName(m).toUpperCase());
 
-  function placePop() {
-    const r = lmBtn.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - 348, r.right - 340));
-    Object.assign(lmPop.style, { left: `${left}px`, top: `${r.bottom + 8}px`, maxHeight: `${Math.max(200, Math.min(520, window.innerHeight - r.bottom - 24))}px` });
-  }
+  const placePop = () => {}; // the dialog is centred by CSS
 
   async function openMenu() {
+    lm.creating = false;
     lmPop.hidden = false;
     placePop();
     renderMenu();
+    const q = lobbyRoot.getElementById('lmQ'); if (q) q.focus();
     await loadMembers();
-    if (!lmPop.hidden) renderMenu();
+    if (!lmPop.hidden) renderMenu(); // keeps the search box focused
   }
 
   lmBtn.addEventListener('click', () => (lmPop.hidden ? openMenu() : (lmPop.hidden = true)));
+  async function createLocal() {
+    const name = lm.draft.trim();
+    if (!name || lm.busy) return;
+    lm.busy = 'new';
+    renderMenu();
+    try {
+      const made = await api('create-player', { name });
+      await loadMembers();
+      const m = lm.members.find(x => x.id === (made.player && made.player.id)) || lm.members.find(x => x.name === name);
+      if (m) { await addToLobby(adName(m)); lm.done.add(m.id); }
+      lm.draft = '';
+      lm.creating = false;
+    } catch (err) {
+      flashLobby(err.message);
+    }
+    lm.busy = '';
+    await loadMembers();
+    renderMenu();
+  }
+  lobbyRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.id === 'lmName') createLocal(); });
+  lobbyRoot.addEventListener('input', (e) => { if (e.target.id === 'lmName') lm.draft = e.target.value; });
   lobbyRoot.addEventListener('input', (e) => { if (e.target.id === 'lmQ') { lm.query = e.target.value; renderMenu(); } });
   lobbyRoot.addEventListener('click', async (e) => {
+    if (e.target.closest('#lmX')) { lmPop.hidden = true; return; }
+    if (e.target.closest('#lmNew')) { lm.creating = true; renderMenu(); return; }
+    if (e.target.closest('#lmBack')) { lm.creating = false; renderMenu(); return; }
+    if (e.target.closest('#lmCreate')) { createLocal(); return; }
     const row = e.target.closest('[data-m]');
     if (!row || lm.busy) return;
     const m = lm.members.find(x => x.id === row.dataset.m);
@@ -413,10 +465,40 @@
     setTimeout(() => { el.innerHTML = ''; }, 5000);
   }
 
-  /** Show the button beside Shuffle (or Add player) while a lobby is on screen; open the menu once per lobby */
+  /** Guests read "Spielt mit <account holder>"; they are local players here. Also learns who the account holder is. */
+  function relabelGuests() {
+    const re = /^\s*(spielt mit|plays with)\s+(.+?)\s*$/i;
+    let holder = '';
+    for (const d of document.querySelectorAll('main div')) {
+      if (d.children.length > 1 || !d.querySelector(':scope > svg')) continue;
+      const m = re.exec(d.textContent);
+      if (!m) continue;
+      holder = m[2];
+      const nodes = [...d.childNodes].filter(n => n.nodeType === 3);
+      nodes.forEach((n, i) => { n.nodeValue = i ? '' : ' ' + lmWords().local; });
+    }
+    if (!holder) {
+      const first = document.querySelector('main button[aria-label^="Set handicap for "]');
+      if (first) holder = first.getAttribute('aria-label').slice('Set handicap for '.length);
+    }
+    if (holder) lm.holder = holder;
+  }
+
+  /** A new lobby starts with the account holder already in it; the lobby should start empty, so take them out once */
+  function emptyNewLobby() {
+    if (!/^\/lobby\//.test(location.pathname) || lm.emptied === location.pathname) return;
+    const rows = [...document.querySelectorAll('main button[aria-label^="Set handicap for "]')].map(b => b.parentElement);
+    if (!rows.length) return; // the lobby has not drawn its players yet
+    lm.emptied = location.pathname;
+    if (rows.length !== 1) return; // somebody else is already in: not a fresh lobby
+    const x = [...rows[0].querySelectorAll('button')].pop();
+    if (x && !x.disabled) x.click();
+  }
+
+  /** Show the button between Add player and Add bot while a lobby is on screen; open the menu once per lobby */
   function placeLobby() {
     const add = addPlayerButton();
-    const anchor = mainButtons().find(b => textIs(b, /^shuffle$/i)) || add;
+    if (add) { relabelGuests(); emptyNewLobby(); }
     const show = !!add && !isOpen() && !document.querySelector('[role="dialog"]:not([data-autoglow])');
     if (!show) {
       if (lmBtn.isConnected) lmBtn.remove();
@@ -424,15 +506,18 @@
       return;
     }
     if (!lobbyHost.isConnected) document.documentElement.appendChild(lobbyHost);
-    // Just before Shuffle at the far end of the header: our button takes Shuffle's auto margin
-    if (lmBtn.nextElementSibling !== anchor) anchor.before(lmBtn);
-    if (lmBtn.className !== anchor.className) lmBtn.className = anchor.className;
-    lmBtn.style.marginLeft = 'auto';
-    anchor.style.marginLeft = '0';
+    de = /spieler/i.test(add.textContent);
+    const lbl = lmBtn.querySelector('span');
+    if (lbl.textContent !== lmWords().add) lbl.textContent = lmWords().add;
+    // Between Add player and Add bot, wearing Add player's classes so it looks like Autodarts' own button
+    if (lmBtn.previousElementSibling !== add) add.after(lmBtn);
+    if (lmBtn.className !== add.className) lmBtn.className = add.className;
+    const row = add.parentElement;
+    if (row && getComputedStyle(row).display === 'grid' && row.children.length === 3) row.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
     if (!lmPop.hidden) {
       placePop();
       // Players removed in Autodarts can be added again
-      if (!lm.busy && Date.now() - (lm.loadedAt || 0) > 3000) {
+      if (!lm.busy && !lm.creating && Date.now() - (lm.loadedAt || 0) > 3000) {
         lm.loadedAt = Date.now();
         loadMembers().then(() => { if (!lmPop.hidden && !lm.busy && !(lobbyRoot.activeElement && lobbyRoot.activeElement.id === 'lmQ')) renderMenu(); });
       }
