@@ -190,7 +190,7 @@ function statusChips() {
 }
 
 function tvButton() {
-  const btn = h('button', { type: 'button', class: 'stu-btn', title: 'The address to open on the TVs' }, icon('tv', 16), 'TV');
+  const btn = h('button', { type: 'button', class: 'stu-btn', 'data-pop': '', title: 'The address to open on the TVs' }, icon('tv', 16), 'TV');
   btn.addEventListener('click', () => {
     const url = S.tv_url || `${location.origin}/tournament/live`;
     const copy = h('button', { type: 'button', class: 'stu-btn stu-iconbtn', title: 'Copy', 'aria-label': 'Copy the address' }, icon('copy', 16));

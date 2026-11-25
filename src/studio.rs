@@ -909,7 +909,9 @@ pub fn build_scoreboard(state: Option<&Obj>, live: bool, phase: &str) -> Obj {
             turn_player = players.iter().find(|p| p["id"] == json!(py_str(pid))).and_then(|p| p["index"].as_i64());
         }
     }
+    // Autodarts' winner is the player's original slot ("index"); a bull-off reorders the players
     let winner = int_v(state.get("winner"));
+    let winner_pos = crate::tournament::agent::winner_pos(state).filter(|_| winner.map_or(false, |w| w >= 0));
     crate::obj! {
         "live" => live, "match_id" => state.get("id").map(py_str).unwrap_or_default(),
         "variant" => non_empty(state.get("variant")).map(py_str).unwrap_or_default(),
@@ -919,7 +921,7 @@ pub fn build_scoreboard(state: Option<&Obj>, live: bool, phase: &str) -> Obj {
         "uses_sets" => num(state.get("sets")).unwrap_or(0.0) > 1.0,
         "set" => num_v(state.get("set")), "leg" => leg, "round" => num_v(state.get("round")), "active" => active,
         "finished" => state.get("finished").map_or(false, truthy) || winner.map_or(false, |w| w >= 0),
-        "winner" => winner.filter(|w| *w >= 0),
+        "winner" => winner_pos,
         "players" => players,
         "turn" => json!({
             "id": last.get("id").map(py_str).unwrap_or_else(|| turns.len().to_string()),

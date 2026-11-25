@@ -452,3 +452,14 @@ fn ag1_preset_is_the_autoglow_1_traffic_light() {
     assert!(f.hits.values().all(|h| !h.enabled) && !f.hit_locator);
     assert_eq!((f.idle.fx, f.idle.colors[0]), (0, green));
 }
+
+#[test]
+fn studio_winner_follows_the_bull_off_reorder() {
+    // After the bull-off Autodarts puts THOR first; its "winner" is the original slot (index 1)
+    let frames = fixture("pdc_bull_off_match_2026-11-02.json");
+    let last = frames.as_array().unwrap().iter().filter_map(|m| m["data"].as_object()).filter(|s| s.get("finished") == Some(&json!(true))).last().unwrap().clone();
+    let board = crate::studio::build_scoreboard(Some(&last), true, "");
+    let w = board["winner"].as_u64().unwrap() as usize;
+    assert_eq!(board["players"][w]["name"], json!("THOR"));
+    assert_eq!(board["players"][w]["legs"], json!(1));
+}

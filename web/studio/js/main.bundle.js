@@ -1850,7 +1850,7 @@ void main() {
         return fmt((_a2 = stat(p, "plus100")) != null ? _a2 : 0);
       }],
       [t("stat_checkout_pct"), (p) => typeof stat(p, "checkoutPercent") === "number" ? `${Math.round(stat(p, "checkoutPercent") * (stat(p, "checkoutPercent") <= 1 ? 100 : 1))}%` : "\u2013"],
-      [t("stat_best_checkout"), (p) => fmt(extra.bestCheckout[p.index]) || "\u2013"],
+      [t("stat_best_checkout"), (p) => fmt(p.best_checkout || extra.bestCheckout[p.index]) || "\u2013"],
       [t("stat_darts"), (p) => fmt(stat(p, "dartsThrown")) || "\u2013"]
     ];
     for (const [label, value] of rows) {

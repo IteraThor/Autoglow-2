@@ -188,7 +188,15 @@ pub async fn state(State(s): State<S>, req: Req) -> ApiResult {
                 None => false,
             };
             let phase = st.last_flow_state_str();
-            let board = studio::build_scoreboard(state.as_ref(), live, &phase);
+            let mut board = studio::build_scoreboard(state.as_ref(), live, &phase);
+            // Best checkout per player from the darts of this match (the match card shows it)
+            if st.match_darts.match_id == board.get("match_id").and_then(Value::as_str).unwrap_or_default() {
+                for p in board.get_mut("players").and_then(Value::as_array_mut).into_iter().flatten() {
+                    let id = p.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+                    let (finish, _) = crate::club::stats::leg_bests_from(&st.match_darts.of(&id));
+                    p["best_checkout"] = json!(finish);
+                }
+            }
             let lobby = if live { None } else { studio::build_lobby(st.open_lobby()) };
             let bo = studio::build_bull_off(st.bull_off_view());
             (board, lobby, bo)

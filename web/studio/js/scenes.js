@@ -332,7 +332,7 @@ export function showMatchCard(state, extra) {
     [t('stat_140'), p => fmt(stat(p, 'plus140') ?? 0)],
     [t('stat_100'), p => fmt(stat(p, 'plus100') ?? 0)],
     [t('stat_checkout_pct'), p => (typeof stat(p, 'checkoutPercent') === 'number' ? `${Math.round(stat(p, 'checkoutPercent') * (stat(p, 'checkoutPercent') <= 1 ? 100 : 1))}%` : '–')],
-    [t('stat_best_checkout'), p => fmt(extra.bestCheckout[p.index]) || '–'],
+    [t('stat_best_checkout'), p => fmt(p.best_checkout || extra.bestCheckout[p.index]) || '–'],
     [t('stat_darts'), p => fmt(stat(p, 'dartsThrown')) || '–']
   ];
   for (const [label, value] of rows) {

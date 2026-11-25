@@ -285,7 +285,8 @@ impl LegBests {
         }
         for (i, s) in stats.iter().enumerate() {
             let Some(leg) = s.get("legStats").filter(|l| l.is_object()) else { continue };
-            if int(leg.get("checkoutsHit")) < 1 {
+            // One leg has one checkout: more hits means the numbers already cover several legs
+            if int(leg.get("checkoutsHit")) != 1 {
                 continue;
             }
             let finish = int(leg.get("checkoutPoints"));
@@ -409,10 +410,27 @@ struct Totals {
     best_checkout: i64,
     best_leg: i64,
     last_at: i64,
+    legs_won: i64,
+    legs_lost: i64,
+}
+
+/// Legs a player won and lost in a game. Only for leg matches: in a set match Autodarts counts the
+/// legs of the current set only.
+fn legs_of(g: &Game, p: &GamePlayer) -> Option<(i64, i64)> {
+    if g.sets > 1 {
+        return None;
+    }
+    let lost = g.players.iter().filter(|o| !std::ptr::eq(*o, p)).map(|o| o.legs).sum();
+    Some((p.legs, lost))
 }
 
 impl Totals {
-    fn add(&mut self, p: &GamePlayer, at: i64) {
+    fn add(&mut self, g: &Game, p: &GamePlayer) {
+        let at = g.at;
+        if let Some((won, lost)) = legs_of(g, p) {
+            self.legs_won += won;
+            self.legs_lost += lost;
+        }
         self.games += 1;
         self.wins += p.won as usize;
         self.score += p.score;
@@ -444,6 +462,8 @@ impl Totals {
             "checkout_pct": if self.checkouts > 0 { round2(self.hit as f64 * 100.0 / self.checkouts as f64) } else { 0.0 },
             "t180": self.t180, "t140": self.t140, "t100": self.t100,
             "best_checkout": self.best_checkout, "best_leg": self.best_leg, "last_at": self.last_at,
+            "legs_won": self.legs_won, "legs_lost": self.legs_lost, "legs": self.legs_won + self.legs_lost,
+            "leg_pct": if self.legs_won + self.legs_lost > 0 { round2(self.legs_won as f64 * 100.0 / (self.legs_won + self.legs_lost) as f64) } else { 0.0 },
         })
     }
 }
@@ -458,7 +478,7 @@ pub fn summaries(games: &[Game], members: &BTreeMap<String, String>) -> BTreeMap
     let mut t: BTreeMap<String, Totals> = BTreeMap::new();
     for g in games.iter().filter(|g| g.counts()) {
         for p in g.players.iter().filter(|p| members.contains_key(&p.member) && p.darts > 0) {
-            t.entry(p.member.clone()).or_default().add(p, g.at);
+            t.entry(p.member.clone()).or_default().add(g, p);
         }
     }
     let ratings = super::coach::ratings(games, members);
@@ -479,7 +499,8 @@ pub fn member_stats(games: &[Game], member: &str, members: &BTreeMap<String, Str
     let mut tot = Totals::default();
     let mut form = Vec::new();
     let mut recent = Vec::new();
-    let mut h2h: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
+    // Per opponent: name, games, wins, legs won, legs lost
+    let mut h2h: BTreeMap<String, (String, usize, usize, i64, i64)> = BTreeMap::new();
     let mut boards: BTreeMap<String, usize> = BTreeMap::new();
     for g in games.iter().filter(|g| g.at >= from) {
         let Some(me) = g.players.iter().position(|p| p.member == member) else { continue };
@@ -487,15 +508,19 @@ pub fn member_stats(games: &[Game], member: &str, members: &BTreeMap<String, Str
         let others: Vec<&GamePlayer> = g.players.iter().enumerate().filter(|(i, _)| *i != me).map(|(_, o)| o).collect();
         let counts = g.counts() && p.darts > 0;
         if counts {
-            tot.add(p, g.at);
+            tot.add(g, p);
             form.push(json!({"at": g.at, "average": p.average, "won": p.won}));
             *boards.entry(g.board.clone()).or_default() += 1;
             for o in &others {
                 let key = who(o, members);
                 let name = members.get(&o.member).cloned().unwrap_or_else(|| o.name.clone());
-                let e = h2h.entry(key).or_insert((name, 0, 0));
+                let e = h2h.entry(key).or_insert((name, 0, 0, 0, 0));
                 e.1 += 1;
                 e.2 += p.won as usize;
+                if g.sets <= 1 {
+                    e.3 += p.legs;
+                    e.4 += o.legs;
+                }
             }
         }
         recent.push(json!({
@@ -509,7 +534,9 @@ pub fn member_stats(games: &[Game], member: &str, members: &BTreeMap<String, Str
     let form: Vec<Value> = form.into_iter().skip(n.saturating_sub(FORM_GAMES)).collect();
     // The whole match history, newest first
     recent.reverse();
-    let mut h2h: Vec<Value> = h2h.into_iter().map(|(k, (name, games, wins))| json!({"key": k, "name": name, "games": games, "wins": wins})).collect();
+    let mut h2h: Vec<Value> = h2h
+        .into_iter()
+        .map(|(k, (name, games, wins, lw, ll))| json!({"key": k, "name": name, "games": games, "wins": wins, "losses": games - wins, "legs_won": lw, "legs_lost": ll})).collect();
     h2h.sort_by_key(|v| std::cmp::Reverse(v["games"].as_u64().unwrap_or(0)));
     let mut boards: Vec<Value> = boards.into_iter().map(|(b, n)| json!({"board": b, "games": n})).collect();
     boards.sort_by_key(|v| std::cmp::Reverse(v["games"].as_u64().unwrap_or(0)));
@@ -521,7 +548,7 @@ pub fn leaderboards(games: &[Game], members: &BTreeMap<String, String>, from: i6
     let mut t: BTreeMap<String, Totals> = BTreeMap::new();
     for g in games.iter().filter(|g| g.counts() && g.at >= from) {
         for p in g.players.iter().filter(|p| members.contains_key(&p.member) && p.darts > 0) {
-            t.entry(p.member.clone()).or_default().add(p, g.at);
+            t.entry(p.member.clone()).or_default().add(g, p);
         }
     }
     // Ratings are all-time; the dart numbers come from every game in the period (bot games too)

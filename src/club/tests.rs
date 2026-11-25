@@ -389,3 +389,21 @@ fn best_checkout_and_best_leg_come_from_the_darts() {
     assert_eq!(fewest, 2);
     assert_eq!(leg_bests_from(&[]), (0, 0));
 }
+
+#[test]
+fn legs_won_and_lost_add_up_overall_and_per_opponent() {
+    let m = members();
+    let mut a = game_at("1", 10, ("THOR", "aaaaaaaaaaaa", 60.0, true), ("IRIS", "bbbbbbbbbbbb", 40.0));
+    (a.players[0].legs, a.players[1].legs) = (3, 2);
+    let mut b = game_at("2", 20, ("THOR", "aaaaaaaaaaaa", 50.0, false), ("IRIS", "bbbbbbbbbbbb", 55.0));
+    (b.players[0].legs, b.players[1].legs) = (1, 3);
+    // A set match: Autodarts' legs are the current set's only, so they don't count
+    let mut c = game_at("3", 30, ("THOR", "aaaaaaaaaaaa", 50.0, true), ("IRIS", "bbbbbbbbbbbb", 55.0));
+    c.sets = 3;
+    let s = member_stats(&[a, b, c], "aaaaaaaaaaaa", &m, 0);
+    let t = &s["totals"];
+    assert_eq!((t["legs_won"].as_i64(), t["legs_lost"].as_i64(), t["legs"].as_i64()), (Some(4), Some(5), Some(9)));
+    let iris = &s["head_to_head"][0];
+    assert_eq!((iris["games"].as_u64(), iris["wins"].as_u64(), iris["losses"].as_u64()), (Some(3), Some(2), Some(1)));
+    assert_eq!((iris["legs_won"].as_i64(), iris["legs_lost"].as_i64()), (Some(4), Some(5)));
+}

@@ -186,6 +186,7 @@ const COLS = {
   first9: ['First 9', p => sums[p.id]?.first9 || 0, 'desc'],
   games: ['Games', p => sums[p.id]?.games || 0, 'desc'],
   win_pct: ['Win %', p => sums[p.id]?.win_pct || 0, 'desc'],
+  legs: ['Legs won–lost', p => sums[p.id]?.legs_won || 0, 'desc'],
   t180: ['180s', p => sums[p.id]?.t180 || 0, 'desc'],
   best_checkout: ['Best checkout', p => sums[p.id]?.best_checkout || 0, 'desc'],
   rating: ['Rating', p => sums[p.id]?.rating || 0, 'desc'],
@@ -243,7 +244,7 @@ function results(list, q) {
       const tr = h('tr', { tabindex: '0', title: 'Open' },
         h('td', {}, h('span', { class: 'pl-trow-who' }, avatar(p), h('span', {}, h('b', {}, p.name), p.nickname ? h('small', {}, `“${p.nickname}”`) : null))),
         h('td', { class: 'is-num' }, fmt(s?.average)), h('td', { class: 'is-num' }, fmt(s?.first9)), h('td', { class: 'is-num' }, int(s?.games)),
-        h('td', { class: 'is-num' }, s?.games ? `${Math.round(s.win_pct)}%` : '–'), h('td', { class: 'is-num' }, int(s?.t180)), h('td', { class: 'is-num' }, int(s?.best_checkout)), h('td', { class: 'is-num' }, int(s?.rating)),
+        h('td', { class: 'is-num' }, s?.games ? `${Math.round(s.win_pct)}%` : '–'), h('td', { class: 'is-num' }, s?.legs ? `${s.legs_won}–${s.legs_lost}` : '–'), h('td', { class: 'is-num' }, int(s?.t180)), h('td', { class: 'is-num' }, int(s?.best_checkout)), h('td', { class: 'is-num' }, int(s?.rating)),
         h('td', { class: 'is-num' }, s?.last_at ? when(s.last_at) : '–'));
       tr.addEventListener('click', () => open(p.id));
       tr.addEventListener('keydown', e => { if (e.key === 'Enter') open(p.id); });
@@ -292,10 +293,12 @@ function statsBlock(st, c) {
       tile('Average', fmt(t.average, 2), 'per 3 darts'), tile('First 9', fmt(t.first9, 2)), tile('Checkout', t.checkout_pct ? `${fmt(t.checkout_pct)}%` : '–'),
       tile('180s', String(t.t180 || 0)), tile('140+', String(t.t140 || 0)), tile('100+', String(t.t100 || 0)),
       tile('Best checkout', int(t.best_checkout)), tile('Best leg', t.best_leg ? `${t.best_leg} darts` : '–'),
-      tile('Games', String(t.games || 0), t.games ? `${t.wins} won · ${Math.round(t.win_pct)}%` : ''), ratingTile(c))));
+      tile('Games', String(t.games || 0), t.games ? `${t.wins} won · ${t.games - t.wins} lost · ${Math.round(t.win_pct)}%` : ''),
+      tile('Legs', String(t.legs || 0), t.legs ? `${t.legs_won} won · ${t.legs_lost} lost · ${Math.round(t.leg_pct)}%` : ''), ratingTile(c))));
   const h2h = st.head_to_head.length
-    ? h('table', { class: 'pl-table' }, h('thead', {}, h('tr', {}, ['Opponent', 'Games', 'Won', ''].map(x => h('th', {}, x)))),
-      h('tbody', {}, st.head_to_head.slice(0, 12).map(o => h('tr', {}, h('td', {}, o.name), h('td', {}, o.games), h('td', {}, o.wins),
+    ? h('table', { class: 'pl-table' }, h('thead', {}, h('tr', {}, ['Opponent', 'Games', 'Won', 'Lost', 'Legs', ''].map(x => h('th', {}, x)))),
+      h('tbody', {}, st.head_to_head.slice(0, 12).map(o => h('tr', {}, h('td', {}, o.name), h('td', {}, o.games), h('td', {}, o.wins), h('td', {}, o.losses),
+        h('td', { title: 'Legs won–lost against them' }, o.legs_won || o.legs_lost ? `${o.legs_won}–${o.legs_lost}` : '–'),
         h('td', {}, h('span', { class: 'pl-bar' }, h('i', { style: `width:${Math.round((o.wins / o.games) * 100)}%` })))))))
     : muted('Nobody played yet.');
   box.append(h('div', { class: 'pl-cols' }, coachCard(c), recordsPanel(c, openGame)));
