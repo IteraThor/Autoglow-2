@@ -159,6 +159,13 @@ body[data-chroma="green"] .stage { background: #00b140; }
   clip-path: inset(0 0 0 0 round 40px);
 }
 
+/* Fewer than two cameras (data-cams, js/cameras.js): an unused camera is not drawn at all, so one camera
+   fills the screen without a corner picture, and with none the overlays sit on the background */
+.cams[data-cams="board"] #camPlayer,
+.cams[data-cams="player"] #camBoard,
+.cams[data-cams="none"] .cam,
+.cams:not([data-cams="both"]) .cam-divider { display: none; }
+
 /* Blurred copy of the picture behind it (js/fill.js): no empty bars when the picture does not cover the frame */
 .cam-fill {
   position: absolute;
@@ -497,6 +504,15 @@ img.avatar { object-fit: contain; }
   border-radius: var(--radius);
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55);
   outline: 2px solid var(--edge);
+}
+
+/* No camera: the dartboard takes the place of the picture, large in the middle above the scoreboard */
+.stage[data-cams="none"] .mini-board {
+  right: 826px;
+  bottom: auto;
+  top: 370px;
+  transform: translateY(-50%) scale(2);
+  transform-origin: center;
 }
 
 .db-title {

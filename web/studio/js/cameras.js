@@ -23,9 +23,31 @@ export function initCameras(cams, canvas) {
   blurCanvas = canvas;
 }
 
+// A slot is in use when it has a source; "No camera" (or none chosen yet) leaves it out of every layout
+export const hasCamera = cam => !!cam && (((cam.kind === 'server' || cam.kind === 'device') && !!cam.device_id) || (cam.kind === 'url' && !!cam.url));
+
+// Which cameras are in use: 'both', 'board', 'player' or 'none'
+export function camerasInUse() {
+  const cams = ctx.settings?.cameras || {};
+  const board = hasCamera(cams.board), player = hasCamera(cams.player);
+  return board && player ? 'both' : board ? 'board' : player ? 'player' : 'none';
+}
+
+// The layout that can be shown with the cameras in use: one camera always fills the screen, and with
+// none the overlays keep their split places over the background
+export function fitLayout(layout) {
+  const want = LAYOUTS.includes(layout) ? layout : 'split';
+  const use = camerasInUse();
+  return use === 'both' ? want : use === 'none' ? 'split' : use;
+}
+
+// Shows a layout and returns the one actually shown
 export function setLayout(layout) {
-  const name = LAYOUTS.includes(layout) ? layout : 'split';
+  const name = fitLayout(layout);
+  const use = camerasInUse();
   if (camsBox.dataset.layout !== name) camsBox.dataset.layout = name;
+  if (camsBox.dataset.cams !== use) camsBox.dataset.cams = use;
+  return name;
 }
 
 function emptyCam(box, title, note, action) {
@@ -194,8 +216,10 @@ export function applyCameras(chroma) {
   cameraKey = key;
   resetDartZoom();
   stopStreams();
-  startCamera(boxes.board, cams.board || {}, 'Board camera', chroma);
-  startCamera(boxes.player, cams.player || {}, 'Player camera', chroma);
+  for (const [slot, title] of [['board', 'Board camera'], ['player', 'Player camera']]) {
+    if (hasCamera(cams[slot])) startCamera(boxes[slot], cams[slot], title, chroma);
+    else boxes[slot].replaceChildren();
+  }
 }
 
 // --- Idle background: the board camera, softly blurred (fill.js), behind the idle screen ---------------

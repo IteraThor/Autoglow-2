@@ -6,7 +6,7 @@
 
 import './tv-compat.js';
 import { ctx, displayName, t, tn, el } from './ctx.js';
-import { initCameras, applyCameras, setLayout, setBlur } from './cameras.js';
+import { initCameras, applyCameras, setLayout, setBlur, fitLayout, camerasInUse } from './cameras.js';
 import { onDarts, outputDelay } from './darts.js';
 import { renderBoard, renderVisit, renderPlayerCard } from './scoreboard.js';
 import { MiniBoard } from './dartboard.js';
@@ -261,11 +261,18 @@ function directLayout(state) {
     if (phase === 'throw') want = 'board';
     else if (phase.startsWith('takeout')) want = 'split';
   }
+  // One camera or none: nothing to switch between
+  want = fitLayout(want);
   if (want === currentLayout || Date.now() - layoutSince < LAYOUT_DWELL_MS) return;
-  currentLayout = want;
   layoutSince = Date.now();
-  setLayout(want);
-  stage.dataset.layout = want;
+  showLayout(want);
+}
+
+// Cameras and overlays in one layout; with fewer than two cameras the layout that fits them
+function showLayout(want) {
+  currentLayout = setLayout(want);
+  stage.dataset.layout = currentLayout;
+  stage.dataset.cams = camerasInUse();
 }
 
 // --- Rendering of the live overlays ---------------------------------------------------------------
@@ -275,7 +282,8 @@ function renderLive(state) {
   renderVisit(state);
   const turn = state.turn || {};
   const owner = state.players[turn.player] || state.players[state.active];
-  const show = ctx.settings?.show_dartboard !== false && owner;
+  // Without a camera the dartboard is the picture: always shown, large in the middle (live.css)
+  const show = (ctx.settings?.show_dartboard !== false || stage.dataset.cams === 'none') && owner;
   $('miniBoard').hidden = !show;
   if (show) {
     const current = new Set((turn.throws || []).map(t => t.id));
@@ -468,6 +476,8 @@ function applySettings(settings) {
   document.title = `${t('brand_main')} ${t('brand_accent')}`.trim();
   stage.classList.toggle('no-overlay', settings.show_overlay === false);
   applyCameras(CHROMA);
+  // A camera switched on or off: fit the layout to them at once
+  if (currentLayout && (fitLayout(currentLayout) !== currentLayout || stage.dataset.cams !== camerasInUse())) showLayout(currentLayout);
 }
 
 // --- Text preview: where an editable text appears (Studio › Broadcast › Texts) ---------------------
@@ -588,9 +598,7 @@ function showcase(key, inPlace = false) {
   const sample = sampleState();
   const live = liveSample(key);
   // The text preview always shows split; the director takes over again when it ends (endShowcase)
-  currentLayout = 'split';
-  setLayout('split');
-  stage.dataset.layout = 'split';
+  showLayout('split');
   if (spec.view.startsWith('idle-')) {
     setScene('idle');
     showIdleSlide(spec.view.slice(5), sample);
@@ -600,9 +608,7 @@ function showcase(key, inPlace = false) {
     playIntro(sample);
   } else if (spec.view === 'bulloff') {
     const bo = sampleBullOff(spec.sample);
-    currentLayout = 'board';
-    setLayout('board');
-    stage.dataset.layout = 'board';
+    showLayout('board');
     setScene('bulloff');
     resetBullOff();
     renderBullOff(spec.kind === 'tie' ? tieView(bo) : bo);
@@ -701,9 +707,7 @@ async function loadSettings() {
 }
 
 loadSettings().then(() => {
-  currentLayout = ctx.settings?.layout || 'split';
-  setLayout(currentLayout);
-  stage.dataset.layout = currentLayout;
+  showLayout(ctx.settings?.layout || 'split');
   poll();
   setInterval(loadSettings, SETTINGS_MS);
 });

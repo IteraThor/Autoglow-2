@@ -69,9 +69,20 @@ const LAYOUTS = {
   player: { label: 'Player', title: 'Player full screen, board small', boxes: [['4%', '8%', '92%', '84%'], ['66%', '54%', '28%', '34%']] }
 };
 
+// A camera slot in use (same rule as the output, web/studio/js/cameras.js)
+const hasCamera = cam => !!cam && (((cam.kind === 'server' || cam.kind === 'device') && !!cam.device_id) || (cam.kind === 'url' && !!cam.url));
+
 export function layoutPicker() {
   const root = h('div', { class: 'stu-layouts', role: 'radiogroup', 'aria-label': 'Cameras on screen' });
   const render = () => {
+    // One camera fills the screen and none shows the overlays on the background: no layout to pick
+    const used = ['board', 'player'].filter(k => hasCamera(S().cameras?.[k]));
+    if (used.length < 2) {
+      root.replaceChildren(h('p', { class: 'stu-hint' }, used.length
+        ? `Only the ${used[0]} camera is on, so it fills the whole screen. Choose a second camera under Cameras for split screen and switching.`
+        : 'No camera is on: the scoreboard and graphics show on the Studio background. Choose a camera under Cameras to show one.'));
+      return;
+    }
     const cur = S().auto_direct ? 'auto' : S().layout;
     root.replaceChildren(...Object.entries(LAYOUTS).map(([id, l]) => {
       const pic = h('span', { class: 'stu-layout-pic' }, l.boxes.map(([left, top, w, hh]) => h('span', { style: `left:${left};top:${top};width:${w};height:${hh}` })));

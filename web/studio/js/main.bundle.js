@@ -1089,9 +1089,24 @@ void main() {
     boxes = { board: cams.querySelector("#camBoard"), player: cams.querySelector("#camPlayer") };
     blurCanvas = canvas;
   }
+  var hasCamera = (cam) => !!cam && ((cam.kind === "server" || cam.kind === "device") && !!cam.device_id || cam.kind === "url" && !!cam.url);
+  function camerasInUse() {
+    var _a;
+    const cams = ((_a = ctx.settings) == null ? void 0 : _a.cameras) || {};
+    const board3 = hasCamera(cams.board), player = hasCamera(cams.player);
+    return board3 && player ? "both" : board3 ? "board" : player ? "player" : "none";
+  }
+  function fitLayout(layout) {
+    const want = LAYOUTS.includes(layout) ? layout : "split";
+    const use = camerasInUse();
+    return use === "both" ? want : use === "none" ? "split" : use;
+  }
   function setLayout(layout) {
-    const name = LAYOUTS.includes(layout) ? layout : "split";
+    const name = fitLayout(layout);
+    const use = camerasInUse();
     if (camsBox.dataset.layout !== name) camsBox.dataset.layout = name;
+    if (camsBox.dataset.cams !== use) camsBox.dataset.cams = use;
+    return name;
   }
   function emptyCam(box, title, note, action) {
     const empty = el("div", "cam-empty");
@@ -1263,8 +1278,10 @@ void main() {
     cameraKey = key2;
     resetDartZoom();
     stopStreams();
-    startCamera(boxes.board, cams.board || {}, "Board camera", chroma);
-    startCamera(boxes.player, cams.player || {}, "Player camera", chroma);
+    for (const [slot, title] of [["board", "Board camera"], ["player", "Player camera"]]) {
+      if (hasCamera(cams[slot])) startCamera(boxes[slot], cams[slot], title, chroma);
+      else boxes[slot].replaceChildren();
+    }
   }
   function drawBlur() {
     const source = boxes.board.querySelector(MEDIA_SELECTOR) || boxes.player.querySelector(MEDIA_SELECTOR);
@@ -2607,11 +2624,15 @@ void main() {
       if (phase === "throw") want = "board";
       else if (phase.startsWith("takeout")) want = "split";
     }
+    want = fitLayout(want);
     if (want === currentLayout || Date.now() - layoutSince < LAYOUT_DWELL_MS) return;
-    currentLayout = want;
     layoutSince = Date.now();
-    setLayout(want);
-    stage.dataset.layout = want;
+    showLayout(want);
+  }
+  function showLayout(want) {
+    currentLayout = setLayout(want);
+    stage.dataset.layout = currentLayout;
+    stage.dataset.cams = camerasInUse();
   }
   function renderLive(state) {
     var _a;
@@ -2620,7 +2641,7 @@ void main() {
     renderVisit(state);
     const turn = state.turn || {};
     const owner = state.players[turn.player] || state.players[state.active];
-    const show = ((_a = ctx.settings) == null ? void 0 : _a.show_dartboard) !== false && owner;
+    const show = (((_a = ctx.settings) == null ? void 0 : _a.show_dartboard) !== false || stage.dataset.cams === "none") && owner;
     $4("miniBoard").hidden = !show;
     if (show) {
       const current = new Set((turn.throws || []).map((t2) => t2.id));
@@ -2811,6 +2832,7 @@ void main() {
     document.title = `${t("brand_main")} ${t("brand_accent")}`.trim();
     stage.classList.toggle("no-overlay", settings.show_overlay === false);
     applyCameras(CHROMA);
+    if (currentLayout && (fitLayout(currentLayout) !== currentLayout || stage.dataset.cams !== camerasInUse())) showLayout(currentLayout);
   }
   var SHOWCASE = {
     event_title: { view: "idle-brand", sel: ".sb-title" },
@@ -2918,9 +2940,7 @@ void main() {
     if (spec.view !== "leg") hideLegCard();
     const sample = sampleState();
     const live = liveSample(key2);
-    currentLayout = "split";
-    setLayout("split");
-    stage.dataset.layout = "split";
+    showLayout("split");
     if (spec.view.startsWith("idle-")) {
       setScene("idle");
       showIdleSlide(spec.view.slice(5), sample);
@@ -2930,9 +2950,7 @@ void main() {
       playIntro(sample);
     } else if (spec.view === "bulloff") {
       const bo = sampleBullOff(spec.sample);
-      currentLayout = "board";
-      setLayout("board");
-      stage.dataset.layout = "board";
+      showLayout("board");
       setScene("bulloff");
       resetBullOff();
       renderBullOff(spec.kind === "tie" ? tieView(bo) : bo);
@@ -3029,9 +3047,7 @@ void main() {
   }
   loadSettings().then(() => {
     var _a;
-    currentLayout = ((_a = ctx.settings) == null ? void 0 : _a.layout) || "split";
-    setLayout(currentLayout);
-    stage.dataset.layout = currentLayout;
+    showLayout(((_a = ctx.settings) == null ? void 0 : _a.layout) || "split");
     poll();
     setInterval(loadSettings, SETTINGS_MS);
   });

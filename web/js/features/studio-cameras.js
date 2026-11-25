@@ -360,7 +360,7 @@ function pictureControls(slot, cam) {
 function sourceSelect(slot, cam) {
   const isServer = id => cam.kind === 'server' && cam.device_id === id;
   const select = h('select', { class: 'stu-select', 'aria-label': `${slot.label} source` },
-    h('option', { value: 'none' }, 'No camera'),
+    h('option', { value: 'none' }, 'No camera (left out of the picture)'),
     // Cameras the Autodarts Board Manager streams: shared with dart detection, nothing to free up
     serverCams.some(c => c.source === 'autodarts') ? h('optgroup', { label: 'Autodarts cameras – shared with dart detection' },
       serverCams.filter(c => c.source === 'autodarts').map(c => h('option', { value: `server:${c.id}`, selected: isServer(c.id) }, c.name))
