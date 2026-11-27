@@ -1,6 +1,6 @@
 // AutoGlow 2 - Studio › Cameras: the board and player camera. Each shows its live picture; drag it to
 // move, scroll or pinch to zoom, double-click for the whole picture. Straighten, dart zoom and a USB
-// camera's picture controls fold under it. Every change saves by itself (studio-core.js).
+// camera's picture (automatic or by hand) fold under it. Every change saves by itself (studio-core.js).
 
 import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
@@ -246,16 +246,16 @@ function dartZoomControls() {
       'The screens show the cameras and the scoreboard a few seconds late; meanwhile Autodarts on this computer reports each dart, so the board camera zooms to it before the picture shows it landing. Off: no delay.'));
 }
 
-// --- Picture controls of a USB camera (V4L2): brightness, white balance, exposure... ---------------
-// Set on the camera at once; saved with the slot, so they come back when the camera opens again.
+// --- Picture of a USB camera (V4L2): automatic, then by hand if wanted ------------------------------
+// Start: the player stands where they throw; the server finds their face and sets exposure, white
+// balance, contrast, colour and sharpness, then locks them (camera automatics off). "Adjust by hand"
+// shows every control with its current value, before or after that. Everything is saved with the slot
+// and set again whenever the camera opens.
 const isUsbCam = cam => cam.kind === 'server' && cam.device_id && !cam.device_id.startsWith('autodarts:');
 
-function pictureControls(slot, cam) {
-  const body = h('div', { class: 'stu-fold-body studio-picture-body' });
-  const panel = h('details', { class: 'stu-fold', hidden: !isUsbCam(cam) },
-    h('summary', {}, icon('play', 12), 'Picture', h('small', {}, 'brightness, white balance, exposure')), body);
+function manualControls(slot, cam, changed) {
+  const body = h('div', { class: 'studio-picture-body' });
   const rows = new Map();   // control id -> { ctrl, input, value, row }
-  let loadedFor = null;
   let pending = null;
 
   const showValue = (entry, value) => {
@@ -287,6 +287,7 @@ function pictureControls(slot, cam) {
   };
   const setValue = (ctrl, value, now) => {
     cam.controls = { ...(cam.controls || {}), [ctrl.id]: value };
+    changed();
     clearTimeout(pending);
     // Sliders send while dragging, a few times a second at most
     if (now) send({ values: { [ctrl.id]: value } });
@@ -316,42 +317,149 @@ function pictureControls(slot, cam) {
     return entry;
   };
 
-  const load = async () => {
-    loadedFor = cam.device_id;
+  // Reads the camera's current values (also after an automatic run)
+  body.load = async () => {
+    const id = cam.device_id;
     rows.clear();
     body.replaceChildren(previewNote('Reading the camera…'));
     try {
-      const { controls } = await api(`/api/studio/camera-controls?cam=${encodeURIComponent(cam.device_id)}`);
-      if (loadedFor !== cam.device_id) return;
+      const { controls } = await api(`/api/studio/camera-controls?cam=${encodeURIComponent(id)}`);
+      if (id !== cam.device_id) return;
       if (!controls.length) { body.replaceChildren(previewNote('This camera has no adjustable controls.')); return; }
       for (const c of controls) rows.set(c.id, controlRow(c));
-      const reset = h('button', { type: 'button', class: 'stu-btn', onclick: async () => {
-        cam.controls = {};
-        await send({ reset: true });
-      } }, icon('reset', 14), 'Camera defaults');
       // Switches first: they decide which sliders are active
       const entries = [...rows.values()];
       body.replaceChildren(
         h('div', { class: 'studio-picture-switches' }, entries.filter(e => e.ctrl.type !== 'int').map(e => e.row)),
         h('div', { class: 'studio-picture-grid' }, entries.filter(e => e.ctrl.type === 'int').map(e => e.row)),
-        h('div', { class: 'studio-picture-foot' },
-          h('small', { class: 'stu-hint' }, 'Changes go to the camera at once. Turn off the automatic white balance or exposure to set them by hand.'),
-          reset));
+        h('small', { class: 'stu-hint' }, 'Changes go to the camera at once. A switched-on automatic (white balance, exposure) greys out its slider. Double-click a slider for its default.'));
       applyState(controls);
     } catch (err) {
-      loadedFor = null;
       body.replaceChildren(previewNote(err.message));
     }
   };
-  panel.addEventListener('toggle', () => { if (panel.open && loadedFor !== cam.device_id) load(); });
+  return body;
+}
+
+// The look of the automatic picture (web/studio/js/look.js), by hand too
+function lookControls(cam, reframe) {
+  const body = h('div', { class: 'studio-picture-grid' });
+  const pct = v => `${Math.round(v * 100)} %`;
+  const sliders = [
+    ['Warmth', 'warmth', -3, 3, 0.1, v => (v > 0 ? '+' : '') + v.toFixed(1), 'Colder or warmer; 0 is neutral grey'],
+    ['Colour', 'vibrance', 0, 1, 0.05, pct, 'More colour for dull colours, little for strong ones and skin; 0 is as the camera sends it'],
+    ['Contrast', 'contrast', 0, 1, 0.05, pct, 'Gentle S-curve: deeper shadows, brighter highlights'],
+    ['Shadows', 'shadows', 0, 0.8, 0.05, pct, 'Brightens dark parts of the picture, as phones do'],
+    ['Highlights', 'highlights', 0, 0.6, 0.05, pct, 'Holds back bright parts (a lit wall); clipped spots stay white']
+  ];
+  const inputs = sliders.map(([label, key, min, max, step, fmt, hint]) => {
+    const value = h('span', { class: 'studio-range-value' });
+    const input = h('input', { type: 'range', min, max, step, 'aria-label': `Look ${label}` });
+    input.addEventListener('input', () => {
+      if (!cam.look) return;
+      cam.look[key] = Number(input.value);
+      value.textContent = fmt(cam.look[key]);
+      reframe();
+      saveCameras();
+    });
+    body.append(rangeRow(label, input, value, hint));
+    return { key, input, value, fmt };
+  });
+  body.show = () => {
+    for (const { key, input, value, fmt } of inputs) {
+      const v = Number(cam.look?.[key] ?? 0);
+      input.value = v;
+      value.textContent = fmt(v);
+    }
+  };
+  return body;
+}
+
+function pictureControls(slot, cam, reframe) {
+  const player = slot.id === 'player';
+  const state = h('small', { class: 'stu-hint' });
+  const start = h('button', { type: 'button', class: 'stu-btn is-primary' }, icon('play', 14), h('span'));
+  const auto = h('button', { type: 'button', class: 'stu-btn', title: 'Back to the camera\'s own settings and automatics' }, icon('reset', 14), 'Camera automatic');
+  const locked = () => Object.keys(cam.controls || {}).length > 0;
+  let lookBox = null;
+  let look = null;
+  const showState = () => {
+    if (!look) return;
+    start.lastChild.textContent = locked() ? 'Set again' : 'Start';
+    auto.hidden = !locked() && !cam.look;
+    lookBox.hidden = !cam.look;
+    look.show();
+    state.textContent = locked() ? 'Saved: the camera opens with these settings.' : 'Not set yet: the camera adjusts itself, so the picture can change during the game.';
+  };
+  look = lookControls(cam, reframe);
+  lookBox = h('div', { class: 'studio-look' }, h('strong', {}, 'Look'), h('small', { class: 'stu-hint' }, 'Picture processing like a phone or TV, done by the graphics chip where the picture is shown: white balance from the room, noise filter, brighter shadows, natural skin, sharpening. The camera stream stays as it is.'), look);
+  const manual = manualControls(slot, cam, showState);
+  const byHand = h('details', { class: 'stu-fold studio-picture-hand' },
+    h('summary', {}, icon('play', 12), 'Adjust by hand', h('small', {}, 'brightness, white balance, exposure…')), manual);
+  let manualFor = null;
+  const reloadManual = () => { if (byHand.open) { manualFor = cam.device_id; manual.load(); } else manualFor = null; };
+  byHand.addEventListener('toggle', () => { if (byHand.open && manualFor !== cam.device_id) reloadManual(); });
+
+  const panel = h('details', { class: 'stu-fold', hidden: !isUsbCam(cam) },
+    h('summary', {}, icon('play', 12), 'Picture', h('small', {}, 'automatic, or by hand')),
+    h('div', { class: 'stu-fold-body' },
+      h('small', { class: 'stu-hint' }, player
+        ? 'Stand where you throw and look at the board, then press Start. AutoGlow finds your face and sets brightness, white balance, contrast, colour and sharpness, then locks them so the picture does not change while you play. Takes about 15 seconds. Fine-tune by hand afterwards if you like.'
+        : 'Light the board as for a game, then press Start. AutoGlow sets the picture from the middle of the view and locks it. Takes about 15 seconds. Fine-tune by hand afterwards if you like.'),
+      h('div', { class: 'stu-row' }, start, auto),
+      state,
+      lookBox,
+      byHand));
+  const busy = on => { start.disabled = on; auto.disabled = on; byHand.classList.toggle('is-busy', on); };
+
+  start.addEventListener('click', async () => {
+    busy(true);
+    start.lastChild.textContent = 'Setting…';
+    state.textContent = player ? 'Stay in your throwing position…' : 'Measuring…';
+    try {
+      const res = await api('/api/studio/camera-auto', { method: 'POST', body: { cam: cam.device_id, slot: slot.id }, timeout: 90000 });
+      cam.controls = res.controls || {};
+      cam.look = res.look || null;
+      reframe();
+      showState();
+      const s = res.summary || {};
+      state.textContent = [
+        res.face ? 'Face found' : player ? 'No face found' : null,
+        s.exposure_ms != null ? `exposure ${s.exposure_ms} ms` : null,
+        s.gain != null ? `gain ${s.gain}` : null,
+        s.white_balance_k ? `white balance ${s.white_balance_k} K` : s.white_balance_camera ? 'white balance from the camera' : null
+      ].filter(Boolean).join(' · ') + '. Locked.';
+      (res.notes || []).forEach(n => toast.warning(n));
+    } catch (err) {
+      toast.error(err.message);
+      showState();
+    } finally {
+      busy(false);
+      reloadManual();
+    }
+  });
+  auto.addEventListener('click', async () => {
+    busy(true);
+    try {
+      await api('/api/studio/camera-controls', { method: 'POST', body: { cam: cam.device_id, slot: slot.id, reset: true } });
+      cam.controls = {};
+      cam.look = null;
+      reframe();
+      showState();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      busy(false);
+      reloadManual();
+    }
+  });
+  showState();
 
   // Called when the slot's source changes
   panel.refresh = () => {
     panel.hidden = !isUsbCam(cam);
-    if (loadedFor !== cam.device_id) {
-      loadedFor = null;
-      if (panel.open && !panel.hidden) load();
-    }
+    showState();
+    if (manualFor !== cam.device_id) reloadManual();
   };
   return panel;
 }
@@ -460,14 +568,14 @@ function cameraCard(slot) {
 
   const select = sourceSelect(slot, cam);
   const url = h('input', { class: 'stu-input', type: 'url', placeholder: 'http://camera-ip/stream.mjpg', value: cam.url || '', hidden: cam.kind !== 'url', 'aria-label': 'Stream URL' });
-  const picture = pictureControls(slot, cam);
+  const picture = pictureControls(slot, cam, () => box.reframe());
   const update = () => {
     const [kind, ...rest] = select.value.split(':');
     const id = rest.join(':');
     if (kind === 'server') {
       const sc = serverCams.find(c => c.id === id);
       // Picture controls belong to the camera they were set on
-      if (cam.device_id !== id) cam.controls = {};
+      if (cam.device_id !== id) { cam.controls = {}; cam.look = null; }
       Object.assign(cam, { kind, device_id: id, label: sc?.name || cam.label });
       if (sc?.autodarts) toast.warning('Autodarts uses this camera for dart detection. Choose it under "Autodarts cameras" to share it.');
     } else if (kind === 'device') {

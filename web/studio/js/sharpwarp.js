@@ -13,14 +13,21 @@
 //    samples it with AMD FidelityFX Super Resolution 1's edge-adaptive upscaler (EASU), which follows the
 //    direction of edges instead of the pixel grid, so slanted and curved wires stay smooth, not stepped.
 //
+// A camera with a look (the automatic picture, look.js) is drawn this way too, also without a warp: the
+// look runs between 1 and 2 (it needs a small blurred copy of the picture: two more tiny passes), and the
+// averaged picture is sharpened a little everywhere (LOOK_SHARPEN), as phones do after their noise filter.
+//
 // The canvas sits in the picture's place and takes the same framing transform (zoom, pan, rotation,
 // mirror, dart zoom) minus the warp. Without WebGL, or for a camera from another site, the CSS warp stays.
 
 import { MEDIA_SELECTOR } from './livecam.js';
+import { FRAG_TONE_BASE, FRAG_TONE_BLUR, FRAG_LOOK, TONE_WIDTH, lookParams } from './look.js';
 
 const MAX_SIDE = 2560;      // Canvas size cap (px): enough for 1440p screens, light on TVs
 const IMG_FRAME_MS = 30;    // MJPEG pictures give no frame events; uploaded at most this often
 const MEASURE_EVERY = 15;   // frames between two measurements of the box on screen (a layout read)
+const LOOK_SHARPEN = 0.6;   // unsharp mask everywhere on a camera with a look (after the noise filter)
+const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 const VERT = `
 attribute vec2 aPos;
@@ -74,6 +81,7 @@ uniform vec2 uContent;     // the picture's size in the element (px)
 uniform vec2 uTexSize;
 uniform float uOutScale;   // canvas px per element px
 uniform float uAmount;
+uniform float uBaseAmount;  // everywhere, enlarged or not
 vec2 project(vec2 p, out float w) { vec3 q = uH * vec3(p, 1.0); w = q.z; return q.xy / q.z; }
 vec3 px(vec2 uv, float dx, float dy) { return texture2D(uTex, uv + vec2(dx, dy) / uTexSize).rgb; }
 void main() {
@@ -91,7 +99,7 @@ void main() {
   vec3 n = px(uv, 0.0, -1.0), s = px(uv, 0.0, 1.0), w = px(uv, -1.0, 0.0), ea = px(uv, 1.0, 0.0);
   vec3 nw = px(uv, -1.0, -1.0), ne = px(uv, 1.0, -1.0), sw = px(uv, -1.0, 1.0), se = px(uv, 1.0, 1.0);
   vec3 blur = (2.0 * (n + s + w + ea) + (nw + ne + sw + se)) / 12.0;
-  vec3 sharp = c + uAmount * stretch * (c - blur);
+  vec3 sharp = c + (uAmount * stretch + uBaseAmount) * (c - blur);
   // No halos: stay within the 3x3 neighbourhood (a little leeway keeps edges crisp)
   vec3 lo = min(min(min(n, s), min(w, ea)), min(min(nw, ne), min(sw, se)));
   vec3 hi = max(max(max(n, s), max(w, ea)), max(max(nw, ne), max(sw, se)));
@@ -238,7 +246,10 @@ function createGl(canvas) {
   const vs = compile(gl, gl.VERTEX_SHADER, VERT);
   const passes = {
     average: program(gl, vs, FRAG_AVERAGE, ['uElem', 'uCur', 'uPrev', 'uHist', 'uTexSize', 'uBase', 'uReset']),
-    sharpen: program(gl, vs, FRAG_SHARPEN, ['uElem', 'uTex', 'uH', 'uContent', 'uTexSize', 'uOutScale', 'uAmount']),
+    sharpen: program(gl, vs, FRAG_SHARPEN, ['uElem', 'uTex', 'uH', 'uContent', 'uTexSize', 'uOutScale', 'uAmount', 'uBaseAmount']),
+    toneBase: program(gl, vs, HEAD + FRAG_TONE_BASE, ['uElem', 'uTex', 'uTexSize', 'uSmall', 'uGain']),
+    toneBlur: program(gl, vs, HEAD + FRAG_TONE_BLUR, ['uElem', 'uTex', 'uSmall', 'uDir']),
+    look: program(gl, vs, HEAD + FRAG_LOOK, ['uElem', 'uTex', 'uBase', 'uTexSize', 'uGain', 'uBlack', 'uWhite', 'uContrast', 'uVibrance', 'uShadows', 'uHighlights']),
     warp: program(gl, vs, FRAG_WARP, ['uElem', 'uTex', 'uHinv', 'uContent', 'uTexSize'])
   };
   const buf = gl.createBuffer();
@@ -255,6 +266,9 @@ function createGl(canvas) {
     raw: [texture(gl), texture(gl)],    // this upload and the one before
     hist: [texture(gl), texture(gl)],   // running average, ping-pong
     sharp: texture(gl),
+    small: [texture(gl), texture(gl)],  // the small blurred copy for the look, ping-pong
+    looked: texture(gl),               // the averaged picture with the look
+    smallSize: [0, 0],
     fbo: gl.createFramebuffer(),
     halfType: half && halfLinear ? half.HALF_FLOAT_OES : null,
     histType: null,
@@ -279,6 +293,15 @@ function allocate(g, w, h) {
     return ok;
   };
   g.histType = g.halfType && tryType(g.halfType) ? g.halfType : (tryType(gl.UNSIGNED_BYTE) ? gl.UNSIGNED_BYTE : null);
+  const sw = Math.min(TONE_WIDTH, w);
+  const sh = Math.max(1, Math.round(h * sw / w));
+  for (const tex of g.small) {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh, 0, gl.RGBA, g.histType || gl.UNSIGNED_BYTE, null);
+  }
+  gl.bindTexture(gl.TEXTURE_2D, g.looked);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  g.smallSize = [sw, sh];
   g.size = [w, h];
   g.reset = true;
   return g.histType !== null;
@@ -308,10 +331,12 @@ const active = new Set();
 let loopOn = false;
 
 // Called by framing.js whenever the warp is worked out. m: the warp homography (element px around the
-// centre, row-major) or null; sharpen 0..1. Returns true when the canvas draws the picture.
-export function setSharpWarp(box, media, m, sharpen) {
+// centre, row-major) or null; sharpen 0..1; look: the camera's saved look or null. Returns true when the
+// canvas draws the picture (with the look, when there is one).
+export function setSharpWarp(box, media, m, sharpen, look) {
   const st = box._sharp || (box._sharp = {});
-  const want = !!(m && media && sharpen > 0 && !st.failed);
+  const want = !!(media && !st.failed && ((m && sharpen > 0) || look));
+  if (want && !m) m = IDENTITY;
   const hinv = want ? invert(m) : null;
   if (!hinv) {
     stop(box);
@@ -323,16 +348,33 @@ export function setSharpWarp(box, media, m, sharpen) {
   st.hinv = hinv;
   // The averaged picture takes more: 1.0 on the slider is 4x the smeared detail back at 2x enlargement
   st.amount = sharpen * 4;
+  st.look = look ? lookParams(look) : null;
   if (!st.canvas) {
     const canvas = document.createElement('canvas');
     canvas.className = 'cam-sharp';
     try {
       st.g = createGl(canvas);
-    } catch {
+    } catch (e) {
+      console.warn('Studio camera: no WebGL picture', e);
       st.g = null;
     }
     if (!st.g) { st.failed = true; return false; }
     st.canvas = canvas;
+    // The browser may drop WebGL (GPU reset, too many contexts): meanwhile the CSS picture shows, and
+    // once the context is back the canvas takes over again
+    canvas.addEventListener('webglcontextlost', e => e.preventDefault());
+    canvas.addEventListener('webglcontextrestored', () => {
+      try {
+        st.g = createGl(canvas);
+      } catch {
+        st.g = null;
+      }
+      if (!st.g) return;
+      st.failed = false;
+      st.dirty = true;
+      active.add(box);
+      if (!loopOn) { loopOn = true; requestAnimationFrame(frame); }
+    });
   }
   active.add(box);
   st.dirty = true;
@@ -342,7 +384,7 @@ export function setSharpWarp(box, media, m, sharpen) {
 
 function stop(box) {
   active.delete(box);
-  box.classList.remove('sharp-on');
+  box.classList.remove('sharp-on', 'gl-look');
   box._sharp?.canvas?.remove();
 }
 
@@ -351,7 +393,8 @@ function frame(now) {
     if (!box.isConnected) { stop(box); continue; }
     try {
       draw(box, now);
-    } catch {
+    } catch (e) {
+      console.warn('Studio camera: WebGL drawing stopped', e);
       // A picture from another site cannot be read by WebGL: keep the CSS warp for this box
       box._sharp.failed = true;
       stop(box);
@@ -452,15 +495,50 @@ function draw(box, now) {
   g.reset = false;
   g.turn = 1 - g.turn;
 
+  // The look: small blurred copy, then the look itself
+  const lk = st.look;
+  if (lk) {
+    const [sw, sh] = g.smallSize;
+    p = passes.toneBase;
+    pass(g, p, g.small[0], sw, sh);
+    bindTex(gl, 0, histOut, p.u.uTex);
+    gl.uniform2f(p.u.uTexSize, nw, nh);
+    gl.uniform2f(p.u.uSmall, sw, sh);
+    gl.uniform3fv(p.u.uGain, lk.gain);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    p = passes.toneBlur;
+    for (const [from, to, dir] of [[0, 1, [1, 0]], [1, 0, [0, 1]]]) {
+      pass(g, p, g.small[to], sw, sh);
+      bindTex(gl, 0, g.small[from], p.u.uTex);
+      gl.uniform2f(p.u.uSmall, sw, sh);
+      gl.uniform2f(p.u.uDir, dir[0], dir[1]);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    p = passes.look;
+    pass(g, p, g.looked, nw, nh);
+    bindTex(gl, 0, histOut, p.u.uTex);
+    bindTex(gl, 1, g.small[0], p.u.uBase);
+    gl.uniform2f(p.u.uTexSize, nw, nh);
+    gl.uniform3fv(p.u.uGain, lk.gain);
+    gl.uniform1f(p.u.uBlack, lk.black);
+    gl.uniform1f(p.u.uWhite, lk.white);
+    gl.uniform1f(p.u.uContrast, lk.contrast);
+    gl.uniform1f(p.u.uVibrance, lk.vibrance);
+    gl.uniform1f(p.u.uShadows, lk.shadows);
+    gl.uniform1f(p.u.uHighlights, lk.highlights);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
   // 2. Sharpen
   p = passes.sharpen;
   pass(g, p, g.sharp, nw, nh);
-  bindTex(gl, 0, histOut, p.u.uTex);
+  bindTex(gl, 0, lk ? g.looked : histOut, p.u.uTex);
   gl.uniformMatrix3fv(p.u.uH, false, colMajor(st.h));
   gl.uniform2f(p.u.uContent, content[0], content[1]);
   gl.uniform2f(p.u.uTexSize, nw, nh);
   gl.uniform1f(p.u.uOutScale, canvas.width / w);
   gl.uniform1f(p.u.uAmount, st.amount);
+  gl.uniform1f(p.u.uBaseAmount, lk ? LOOK_SHARPEN : 0);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
   // 3. Warp onto the screen
@@ -473,4 +551,5 @@ function draw(box, now) {
   gl.uniform2f(p.u.uTexSize, nw, nh);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   box.classList.add('sharp-on');
+  box.classList.toggle('gl-look', !!lk);
 }

@@ -41,8 +41,8 @@
     Element.prototype.replaceChildren = function() {
       while (this.firstChild) this.removeChild(this.firstChild);
       for (let i = 0; i < arguments.length; i++) {
-        const n = arguments[i];
-        this.appendChild(typeof n === "string" ? document.createTextNode(n) : n);
+        const n2 = arguments[i];
+        this.appendChild(typeof n2 === "string" ? document.createTextNode(n2) : n2);
       }
     };
   }
@@ -68,7 +68,7 @@
     var _a, _b, _c, _d;
     return hiddenText(key2) ? "" : ((_b = (_a = ctx.settings) == null ? void 0 : _a.texts) == null ? void 0 : _b[key2]) || ((_d = (_c = ctx.settings) == null ? void 0 : _c.text_defaults) == null ? void 0 : _d[key2]) || "";
   };
-  var tn = (key2, n) => t(key2) ? `${t(key2)} ${n}` : "";
+  var tn = (key2, n2) => t(key2) ? `${t(key2)} ${n2}` : "";
   var eventTitle = (fallback = "AutoGlow Darts Studio") => {
     var _a;
     return hiddenText("event_title") ? "" : ((_a = ctx.settings) == null ? void 0 : _a.title) || fallback;
@@ -244,10 +244,156 @@
     return canvas;
   }
 
+  // js/look.js
+  var TONE_WIDTH = 240;
+  var TONE_SIGMA = 6;
+  var TONE_RADIUS = 18;
+  var LOG_RANGE = 16;
+  var n = (v, d) => Number.isFinite(Number(v)) ? Number(v) : d;
+  function lookParams(look) {
+    const w = Math.exp(0.06 * n(look.warmth, 0));
+    const k = [n(look.r, 1) * w, n(look.g, 1), n(look.b, 1) / w];
+    const l = 0.2126 * k[0] + 0.7152 * k[1] + 0.0722 * k[2] || 1;
+    return {
+      gain: k.map((v) => v / l),
+      black: n(look.black, 0),
+      white: n(look.white, 1),
+      contrast: n(look.contrast, 0),
+      vibrance: n(look.vibrance, 0),
+      shadows: n(look.shadows, 0),
+      highlights: n(look.highlights, 0)
+    };
+  }
+  var COMMON = `
+const vec3 LUM = vec3(0.2126, 0.7152, 0.0722);
+vec3 toLinear(vec3 c) {
+  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+`;
+  var FRAG_TONE_BASE = `
+uniform sampler2D uTex;
+uniform vec2 uTexSize;
+uniform vec2 uSmall;
+uniform vec3 uGain;
+${COMMON}
+void main() {
+  vec2 block = uTexSize / uSmall;
+  vec2 origin = (gl_FragCoord.xy - 0.5) * block;
+  float sum = 0.0;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      vec2 p = origin + block * (vec2(float(i), float(j)) + 0.5) / 4.0;
+      vec3 c = toLinear(texture2D(uTex, p / uTexSize).rgb) * uGain;
+      sum += log2(max(dot(c, LUM), 1e-5));
+    }
+  }
+  gl_FragColor = vec4(vec3(clamp(sum / 16.0 / ${LOG_RANGE}.0 + 1.0, 0.0, 1.0)), 1.0);
+}`;
+  var FRAG_TONE_BLUR = `
+uniform sampler2D uTex;
+uniform vec2 uSmall;
+uniform vec2 uDir;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uSmall;
+  float sum = 0.0;
+  float total = 0.0;
+  for (int i = -${TONE_RADIUS}; i <= ${TONE_RADIUS}; i++) {
+    float w = exp(-float(i * i) / ${(2 * TONE_SIGMA * TONE_SIGMA).toFixed(1)});
+    sum += w * texture2D(uTex, uv + uDir * float(i) / uSmall).r;
+    total += w;
+  }
+  gl_FragColor = vec4(vec3(sum / total), 1.0);
+}`;
+  var FRAG_LOOK = `
+uniform sampler2D uTex;
+uniform sampler2D uBase;
+uniform vec2 uTexSize;
+uniform vec3 uGain;
+uniform float uBlack;
+uniform float uWhite;
+uniform float uContrast;
+uniform float uVibrance;
+uniform float uShadows;
+uniform float uHighlights;
+${COMMON}
+const float KEY = -2.4739311;   // log2(0.18)
+const float HALO = 1.5;
+const float KNEE = 0.8;
+const float SKIN_HUE = 0.77;
+const float SKIN_PROTECT = 0.6;
+const float SKIN_PULL = 0.25;
+vec3 toSrgb(vec3 l) {
+  l = clamp(l, 0.0, 1.0);
+  return mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, l));
+}
+vec3 oklab(vec3 c) {
+  vec3 lms = vec3(dot(c, vec3(0.4122214708, 0.5363325363, 0.0514459929)),
+                  dot(c, vec3(0.2119034982, 0.6806995451, 0.1073969566)),
+                  dot(c, vec3(0.0883024619, 0.2817188376, 0.6299787005)));
+  lms = pow(max(lms, 0.0), vec3(1.0 / 3.0));
+  return vec3(dot(lms, vec3(0.2104542553, 0.7936177850, -0.0040720468)),
+              dot(lms, vec3(1.9779984951, -2.4285922050, 0.4505937099)),
+              dot(lms, vec3(0.0259040371, 0.7827717662, -0.8086757660)));
+}
+vec3 fromOklab(vec3 k) {
+  vec3 lms = vec3(k.x + 0.3963377774 * k.y + 0.2158037573 * k.z,
+                  k.x - 0.1055613458 * k.y - 0.0638541728 * k.z,
+                  k.x - 0.0894841775 * k.y - 1.2914855480 * k.z);
+  lms = lms * lms * lms;
+  return vec3(dot(lms, vec3(4.0767416621, -3.3077115913, 0.2309699292)),
+              dot(lms, vec3(-1.2684380046, 2.6097574011, -0.3413193965)),
+              dot(lms, vec3(-0.0041960863, -0.7034186147, 1.7076147010)));
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / uTexSize;
+  vec3 c = texture2D(uTex, uv).rgb;
+  float base = (texture2D(uBase, uv).r - 1.0) * ${LOG_RANGE}.0;
+  // White balance; clipped spots stay white
+  float clip = smoothstep(0.86, 0.98, max(c.r, max(c.g, c.b)));
+  vec3 lin = toLinear(c) * uGain;
+  lin = mix(lin, vec3(dot(lin, LUM)), clip);
+  float y = max(dot(lin, LUM), 1e-5);
+  // Local tone
+  float l = log2(y);
+  float d = base < KEY ? uShadows * (KEY - base) : -uHighlights * (base - KEY) * (1.0 - clip);
+  d *= exp(-(l - base) * (l - base) / (2.0 * HALO * HALO));
+  float y2 = exp2(l + clamp(d, -1.0, 1.5));
+  // Tone curve: levels, soft knee onto white, S-curve
+  float span = max(uWhite - uBlack, 0.05);
+  float x = (1.055 * pow(y2, 1.0 / 2.4) - 0.055 - uBlack) / span;
+  float top = (1.0 - uBlack) / span - KNEE;
+  if (x > KNEE && top > 0.0) {
+    float t = x - KNEE;
+    float a = max((top - (1.0 - KNEE)) / (top * top), 0.0);
+    float tt = min(t, top);
+    x = KNEE + t - a * tt * tt;
+  }
+  x = clamp(x, 0.0, 1.0);
+  float outv = x + uContrast * (x * x * (3.0 - 2.0 * x) - x);
+  float yo = toLinear(vec3(outv)).r;
+  vec3 lo = lin * (yo / y);
+  float over = clamp((max(lo.r, max(lo.g, lo.b)) - 0.85) / 0.6, 0.0, 1.0);
+  lo = mix(lo, vec3(yo), over);
+  // Colour: vibrance, skin kept natural
+  vec3 k = oklab(lo);
+  float ch = length(k.yz);
+  float hue = atan(k.z, k.y);
+  float dh = hue - SKIN_HUE;
+  dh = atan(sin(dh), cos(dh));
+  float skin = exp(-(dh / 0.45) * (dh / 0.45)) * clamp((ch - 0.01) / 0.03, 0.0, 1.0) * clamp((0.2 - ch) / 0.08, 0.0, 1.0);
+  float boost = uVibrance * (1.0 - clamp(ch / 0.22, 0.0, 1.0)) * (1.0 - SKIN_PROTECT * skin);
+  float ch2 = ch * (1.0 + boost);
+  float hue2 = hue - skin * SKIN_PULL * dh;
+  k.yz = ch2 * vec2(cos(hue2), sin(hue2));
+  gl_FragColor = vec4(toSrgb(fromOklab(k)), 1.0);
+}`;
+
   // js/sharpwarp.js
   var MAX_SIDE = 2560;
   var IMG_FRAME_MS = 30;
   var MEASURE_EVERY = 15;
+  var LOOK_SHARPEN = 0.6;
+  var IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   var VERT = `
 attribute vec2 aPos;
 uniform vec2 uElem;
@@ -294,6 +440,7 @@ uniform vec2 uContent;     // the picture's size in the element (px)
 uniform vec2 uTexSize;
 uniform float uOutScale;   // canvas px per element px
 uniform float uAmount;
+uniform float uBaseAmount;  // everywhere, enlarged or not
 vec2 project(vec2 p, out float w) { vec3 q = uH * vec3(p, 1.0); w = q.z; return q.xy / q.z; }
 vec3 px(vec2 uv, float dx, float dy) { return texture2D(uTex, uv + vec2(dx, dy) / uTexSize).rgb; }
 void main() {
@@ -311,7 +458,7 @@ void main() {
   vec3 n = px(uv, 0.0, -1.0), s = px(uv, 0.0, 1.0), w = px(uv, -1.0, 0.0), ea = px(uv, 1.0, 0.0);
   vec3 nw = px(uv, -1.0, -1.0), ne = px(uv, 1.0, -1.0), sw = px(uv, -1.0, 1.0), se = px(uv, 1.0, 1.0);
   vec3 blur = (2.0 * (n + s + w + ea) + (nw + ne + sw + se)) / 12.0;
-  vec3 sharp = c + uAmount * stretch * (c - blur);
+  vec3 sharp = c + (uAmount * stretch + uBaseAmount) * (c - blur);
   // No halos: stay within the 3x3 neighbourhood (a little leeway keeps edges crisp)
   vec3 lo = min(min(min(n, s), min(w, ea)), min(min(nw, ne), min(sw, se)));
   vec3 hi = max(max(max(n, s), max(w, ea)), max(max(nw, ne), max(sw, se)));
@@ -448,7 +595,10 @@ void main() {
     const vs = compile(gl, gl.VERTEX_SHADER, VERT);
     const passes = {
       average: program(gl, vs, FRAG_AVERAGE, ["uElem", "uCur", "uPrev", "uHist", "uTexSize", "uBase", "uReset"]),
-      sharpen: program(gl, vs, FRAG_SHARPEN, ["uElem", "uTex", "uH", "uContent", "uTexSize", "uOutScale", "uAmount"]),
+      sharpen: program(gl, vs, FRAG_SHARPEN, ["uElem", "uTex", "uH", "uContent", "uTexSize", "uOutScale", "uAmount", "uBaseAmount"]),
+      toneBase: program(gl, vs, HEAD + FRAG_TONE_BASE, ["uElem", "uTex", "uTexSize", "uSmall", "uGain"]),
+      toneBlur: program(gl, vs, HEAD + FRAG_TONE_BLUR, ["uElem", "uTex", "uSmall", "uDir"]),
+      look: program(gl, vs, HEAD + FRAG_LOOK, ["uElem", "uTex", "uBase", "uTexSize", "uGain", "uBlack", "uWhite", "uContrast", "uVibrance", "uShadows", "uHighlights"]),
       warp: program(gl, vs, FRAG_WARP, ["uElem", "uTex", "uHinv", "uContent", "uTexSize"])
     };
     const buf = gl.createBuffer();
@@ -467,6 +617,11 @@ void main() {
       hist: [texture(gl), texture(gl)],
       // running average, ping-pong
       sharp: texture(gl),
+      small: [texture(gl), texture(gl)],
+      // the small blurred copy for the look, ping-pong
+      looked: texture(gl),
+      // the averaged picture with the look
+      smallSize: [0, 0],
       fbo: gl.createFramebuffer(),
       halfType: half && halfLinear ? half.HALF_FLOAT_OES : null,
       histType: null,
@@ -489,6 +644,15 @@ void main() {
       return ok;
     };
     g.histType = g.halfType && tryType(g.halfType) ? g.halfType : tryType(gl.UNSIGNED_BYTE) ? gl.UNSIGNED_BYTE : null;
+    const sw = Math.min(TONE_WIDTH, w);
+    const sh = Math.max(1, Math.round(h * sw / w));
+    for (const tex of g.small) {
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, sw, sh, 0, gl.RGBA, g.histType || gl.UNSIGNED_BYTE, null);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, g.looked);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    g.smallSize = [sw, sh];
     g.size = [w, h];
     g.reset = true;
     return g.histType !== null;
@@ -516,9 +680,10 @@ void main() {
   var colMajor = (H) => new Float32Array([H[0], H[3], H[6], H[1], H[4], H[7], H[2], H[5], H[8]]);
   var active = /* @__PURE__ */ new Set();
   var loopOn = false;
-  function setSharpWarp(box, media, m, sharpen) {
+  function setSharpWarp(box, media, m, sharpen, look) {
     const st = box._sharp || (box._sharp = {});
-    const want = !!(m && media && sharpen > 0 && !st.failed);
+    const want = !!(media && !st.failed && (m && sharpen > 0 || look));
+    if (want && !m) m = IDENTITY;
     const hinv = want ? invert(m) : null;
     if (!hinv) {
       stop(box);
@@ -529,12 +694,14 @@ void main() {
     st.h = m;
     st.hinv = hinv;
     st.amount = sharpen * 4;
+    st.look = look ? lookParams(look) : null;
     if (!st.canvas) {
       const canvas = document.createElement("canvas");
       canvas.className = "cam-sharp";
       try {
         st.g = createGl(canvas);
       } catch (e) {
+        console.warn("Studio camera: no WebGL picture", e);
         st.g = null;
       }
       if (!st.g) {
@@ -542,6 +709,22 @@ void main() {
         return false;
       }
       st.canvas = canvas;
+      canvas.addEventListener("webglcontextlost", (e) => e.preventDefault());
+      canvas.addEventListener("webglcontextrestored", () => {
+        try {
+          st.g = createGl(canvas);
+        } catch (e) {
+          st.g = null;
+        }
+        if (!st.g) return;
+        st.failed = false;
+        st.dirty = true;
+        active.add(box);
+        if (!loopOn) {
+          loopOn = true;
+          requestAnimationFrame(frame);
+        }
+      });
     }
     active.add(box);
     st.dirty = true;
@@ -554,7 +737,7 @@ void main() {
   function stop(box) {
     var _a, _b;
     active.delete(box);
-    box.classList.remove("sharp-on");
+    box.classList.remove("sharp-on", "gl-look");
     (_b = (_a = box._sharp) == null ? void 0 : _a.canvas) == null ? void 0 : _b.remove();
   }
   function frame(now) {
@@ -566,6 +749,7 @@ void main() {
       try {
         draw(box, now);
       } catch (e) {
+        console.warn("Studio camera: WebGL drawing stopped", e);
         box._sharp.failed = true;
         stop(box);
       }
@@ -652,14 +836,47 @@ void main() {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     g.reset = false;
     g.turn = 1 - g.turn;
+    const lk = st.look;
+    if (lk) {
+      const [sw, sh] = g.smallSize;
+      p = passes.toneBase;
+      pass(g, p, g.small[0], sw, sh);
+      bindTex(gl, 0, histOut, p.u.uTex);
+      gl.uniform2f(p.u.uTexSize, nw, nh);
+      gl.uniform2f(p.u.uSmall, sw, sh);
+      gl.uniform3fv(p.u.uGain, lk.gain);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      p = passes.toneBlur;
+      for (const [from, to, dir] of [[0, 1, [1, 0]], [1, 0, [0, 1]]]) {
+        pass(g, p, g.small[to], sw, sh);
+        bindTex(gl, 0, g.small[from], p.u.uTex);
+        gl.uniform2f(p.u.uSmall, sw, sh);
+        gl.uniform2f(p.u.uDir, dir[0], dir[1]);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+      p = passes.look;
+      pass(g, p, g.looked, nw, nh);
+      bindTex(gl, 0, histOut, p.u.uTex);
+      bindTex(gl, 1, g.small[0], p.u.uBase);
+      gl.uniform2f(p.u.uTexSize, nw, nh);
+      gl.uniform3fv(p.u.uGain, lk.gain);
+      gl.uniform1f(p.u.uBlack, lk.black);
+      gl.uniform1f(p.u.uWhite, lk.white);
+      gl.uniform1f(p.u.uContrast, lk.contrast);
+      gl.uniform1f(p.u.uVibrance, lk.vibrance);
+      gl.uniform1f(p.u.uShadows, lk.shadows);
+      gl.uniform1f(p.u.uHighlights, lk.highlights);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
     p = passes.sharpen;
     pass(g, p, g.sharp, nw, nh);
-    bindTex(gl, 0, histOut, p.u.uTex);
+    bindTex(gl, 0, lk ? g.looked : histOut, p.u.uTex);
     gl.uniformMatrix3fv(p.u.uH, false, colMajor(st.h));
     gl.uniform2f(p.u.uContent, content[0], content[1]);
     gl.uniform2f(p.u.uTexSize, nw, nh);
     gl.uniform1f(p.u.uOutScale, canvas.width / w);
     gl.uniform1f(p.u.uAmount, st.amount);
+    gl.uniform1f(p.u.uBaseAmount, lk ? LOOK_SHARPEN : 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     p = passes.warp;
     pass(g, p, null, canvas.width, canvas.height);
@@ -670,6 +887,7 @@ void main() {
     gl.uniform2f(p.u.uTexSize, nw, nh);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     box.classList.add("sharp-on");
+    box.classList.toggle("gl-look", !!lk);
   }
 
   // js/framing.js
@@ -693,9 +911,66 @@ void main() {
     box.style.setProperty("--tx", `${tx.toFixed(3)}%`);
     box.style.setProperty("--ty", `${ty.toFixed(3)}%`);
     box._framing = { rot, flip: cam.mirror ? -1 : 1, zoom, tx, ty };
+    applyLook(box, cam.look);
     box._framingCam = cam;
     watchBox(box);
     applyWarp(box, cam);
+  }
+  var LUMA = [0.299, 0.587, 0.114];
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var lookDefs = null;
+  function lookFilter(look) {
+    if (!look) return "";
+    const n2 = (v, d) => Number.isFinite(Number(v)) ? Number(v) : d;
+    const w = Math.exp(0.06 * n2(look.warmth, 0));
+    const k = [n2(look.r, 1) * w, n2(look.g, 1), n2(look.b, 1) / w].map((v) => v ** (1 / 2.2));
+    const s = 1 + 0.6 * n2(look.vibrance, 0);
+    const black = n2(look.black, 0);
+    const white = n2(look.white, 1);
+    const contrast = n2(look.contrast, 0);
+    const rows = [0, 1, 2].map((i) => [0, 1, 2].map((j) => ((i === j ? s : 0) + (1 - s) * LUMA[j]) * k[j]));
+    const matrix = rows.map((r) => [...r.map((v) => v.toFixed(4)), 0, 0].join(" ")).join(" ") + " 0 0 0 1 0";
+    const table = Array.from({ length: 33 }, (_, i) => {
+      const y = Math.min(1, Math.max(0, (i / 32 - black) / Math.max(0.05, white - black)));
+      return (y + contrast * (y * y * (3 - 2 * y) - y)).toFixed(4);
+    }).join(" ");
+    let hash = 0;
+    for (const ch of matrix + table) hash = hash * 31 + ch.charCodeAt(0) | 0;
+    const id = `ag-look-${(hash >>> 0).toString(36)}`;
+    if (!document.getElementById(id)) {
+      if (!lookDefs) {
+        const svg2 = document.createElementNS(SVG_NS, "svg");
+        svg2.setAttribute("width", "0");
+        svg2.setAttribute("height", "0");
+        svg2.setAttribute("aria-hidden", "true");
+        svg2.style.position = "absolute";
+        lookDefs = document.createElementNS(SVG_NS, "defs");
+        svg2.append(lookDefs);
+        document.body.append(svg2);
+      }
+      const filter = document.createElementNS(SVG_NS, "filter");
+      filter.id = id;
+      filter.setAttribute("color-interpolation-filters", "sRGB");
+      const cm = document.createElementNS(SVG_NS, "feColorMatrix");
+      cm.setAttribute("type", "matrix");
+      cm.setAttribute("values", matrix);
+      const ct = document.createElementNS(SVG_NS, "feComponentTransfer");
+      for (const c of ["R", "G", "B"]) {
+        const f = document.createElementNS(SVG_NS, `feFunc${c}`);
+        f.setAttribute("type", "table");
+        f.setAttribute("tableValues", table);
+        ct.append(f);
+      }
+      filter.append(cm, ct);
+      lookDefs.append(filter);
+    }
+    return `url(#${id})`;
+  }
+  function applyLook(box, look) {
+    const filter = lookFilter(look);
+    box.classList.toggle("cam-look", !!filter);
+    if (filter) box.style.setProperty("--look", filter);
+    else box.style.removeProperty("--look");
   }
   function watchBox(box) {
     if (box._framingWatched) return;
@@ -732,7 +1007,7 @@ void main() {
       if (m) css = toMatrix3d(m);
       box._warpM = m;
     }
-    setSharpWarp(box, media, box._warpM, (_a = warp == null ? void 0 : warp.sharpen) != null ? _a : 0);
+    setSharpWarp(box, media, box._warpM, (_a = warp == null ? void 0 : warp.sharpen) != null ? _a : 0, cam.look || null);
     const key2 = css || "none";
     if (box._warpKey === key2) return;
     box._warpKey = key2;
@@ -904,10 +1179,10 @@ void main() {
     let k = 1;
     for (let i = 0; i < 4; i++) {
       const [a, b] = [quad[i], quad[(i + 1) % 4]];
-      const n = [sign * (b[1] - a[1]), -sign * (b[0] - a[0])];
-      const d = n[0] * a[0] + n[1] * a[1];
+      const n2 = [sign * (b[1] - a[1]), -sign * (b[0] - a[0])];
+      const d = n2[0] * a[0] + n2[1] * a[1];
       if (d <= 0) return null;
-      for (const r of rect) k = Math.max(k, (n[0] * r[0] + n[1] * r[1]) / d);
+      for (const r of rect) k = Math.max(k, (n2[0] * r[0] + n2[1] * r[1]) / d);
     }
     return k <= WARP_ZOOM_MAX ? k : null;
   }
@@ -935,7 +1210,7 @@ void main() {
   }
   function toMatrix3d(H) {
     const v = [H[0], H[3], 0, H[6], H[1], H[4], 0, H[7], 0, 0, 1, 0, H[2], H[5], 0, H[8]];
-    return `matrix3d(${v.map((n) => +n.toPrecision(8)).join(",")})`;
+    return `matrix3d(${v.map((n2) => +n2.toPrecision(8)).join(",")})`;
   }
 
   // js/fill.js
@@ -1305,18 +1580,18 @@ void main() {
   var GOOD_DOUBLES = [20, 16, 8, 10, 12, 18];
   var NUMBERS = Array.from({ length: 20 }, (_, i) => 20 - i);
   var SETUP = [
-    ...NUMBERS.map((n) => ({ label: `T${n}`, value: 3 * n, cost: (20 - n) * 2 })),
-    ...NUMBERS.map((n) => ({ label: `S${n}`, value: n, cost: 15 + (20 - n) })),
+    ...NUMBERS.map((n2) => ({ label: `T${n2}`, value: 3 * n2, cost: (20 - n2) * 2 })),
+    ...NUMBERS.map((n2) => ({ label: `S${n2}`, value: n2, cost: 15 + (20 - n2) })),
     { label: "25", value: 25, cost: 12 },
     { label: "Bull", value: 50, cost: 30 },
-    ...NUMBERS.map((n) => ({ label: `D${n}`, value: 2 * n, cost: 40 }))
+    ...NUMBERS.map((n2) => ({ label: `D${n2}`, value: 2 * n2, cost: 40 }))
   ];
-  function doubleCost(n) {
-    const good = GOOD_DOUBLES.indexOf(n);
-    return good >= 0 ? good * 3 : 25 + (20 - n);
+  function doubleCost(n2) {
+    const good = GOOD_DOUBLES.indexOf(n2);
+    return good >= 0 ? good * 3 : 25 + (20 - n2);
   }
   function finishers(outMode) {
-    const doubles = [...NUMBERS.map((n) => ({ label: `D${n}`, value: 2 * n, cost: doubleCost(n) })), { label: "Bull", value: 50, cost: 20 }];
+    const doubles = [...NUMBERS.map((n2) => ({ label: `D${n2}`, value: 2 * n2, cost: doubleCost(n2) })), { label: "Bull", value: 50, cost: 20 }];
     if (outMode === "Straight") return [...doubles, ...SETUP];
     if (outMode === "Master") return [...doubles, ...SETUP.filter((d) => d.label.startsWith("T"))];
     return doubles;
@@ -1329,11 +1604,11 @@ void main() {
     if (cache.has(key2)) return cache.get(key2);
     const finish = finishers(outMode);
     let route = null;
-    for (let n = 1; n <= Math.min(3, darts) && !route; n++) route = best(remaining, n, finish);
+    for (let n2 = 1; n2 <= Math.min(3, darts) && !route; n2++) route = best(remaining, n2, finish);
     cache.set(key2, route);
     return route;
   }
-  function best(remaining, n, finish) {
+  function best(remaining, n2, finish) {
     let found = null;
     let foundCost = Infinity;
     const consider = (setup, last) => {
@@ -1345,11 +1620,11 @@ void main() {
     };
     for (const last of finish) {
       const rest = remaining - last.value;
-      if (n === 1 && rest === 0) consider([], last);
-      if (n === 2) {
+      if (n2 === 1 && rest === 0) consider([], last);
+      if (n2 === 2) {
         for (const a of SETUP) if (a.value === rest) consider([a], last);
       }
-      if (n === 3) {
+      if (n2 === 3) {
         for (const a of SETUP) for (const b of SETUP) if (a.value + b.value === rest) consider(a.cost <= b.cost ? [a, b] : [b, a], last);
       }
     }
@@ -1459,7 +1734,7 @@ void main() {
   }
 
   // js/dartboard.js
-  var SVG_NS = "http://www.w3.org/2000/svg";
+  var SVG_NS2 = "http://www.w3.org/2000/svg";
   var ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
   var R = { bull: 6.35 / 170, outerBull: 15.9 / 170, trebleIn: 99 / 170, trebleOut: 107 / 170, doubleIn: 162 / 170, doubleOut: 1 };
   var BED_RADIUS = { SingleInner: 0.36, Triple: 0.605, SingleOuter: 0.79, Double: 0.976 };
@@ -1487,7 +1762,7 @@ void main() {
     return t2._pos;
   }
   function svg(tag, attrs) {
-    const node = document.createElementNS(SVG_NS, tag);
+    const node = document.createElementNS(SVG_NS2, tag);
     for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
     return node;
   }
@@ -1548,9 +1823,9 @@ void main() {
         const g = svg("g", { transform: `translate(${x.toFixed(4)} ${(-y).toFixed(4)})` });
         const pop = svg("g", { class: "db-dart" });
         pop.append(svg("circle", { r: 0.075, class: "db-dart-dot" }));
-        const n = svg("text", { y: 0.032, class: "db-dart-num" });
-        n.textContent = i + 1;
-        pop.append(n);
+        const n2 = svg("text", { y: 0.032, class: "db-dart-num" });
+        n2.textContent = i + 1;
+        pop.append(n2);
         g.append(pop);
         return g;
       }));
@@ -2812,8 +3087,8 @@ void main() {
     setTimeout(poll, POLL_MS);
   }
   function shade(hex, amount) {
-    const n = parseInt(hex.slice(1), 16);
-    const ch = (s) => Math.max(0, Math.min(255, Math.round((n >> s & 255) * (1 + amount))));
+    const n2 = parseInt(hex.slice(1), 16);
+    const ch = (s) => Math.max(0, Math.min(255, Math.round((n2 >> s & 255) * (1 + amount))));
     return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, "0")).join("")}`;
   }
   function applySettings(settings) {

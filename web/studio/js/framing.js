@@ -39,9 +39,74 @@ export function applyFraming(box, cam) {
   box.style.setProperty('--tx', `${tx.toFixed(3)}%`);
   box.style.setProperty('--ty', `${ty.toFixed(3)}%`);
   box._framing = { rot, flip: cam.mirror ? -1 : 1, zoom, tx, ty };
+  applyLook(box, cam.look);
   box._framingCam = cam;
   watchBox(box);
   applyWarp(box, cam);
+}
+
+// --- Look: the colour grade of the automatic picture (studio_autotune.rs, Look) --------------------
+// Drawn by WebGL (look.js, in sharpwarp.js's passes; the box gets .gl-look). This SVG colour filter is
+// only the fallback without WebGL: the global part of the look (gains, more colour, black and white
+// points, S-curve), without the local tone and the skin care.
+const LUMA = [0.299, 0.587, 0.114];
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let lookDefs = null;
+
+export function lookFilter(look) {
+  if (!look) return '';
+  const n = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+  const w = Math.exp(0.06 * n(look.warmth, 0));
+  // Gains in linear light, as display-value gains
+  const k = [n(look.r, 1) * w, n(look.g, 1), n(look.b, 1) / w].map(v => v ** (1 / 2.2));
+  const s = 1 + 0.6 * n(look.vibrance, 0);
+  const black = n(look.black, 0);
+  const white = n(look.white, 1);
+  const contrast = n(look.contrast, 0);
+  const rows = [0, 1, 2].map(i => [0, 1, 2].map(j => ((i === j ? s : 0) + (1 - s) * LUMA[j]) * k[j]));
+  const matrix = rows.map(r => [...r.map(v => v.toFixed(4)), 0, 0].join(' ')).join(' ') + ' 0 0 0 1 0';
+  const table = Array.from({ length: 33 }, (_, i) => {
+    const y = Math.min(1, Math.max(0, (i / 32 - black) / Math.max(0.05, white - black)));
+    return (y + contrast * (y * y * (3 - 2 * y) - y)).toFixed(4);
+  }).join(' ');
+  let hash = 0;
+  for (const ch of matrix + table) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  const id = `ag-look-${(hash >>> 0).toString(36)}`;
+  if (!document.getElementById(id)) {
+    if (!lookDefs) {
+      const svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('width', '0');
+      svg.setAttribute('height', '0');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.position = 'absolute';
+      lookDefs = document.createElementNS(SVG_NS, 'defs');
+      svg.append(lookDefs);
+      document.body.append(svg);
+    }
+    const filter = document.createElementNS(SVG_NS, 'filter');
+    filter.id = id;
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    const cm = document.createElementNS(SVG_NS, 'feColorMatrix');
+    cm.setAttribute('type', 'matrix');
+    cm.setAttribute('values', matrix);
+    const ct = document.createElementNS(SVG_NS, 'feComponentTransfer');
+    for (const c of ['R', 'G', 'B']) {
+      const f = document.createElementNS(SVG_NS, `feFunc${c}`);
+      f.setAttribute('type', 'table');
+      f.setAttribute('tableValues', table);
+      ct.append(f);
+    }
+    filter.append(cm, ct);
+    lookDefs.append(filter);
+  }
+  return `url(#${id})`;
+}
+
+function applyLook(box, look) {
+  const filter = lookFilter(look);
+  box.classList.toggle('cam-look', !!filter);
+  if (filter) box.style.setProperty('--look', filter);
+  else box.style.removeProperty('--look');
 }
 
 // --- Straighten -------------------------------------------------------------------------------------
@@ -84,7 +149,7 @@ function applyWarp(box, cam) {
     box._warpM = m;
   }
   // Drawn by WebGL with the far side sharpened when possible; the CSS warp below stays as the fallback
-  setSharpWarp(box, media, box._warpM, warp?.sharpen ?? 0);
+  setSharpWarp(box, media, box._warpM, warp?.sharpen ?? 0, cam.look || null);
   const key = css || 'none';
   if (box._warpKey === key) return;
   box._warpKey = key;

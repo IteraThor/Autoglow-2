@@ -198,6 +198,7 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/studio/video", get(studio_routes::camera_video))
         .route("/api/studio/output-log", post(studio_routes::output_log))
         .route("/api/studio/camera-controls", get(studio_routes::get_camera_controls).post(studio_routes::set_camera_controls))
+        .route("/api/studio/camera-auto", post(studio_routes::auto_camera_picture))
         .route("/api/studio/cue", post(studio_routes::cue))
         .route("/api/dashboard", get(dashboard_routes::get).post(dashboard_routes::post))
         .route("/api/dashboard/logo", post(dashboard_routes::logo_upload))

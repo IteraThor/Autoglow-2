@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 const SYS_DIR: &str = "/sys/class/video4linux";
 const BY_PATH_DIR: &str = "/dev/v4l/by-path";
 pub const RESOLUTIONS: [(&str, (u32, u32)); 3] = [("480p", (848, 480)), ("720p", (1280, 720)), ("1080p", (1920, 1080))];
-const FPS: u32 = 30;
+pub const FPS: u32 = 30;
 const BUFFER_COUNT: u32 = 4;
 const CLOSE_AFTER_SECONDS: u64 = 10;
 pub const FIRST_FRAME_TIMEOUT: f64 = 6.0;
@@ -413,7 +413,7 @@ pub fn clean_control_values(raw: Option<&Value>) -> Obj {
 }
 
 #[cfg(target_os = "linux")]
-fn query_controls(fd: i32) -> Vec<Value> {
+pub fn query_controls(fd: i32) -> Vec<Value> {
     use v4l2::*;
     const NEXT: u32 = 0x8000_0000;
     let mut out = Vec::new();
@@ -486,6 +486,24 @@ fn set_controls_fd(fd: i32, values: &[(u32, i32)]) -> Vec<String> {
         }
     }
     failed
+}
+
+/// For the automatic picture: one open device, one control at a time
+#[cfg(target_os = "linux")]
+pub fn open_device(dev: &str) -> std::io::Result<i32> {
+    open_dev(dev)
+}
+
+#[cfg(target_os = "linux")]
+pub fn set_control(fd: i32, id: u32, value: i32) -> std::io::Result<()> {
+    let mut ctl = v4l2::Control { id, value };
+    unsafe { v4l2::ioctl(fd, v4l2::S_CTRL, &mut ctl) }
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_control(fd: i32, id: u32) -> Option<i32> {
+    let mut ctl = v4l2::Control { id, value: 0 };
+    unsafe { v4l2::ioctl(fd, v4l2::G_CTRL, &mut ctl) }.ok().map(|_| ctl.value)
 }
 
 #[cfg(target_os = "linux")]
@@ -765,8 +783,12 @@ fn start_camera(src: Arc<FrameSource>, device: String, size: (u32, u32), control
                     }
                 }
                 let mut g = Guard(fd, Vec::new());
+                // An automatic picture that leaves the white balance to the camera: its automatics run for
+                // the first moment, then the saved manual exposure freezes them
+                let settle = crate::studio_autotune::open_settle(&controls);
+                let mut frames = 0u64;
                 if !controls.is_empty() {
-                    let failed = set_controls_fd(fd, &controls);
+                    let failed = set_controls_fd(fd, settle.as_deref().unwrap_or(&controls));
                     if !failed.is_empty() {
                         info!("Studio camera {}: controls not applied: {}", src.cam_id, failed.join(", "));
                     }
@@ -823,6 +845,10 @@ fn start_camera(src: Arc<FrameSource>, device: String, size: (u32, u32), control
                         ioctl(fd, QBUF, &mut b)?;
                         if data.len() > 4 {
                             src.publish(ensure_huffman_tables(data));
+                        }
+                        frames += 1;
+                        if settle.is_some() && frames == FPS as u64 * crate::studio_autotune::SETTLE_MS / 1000 {
+                            set_controls_fd(fd, &controls);
                         }
                     }
                 }

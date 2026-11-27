@@ -31,6 +31,7 @@ mod security;
 mod server;
 mod storage;
 mod studio;
+mod studio_autotune;
 mod studio_camera;
 mod studio_darts;
 mod studio_video;

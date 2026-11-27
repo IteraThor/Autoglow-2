@@ -317,10 +317,7 @@ pub async fn set_camera_controls(State(s): State<S>, req: Req) -> ApiResult {
     let cam_id = get_str(&data, "cam", "");
     let slot = get_str(&data, "slot", "");
     let dev = usb_device(&cam_id)?;
-    let used = tokio::task::spawn_blocking(cam::board_manager_camera_locations).await.unwrap_or_default();
-    if used.iter().any(|loc| !loc.is_empty() && format!("-{}-", cam_id).contains(&format!("-{}-", loc))) {
-        return Err(AppError::validation("Autodarts uses this camera for dart detection; change its picture in Autodarts"));
-    }
+    refuse_autodarts_camera(&cam_id).await?;
     let reset = get_bool(&data, "reset", false);
     let dev2 = dev.clone();
     let values: Vec<(u32, i32)> = if reset {
@@ -337,11 +334,102 @@ pub async fn set_camera_controls(State(s): State<S>, req: Req) -> ApiResult {
     let result = result.map_err(|e| AppError::unavailable(format!("Camera controls not writable: {}", e)))?;
     let saved: Obj = if reset { Obj::new() } else { values.iter().map(|(k, v)| (k.to_string(), json!(v))).collect() };
     s.studio.save_camera_controls(&slot, &cam_id, &saved, reset);
+    if reset {
+        // The camera's own picture: no look on top either
+        s.studio.save_camera_look(&slot, &cam_id, &Value::Null);
+    }
     let mut o = crate::obj! {"status" => "ok"};
     if let Value::Object(r) = result {
         o.extend(r);
     }
     ok(Value::Object(o))
+}
+
+/// Autodarts reads this camera for dart detection: its picture is set in Autodarts, not here
+async fn refuse_autodarts_camera(cam_id: &str) -> Result<(), AppError> {
+    let used = tokio::task::spawn_blocking(cam::board_manager_camera_locations).await.unwrap_or_default();
+    if used.iter().any(|loc| !loc.is_empty() && format!("-{}-", cam_id).contains(&format!("-{}-", loc))) {
+        return Err(AppError::validation("Autodarts uses this camera for dart detection; change its picture in Autodarts"));
+    }
+    Ok(())
+}
+
+static CALIBRATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Automatic picture of a slot's USB camera: finds the player's face and sets exposure, white balance,
+/// contrast, colour and sharpness by hand (automatics off), then saves them with the slot. Takes ~15 s.
+pub async fn auto_camera_picture(State(s): State<S>, req: Req) -> ApiResult {
+    use std::sync::atomic::Ordering;
+    let data = req.json()?;
+    let cam_id = get_str(&data, "cam", "");
+    let slot = get_str(&data, "slot", "");
+    let dev = usb_device(&cam_id)?;
+    refuse_autodarts_camera(&cam_id).await?;
+    let settings = s.studio.load_settings();
+    let slot_cam = &settings["cameras"][slot.as_str()];
+    if slot_cam["kind"] != json!("server") || slot_cam["device_id"] != json!(cam_id) {
+        return Err(AppError::validation("Choose this camera for the slot first"));
+    }
+    let rotation = slot_cam["rotation"].as_u64().unwrap_or(0) as u32;
+    if CALIBRATING.swap(true, Ordering::SeqCst) {
+        return Err(AppError::validation("A camera picture is being set already"));
+    }
+    struct Busy;
+    impl Drop for Busy {
+        fn drop(&mut self) {
+            CALIBRATING.store(false, Ordering::SeqCst);
+        }
+    }
+    let _busy = Busy;
+    let res = py_str(&settings["camera_resolution"]);
+    let src = s
+        .cameras
+        // Nothing saved is set on open: the calibration starts from the camera's defaults itself
+        .acquire(&cam_id, &res, settings["relay_fps"].as_i64().unwrap_or(15), Vec::new())
+        .map_err(|_| AppError::not_found("Camera not found \u{2013} is it plugged in?"))?;
+    struct Release(Arc<cam::CameraHub>, Arc<cam::FrameSource>);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.0.release(&self.1);
+        }
+    }
+    let _release = Release(Arc::clone(&s.cameras), Arc::clone(&src));
+
+    // The calibration's last frame is kept to look at afterwards (what it measured)
+    let last: Arc<std::sync::Mutex<Option<Arc<Vec<u8>>>>> = Arc::default();
+    let (src2, last2, handle) = (Arc::clone(&src), Arc::clone(&last), tokio::runtime::Handle::current());
+    let grab = move |skip: usize| -> Result<crate::studio_autotune::Pic, String> {
+        let mut seq = src2.seq();
+        let mut frame = None;
+        for _ in 0..=skip {
+            let (s, f) = handle.block_on(src2.next_frame(seq, FIRST_FRAME_TIMEOUT)).ok_or_else(|| {
+                let e = src2.error();
+                if e.is_empty() { "The camera sends no picture".to_string() } else { e }
+            })?;
+            seq = s;
+            frame = Some(f);
+        }
+        let frame = frame.unwrap();
+        *last2.lock().unwrap() = Some(Arc::clone(&frame));
+        crate::studio_autotune::decode(&frame).ok_or_else(|| "Could not read the camera picture".to_string())
+    };
+    #[cfg(target_os = "linux")]
+    let run = move || crate::studio_autotune::calibrate(&mut crate::studio_autotune::Live::open(&dev, grab)?, rotation);
+    #[cfg(not(target_os = "linux"))]
+    let run = move || -> Result<crate::studio_autotune::Outcome, String> {
+        let _ = (dev, grab, rotation);
+        Err("The automatic picture needs a USB camera on Linux".into())
+    };
+    let out = tokio::task::spawn_blocking(run).await.map_err(|_| AppError::internal("failed"))?.map_err(AppError::unavailable)?;
+    if let Some(f) = last.lock().unwrap().take() {
+        let _ = std::fs::write(std::env::temp_dir().join(format!("autoglow-camera-auto-{}.jpg", slot)), &*f);
+    }
+    let saved: Obj = out.values.iter().map(|(k, v)| (k.to_string(), json!(v))).collect();
+    s.studio.save_camera_controls(&slot, &cam_id, &saved, true);
+    let look = out.look.json();
+    s.studio.save_camera_look(&slot, &cam_id, &look);
+    info!("Studio {} camera picture set automatically: {} (face {})", slot, out.summary, if out.face.is_some() { "found" } else { "not found" });
+    ok(json!({"status": "ok", "controls": saved, "look": look, "face": out.face, "summary": out.summary, "notes": out.notes}))
 }
 
 fn parse_delay(req: &Req) -> f64 {

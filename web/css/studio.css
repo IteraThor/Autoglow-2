@@ -394,8 +394,17 @@ details[open] > summary .stu-chev { transform: rotate(90deg); }
   pointer-events: none;
 }
 
+/* The look of the automatic picture: drawn by WebGL (js/look.js, the box gets .gl-look); without WebGL
+   this SVG colour filter does its global part (js/framing.js lookFilter) */
+.cam-look:not(.gl-look) > img,
+.cam-look:not(.gl-look) > video,
+.cam-look:not(.gl-look) > canvas.cam-live,
+.cam-look:not(.gl-look) > canvas.cam-sharp { filter: var(--look); }
+
 /* Picture controls of a USB camera (V4L2) */
+.studio-picture-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 12px 12px; }
 .studio-picture-switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); align-items: end; gap: 12px; }
 .studio-picture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 .studio-picture-row.is-inactive { opacity: 0.45; }
-.studio-picture-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.studio-look { display: flex; flex-direction: column; gap: 8px; }
+.studio-picture-hand.is-busy { opacity: 0.5; pointer-events: none; }

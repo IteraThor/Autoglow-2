@@ -173,7 +173,7 @@ fn clean_warp(raw: Option<&Value>) -> Value {
 
 fn default_camera() -> Obj {
     crate::obj! {"kind" => "none", "device_id" => "", "label" => "", "url" => "", "mirror" => false, "rotation" => 0,
-                 "zoom" => 1.0, "pan_x" => 0.0, "pan_y" => 0.0, "warp" => Value::Null, "controls" => {}}
+                 "zoom" => 1.0, "pan_x" => 0.0, "pan_y" => 0.0, "warp" => Value::Null, "controls" => {}, "look" => Value::Null}
 }
 
 fn clean_camera(raw: Option<&Value>) -> Obj {
@@ -192,7 +192,23 @@ fn clean_camera(raw: Option<&Value>) -> Obj {
     cam.insert("pan_y".into(), json!(clampf(r.get("pan_y"), -1.0, 1.0, 0.0)));
     cam.insert("warp".into(), clean_warp(r.get("warp")));
     cam.insert("controls".into(), Value::Object(crate::studio_camera::clean_control_values(r.get("controls"))));
+    cam.insert("look".into(), clean_look(r.get("look")));
     cam
+}
+
+/// The colour grade of the automatic picture (studio_autotune::Look), or null
+fn clean_look(raw: Option<&Value>) -> Value {
+    let Some(r) = raw.and_then(Value::as_object) else { return Value::Null };
+    json!({
+        "r": clampf(r.get("r"), 0.4, 2.5, 1.0), "g": clampf(r.get("g"), 0.4, 2.5, 1.0), "b": clampf(r.get("b"), 0.4, 2.5, 1.0),
+        "warmth": clampf(r.get("warmth"), -3.0, 3.0, 0.0),
+        "black": clampf(r.get("black"), 0.0, 0.3, 0.0), "white": clampf(r.get("white"), 0.6, 1.0, 1.0),
+        "contrast": clampf(r.get("contrast"), 0.0, 1.0, 0.0),
+        // A look saved before these existed gets the automatic values
+        "vibrance": clampf(r.get("vibrance"), 0.0, 1.0, crate::studio_autotune::LOOK_VIBRANCE),
+        "shadows": clampf(r.get("shadows"), 0.0, 0.8, crate::studio_autotune::LOOK_SHADOWS),
+        "highlights": clampf(r.get("highlights"), 0.0, 0.6, crate::studio_autotune::LOOK_HIGHLIGHTS),
+    })
 }
 
 fn clean_dart_zoom(raw: Option<&Value>) -> Value {
@@ -486,6 +502,18 @@ impl Studio {
             }
         }
         Vec::new()
+    }
+
+    /// The look (colour grade) of a slot that shows this camera; null takes it away
+    pub fn save_camera_look(&self, slot: &str, cam_id: &str, look: &Value) {
+        let _g = self.lock.lock().unwrap();
+        let mut s = self.load_settings();
+        let Some(Value::Object(cam)) = s.get_mut("cameras").and_then(|c| c.get_mut(slot)) else { return };
+        if cam.get("device_id") != Some(&json!(cam_id)) {
+            return;
+        }
+        cam.insert("look".into(), clean_look(Some(look)));
+        let _ = self.write(&s);
     }
 
     /// Merge control values into the saved controls of a slot that shows this camera (replace: only these)
