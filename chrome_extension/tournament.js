@@ -255,6 +255,7 @@
     .sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.55;margin:12px 0 4px 10px}
     .b{margin-left:auto;font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;background:#0b55df;color:#f0f5fd}.b.live{background:#da3954}.b:empty{display:none}
     svg{width:18px;height:18px;flex:none}
+    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere */ :host(.top) svg{display:none}
     /* AutoGlow's teal (the app's --accent-bright), so the extension's items stand apart from Autodarts' own */
     a{color:#2dd4bf!important}:host(.top) a:hover,:host(.top) a.on,a:hover,a.on{color:#5eead4!important}
     :host(.top) a.on::after{background:#2dd4bf!important}

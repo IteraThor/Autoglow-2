@@ -72,6 +72,7 @@
     :host(.top) a.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:#fff}
     :host(.bottom) a{flex-direction:column;gap:4px;justify-content:center}:host(.bottom) svg{width:20px;height:20px}
     svg{width:18px;height:18px;flex:none}
+    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere */ :host(.top) svg{display:none}
     /* AutoGlow's teal, like Local Tournament */
     a{color:#2dd4bf!important}:host(.top) a:hover,:host(.top) a.on,a:hover,a.on{color:#5eead4!important}
     :host(.top) a.on::after{background:#2dd4bf!important}
@@ -302,7 +303,25 @@
   const lmBtn = document.createElement('button');
   lmBtn.type = 'button';
   lmBtn.setAttribute('data-autoglow', 'club-members');
+  // AutoGlow's teal (as on the Local Tournament / Local Players menu items) marks it as the extension's
+  lmBtn.style.backgroundColor = '#0d9488';
+  lmBtn.style.color = '#f0fdfa';
+  lmBtn.style.position = 'relative';
+  lmBtn.style.paddingRight = '52px';
+  // Split button: a gear segment on the right opens AutoGlow's Players page
+  const lmGear = document.createElement('span');
+  lmGear.setAttribute('role', 'button');
+  lmGear.title = 'AutoGlow Players';
+  lmGear.style.cssText = 'position:absolute;top:0;right:0;bottom:0;width:44px;display:grid;place-items:center;background:#00000024;border-radius:0 12px 12px 0;cursor:pointer';
+  lmGear.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
+  lmGear.addEventListener('mouseenter', () => { lmGear.style.background = '#00000040'; });
+  lmGear.addEventListener('mouseleave', () => { lmGear.style.background = '#00000024'; });
+  lmGear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.open('http://127.0.0.1:8080/players', '_blank', 'noopener');
+  });
   lmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span></span>';
+  lmBtn.appendChild(lmGear);
   const lmPop = lobbyRoot.getElementById('lmPop');
   // Autodarts' language decides ours: its Add player button reads German or English
   let de = false;
