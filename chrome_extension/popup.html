@@ -14,17 +14,18 @@
 
   <section class="status">
     <div class="row"><span id="dotServer" class="dot"></span><span>AutoGlow</span><span id="serverStatus" class="value">…</span></div>
-    <div class="row"><span id="dotTab" class="dot"></span><span>Autodarts tab</span><span id="tabStatus" class="value">…</span></div>
+    <div class="row"><span id="dotTab" class="dot"></span><span data-t="Autodarts tab">Autodarts tab</span><span id="tabStatus" class="value">…</span></div>
     <p id="error" class="error" hidden></p>
-    <p id="hint" class="muted" hidden>Open <a href="https://play.autodarts.com" target="_blank">play.autodarts.com</a> and play as usual. AutoGlow receives the game events from this tab.</p>
+    <p id="hint" class="muted" hidden data-t="Open {link} and play as usual. AutoGlow receives the game events from this tab.">Open <a href="https://play.autodarts.com" target="_blank">play.autodarts.com</a> and play as usual. AutoGlow receives the game events from this tab.</p>
   </section>
 
-  <p class="muted">AutoGlow must run on this computer (port 8080).</p>
+  <p class="muted" data-t="AutoGlow must run on this computer (port 8080).">AutoGlow must run on this computer (port 8080).</p>
   <div class="actions">
-    <button id="reconnect" type="button">Reconnect</button>
-    <a id="openAutoglow" href="http://127.0.0.1:8080" target="_blank">Open AutoGlow ↗</a>
+    <button id="reconnect" type="button" data-t="Reconnect">Reconnect</button>
+    <a id="openAutoglow" href="http://127.0.0.1:8080" target="_blank" data-t="Open AutoGlow ↗">Open AutoGlow ↗</a>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

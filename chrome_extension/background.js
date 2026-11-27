@@ -148,7 +148,10 @@ chrome.runtime.onConnect.addListener((port) => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.type === 'tab') {
       const tab = tabs.get(tabId);
-      if (tab) tab.url = msg.url || tab.url;
+      if (tab) {
+        tab.url = msg.url || tab.url;
+        if (msg.lang) tab.lang = msg.lang; // the popup speaks the tab's language
+      }
     }
     if (tabId !== primaryTabId) return;
     rememberSnapshot(msg);
@@ -198,6 +201,7 @@ function status() {
     lastError,
     tabAttached: !!tab,
     tabUrl: tab ? tab.url : '',
+    lang: tab ? tab.lang || '' : '',
     tabCount: tabs.size,
     version: chrome.runtime.getManifest().version
   };

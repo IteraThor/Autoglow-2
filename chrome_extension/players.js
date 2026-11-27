@@ -6,23 +6,25 @@
   const HASH = '#autoglow-players';
   const STATE_EVERY_MS = 5000;
 
+  const { tn, srv } = window.agI18n;
+  const tr = window.agI18n.t;
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (v, d = 1) => (typeof v === 'number' && v > 0 ? v.toFixed(d) : '–');
-  const when = s => (s ? new Date(s * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '');
+  const when = s => (s ? new Date(s * 1000).toLocaleDateString(window.agI18n.lang() === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'short' }) : '');
   const initials = n => String(n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   /** "Updated" only when it was: any other failure means the extension's background did not answer */
-  const bridgeError = m => (/context invalidated/i.test(m || '') ? 'AutoGlow Bridge was updated. Reload this page.' : 'AutoGlow Bridge did not answer. Restart the browser, or reload the extension in chrome://extensions.');
+  const bridgeError = m => (/context invalidated/i.test(m || '') ? tr('AutoGlow Bridge was updated. Reload this page.') : tr('AutoGlow Bridge did not answer. Restart the browser, or reload the extension in chrome://extensions.'));
 
   function api(path, body) {
     return new Promise((resolve, reject) => {
       try {
         chrome.runtime.sendMessage(body ? { type: 'clubCreate', body } : { type: 'club', path }, (r) => {
           if (chrome.runtime.lastError) return reject(new Error(bridgeError(chrome.runtime.lastError.message)));
-          if (r && r.ok) resolve(r.data); else reject(new Error(r ? r.error : 'AutoGlow is not reachable'));
+          if (r && r.ok) resolve(r.data); else reject(new Error(r ? srv(r.error) : tr('AutoGlow is not reachable')));
         });
       } catch {
-        reject(new Error('AutoGlow Bridge was updated. Reload this page.'));
+        reject(new Error(tr('AutoGlow Bridge was updated. Reload this page.')));
       }
     });
   }
@@ -67,17 +69,23 @@
     :host{display:block}:host(.top){display:flex}
     a{display:flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer;color:inherit;font:inherit;border-radius:8px;white-space:nowrap}
     a:hover{background:#ffffff0d}a.on{background:#ffffff14;color:#fff}
-    :host(.compact) span{display:none}
     :host(.top) a{position:relative;border-radius:0;background:none;gap:7px}:host(.top) a:hover,:host(.top) a.on{color:#fff!important}
     :host(.top) a.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:#fff}
     :host(.bottom) a{flex-direction:column;gap:4px;justify-content:center}:host(.bottom) svg{width:20px;height:20px}
     svg{width:18px;height:18px;flex:none}
-    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere */ :host(.top) svg{display:none}
+    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere; the bottom tab bar has icons and the short label */ :host(.top) svg{display:none}:host(.bottom) svg{display:block}
+    .short{display:none}:host(.bottom) .long{display:none}:host(.bottom) .short{display:inline}
     /* AutoGlow's teal, like Local Tournament */
     a{color:#2dd4bf!important}:host(.top) a:hover,:host(.top) a.on,a:hover,a.on{color:#5eead4!important}
     :host(.top) a.on::after{background:#2dd4bf!important}
-  </style><a id="item" title="Local Players"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6"/></svg><span>Local Players</span></a>`;
+  </style><a id="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7.5M22 21v-1a6 6 0 0 0-4-5.6"/></svg><span class="long"></span><span class="short"></span></a>`;
   const navItem = navRoot.getElementById('item');
+  function labelNav() {
+    navItem.title = tr('Local Players');
+    navItem.querySelector('.long').textContent = tr('Local Players');
+    navItem.querySelector('.short').textContent = tr('Players');
+  }
+  labelNav();
   navItem.addEventListener('click', (e) => { e.preventDefault(); openPage(); });
 
   function placeNav() {
@@ -133,22 +141,23 @@
 
   const subtabs = (items, cur, act) => `<div class="subtabs">${items.map(([k, n]) => `<button data-act="${act}" data-v="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join('')}</div>`;
   const PERIODS = [['season', 'This year'], ['month', 'This month'], ['all', 'All time']];
+  const periods = () => PERIODS.map(([k, n]) => [k, tr(n)]);
 
   // Table columns: [key, header, format, kind]. 'rate' ranks after min_games games, 'count' and
   // 'low' (fewest darts first) rank anyone who has one.
   const COLS = [['average', 'Average', v => v.toFixed(2), 'rate'], ['first9', 'First 9', v => v.toFixed(2), 'rate'], ['checkout_pct', 'Checkout', v => `${v.toFixed(1)}%`, 'rate'],
-    ['t180', '180s', String, 'count'], ['best_checkout', 'Best checkout', String, 'count'], ['best_leg', 'Best leg', v => `${v} darts`, 'low'],
+    ['t180', '180s', String, 'count'], ['best_checkout', 'Best checkout', String, 'count'], ['best_leg', 'Best leg', v => tr('{n} darts', { n: v }), 'low'],
     ['games', 'Games', String, 'count'], ['win_pct', 'Win %', v => `${Math.round(v)}%`, 'rate']];
   let data = null; // { period, members, lb }
   let joinQr = null; // the QR svg for players to add themselves
 
   async function render() {
     const mine = ++seq;
-    const club = state && state.role === 'board' ? `the club host ${esc(state.club_name || state.address)}` : esc((state && state.node_name) || 'this PC');
-    const head = `<div class="ph"><div><h1>Local Players</h1><div class="sub">Stats from every local game, kept by ${club}. Members are edited in AutoGlow.</div></div>
-      <div class="r">${subtabs(PERIODS, view.period, 'period')}</div></div>`;
+    const club = state && state.role === 'board' ? tr('the club host {name}', { name: esc(state.club_name || state.address) }) : esc((state && state.node_name) || tr('this PC'));
+    const head = `<div class="ph"><div><h1>${tr('Local Players')}</h1><div class="sub">${tr('Stats from every local game, kept by {club}. Members are edited in AutoGlow.', { club })}</div></div>
+      <div class="r">${subtabs(periods(), view.period, 'period')}</div></div>`;
     if (!view.member && data && data.period === view.period) { pg.innerHTML = head + listPage(); return; }
-    if (!pg.innerHTML) pg.innerHTML = head + '<div class="card muted">Loading…</div>';
+    if (!pg.innerHTML) pg.innerHTML = head + `<div class="card muted">${tr('Loading…')}</div>`;
     let body;
     try {
       if (view.member) body = await memberPage(view.member);
@@ -165,14 +174,14 @@
   }
 
   function listPage() {
-    const qr = joinQr ? `<aside class="card qrc"><div><h3>Join the club</h3><span class="muted small">Scan with a phone on the club WiFi to add yourself as a player.</span></div><div class="qrbox" role="img" aria-label="QR code to join">${joinQr.svg}</div></aside>` : '';
+    const qr = joinQr ? `<aside class="card qrc"><div><h3>${tr('Join the club')}</h3><span class="muted small">${tr('Scan with a phone on the club WiFi to add yourself as a player.')}</span></div><div class="qrbox" role="img" aria-label="${tr('QR code to join')}">${joinQr.svg}</div></aside>` : '';
     return `<div class="pl-wrap"><div>${tablePage()}</div>${qr}</div>`;
   }
 
   function tablePage() {
     const { members, lb } = data;
-    if (!members.length) return '<div class="card">No members yet. Add them in AutoGlow under <b>Players</b>.</div>';
-    if (!lb.rows) return '<div class="err">The club host runs an older AutoGlow. Update it to see the players table.</div>';
+    if (!members.length) return `<div class="card">${tr('No members yet. Add them in AutoGlow under <b>Players</b>.')}</div>`;
+    if (!lb.rows) return `<div class="err">${tr('The club host runs an older AutoGlow. Update it to see the players table.')}</div>`;
     const by = Object.fromEntries(lb.rows.map(r => [r.member, r]));
     const rows = members.map(p => ({ ...(by[p.id] || { games: 0 }), id: p.id, name: p.name, nickname: p.nickname || '' }));
     const col = COLS.find(c => c[0] === view.sort);
@@ -188,8 +197,8 @@
     const q = view.q.trim().toLowerCase();
     const th = (k, n, tip) => `<th class="${view.sort === k ? 'on' : ''}"${tip ? ` title="${tip}"` : ''}><button data-act="sort" data-v="${k}">${n}${view.sort === k ? (view.flip ? ' ▴' : ' ▾') : ''}</button></th>`;
     let rank = 0;
-    return `<div class="tools"><input id="q" type="search" placeholder="Search members" value="${esc(view.q)}"><span class="muted small">${members.length} member${members.length === 1 ? '' : 's'} · click a column to rank by it</span></div>
-      <div class="card tw"><table class="pt"><thead><tr><th></th>${th('name', 'Player')}${COLS.map(([k, n, , kind]) => th(k, n, kind === 'rate' ? `Ranked after ${lb.min_games} games` : kind === 'low' ? 'Fewest darts in a leg' : '')).join('')}</tr></thead><tbody>
+    return `<div class="tools"><input id="q" type="search" placeholder="${tr('Search members')}" value="${esc(view.q)}"><span class="muted small">${tn(members.length, '{n} member', '{n} members')} · ${tr('click a column to rank by it')}</span></div>
+      <div class="card tw"><table class="pt"><thead><tr><th></th>${th('name', tr('Player'))}${COLS.map(([k, n, , kind]) => th(k, tr(n), kind === 'rate' ? tr('Ranked after {n} games', { n: lb.min_games }) : kind === 'low' ? tr('Fewest darts in a leg') : '')).join('')}</tr></thead><tbody>
       ${rows.map((r) => {
         const n = ranked(r) ? ++rank : 0;
         const hide = q && ![r.name, r.nickname].some(v => v.toLowerCase().includes(q));
@@ -197,19 +206,19 @@
           <td class="rk${n && n < 4 ? ` g${n}` : ''}">${n || ''}</td><td><span class="who"><span class="av">${esc(initials(r.name))}</span><b>${esc(r.name)}</b>${r.nickname ? `<small>“${esc(r.nickname)}”</small>` : ''}</span></td>
           ${COLS.map(([k, , f]) => `<td class="${view.sort === k ? 'on' : ''}">${k === 'games' ? r.games : r.games && r[k] > 0 ? esc(f(r[k])) : r.games && k === 't180' ? '0' : '–'}</td>`).join('')}</tr>`;
       }).join('')}</tbody></table></div>
-      <div class="note">Every finished local game counts for the members in it, on any board of the club. Games against a bot don’t count. Average, First 9, Checkout and Win % rank members once they have ${lb.min_games} games.</div>`;
+      <div class="note">${tr('Every finished local game counts for the members in it, on any board of the club. Games against a bot don’t count. Average, First 9, Checkout and Win % rank members once they have {n} games.', { n: lb.min_games })}</div>`;
   }
 
   function formChart(form) {
-    if (form.length < 2) return '<div class="muted small">The form line starts after the second game.</div>';
+    if (form.length < 2) return `<div class="muted small">${tr('The form line starts after the second game.')}</div>`;
     const W = 520, H = 140, L = 30, R = 8, T = 10, B = 18;
     const vals = form.map(f => f.average);
     const lo = Math.max(0, Math.floor((Math.min(...vals) - 5) / 10) * 10), hi = Math.ceil((Math.max(...vals) + 5) / 10) * 10;
     const x = i => L + (i * (W - L - R)) / (form.length - 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo || 1));
-    return `<div class="form"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Average of the last ${form.length} games">
+    return `<div class="form"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr('Average of the last {n} games', { n: form.length })}">
       ${[lo, (lo + hi) / 2, hi].map(t => `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 5}" y="${y(t) + 4}" text-anchor="end">${t}</text>`).join('')}
       <polyline class="ln" points="${form.map((f, i) => `${x(i)},${y(f.average)}`).join(' ')}"/>
-      ${form.map((f, i) => `<circle class="dt${f.won ? ' w' : ''}" cx="${x(i)}" cy="${y(f.average)}" r="4.5"><title>${f.average.toFixed(2)} · ${f.won ? 'won' : 'lost'} · ${when(f.at)}</title></circle>`).join('')}</svg></div>`;
+      ${form.map((f, i) => `<circle class="dt${f.won ? ' w' : ''}" cx="${x(i)}" cy="${y(f.average)}" r="4.5"><title>${f.average.toFixed(2)} · ${f.won ? tr('won') : tr('lost')} · ${when(f.at)}</title></circle>`).join('')}</svg></div>`;
   }
 
   async function memberPage(id) {
@@ -218,13 +227,13 @@
     const tile = (k, v, h) => `<div class="tile"><small>${k}</small><b>${esc(v)}</b>${h ? `<span>${esc(h)}</span>` : ''}</div>`;
     // Opponents who are members link to their own profile
     const opp = o => (o.key.startsWith('name:') ? esc(o.name) : `<a data-act="member" data-v="${esc(o.key)}">${esc(o.name)}</a>`);
-    return `<button class="back" data-act="back">← All players</button>
+    return `<button class="back" data-act="back">← ${tr('All players')}</button>
       <div class="card" style="margin-bottom:16px"><div class="row" style="gap:16px;margin-bottom:18px"><span class="av big">${esc(initials(p.name))}</span><div><h2 style="margin:0">${esc(p.name)}</h2>${p.nickname ? `<div class="muted">“${esc(p.nickname)}”</div>` : ''}</div></div>
-        <div class="tiles">${tile('Average', fmt(t.average, 2))}${tile('First 9', fmt(t.first9, 2))}${tile('Checkout', t.checkout_pct ? `${fmt(t.checkout_pct)}%` : '–')}
-        ${tile('180s', t.t180 || 0)}${tile('140+', t.t140 || 0)}${tile('Best checkout', t.best_checkout || '–')}${tile('Best leg', t.best_leg ? `${t.best_leg} darts` : '–')}${tile('Games', t.games || 0, t.games ? `${t.wins} won · ${Math.round(t.win_pct)}%` : '')}</div></div>
-      <div class="grid2"><div class="card"><h3>Form</h3>${formChart(s.form)}</div>
-        <div class="card"><h3>Head-to-head</h3>${s.head_to_head.length ? `<table><tr><th>Opponent</th><th>Games</th><th>Won</th></tr>${s.head_to_head.slice(0, 10).map(o => `<tr><td>${opp(o)}</td><td>${o.games}</td><td>${o.wins}</td></tr>`).join('')}</table>` : '<div class="muted small">Nobody played yet.</div>'}</div></div>
-      <div class="card" style="margin-top:24px"><h3>Recent games</h3>${s.recent.length ? `<table><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Average</th><th>Board</th></tr>${s.recent.map(g => `<tr${g.counts ? '' : ' style="color:#707580"'}><td>${when(g.at)}</td><td>${esc(g.opponents.join(', ') || 'Solo')}</td><td><span class="res${g.won ? ' w' : ''}">${g.won ? 'W' : 'L'}</span> ${g.score[0]}–${g.score[1]}</td><td>${fmt(g.average, 2)}</td><td>${esc(g.board)}</td></tr>`).join('')}</table>` : '<div class="muted small">No games in this period.</div>'}</div>`;
+        <div class="tiles">${tile(tr('Average'), fmt(t.average, 2))}${tile(tr('First 9'), fmt(t.first9, 2))}${tile(tr('Checkout'), t.checkout_pct ? `${fmt(t.checkout_pct)}%` : '–')}
+        ${tile(tr('180s'), t.t180 || 0)}${tile('140+', t.t140 || 0)}${tile(tr('Best checkout'), t.best_checkout || '–')}${tile(tr('Best leg'), t.best_leg ? tr('{n} darts', { n: t.best_leg }) : '–')}${tile(tr('Games'), t.games || 0, t.games ? tr('{wins} won · {pct}%', { wins: t.wins, pct: Math.round(t.win_pct) }) : '')}</div></div>
+      <div class="grid2"><div class="card"><h3>${tr('Form')}</h3>${formChart(s.form)}</div>
+        <div class="card"><h3>${tr('Head-to-head')}</h3>${s.head_to_head.length ? `<table><tr><th>${tr('Opponent')}</th><th>${tr('Games')}</th><th>${tr('Won')}</th></tr>${s.head_to_head.slice(0, 10).map(o => `<tr><td>${opp(o)}</td><td>${o.games}</td><td>${o.wins}</td></tr>`).join('')}</table>` : `<div class="muted small">${tr('Nobody played yet.')}</div>`}</div></div>
+      <div class="card" style="margin-top:24px"><h3>${tr('Recent games')}</h3>${s.recent.length ? `<table><tr><th>${tr('Date')}</th><th>${tr('Opponent')}</th><th>${tr('Result')}</th><th>${tr('Average')}</th><th>Board</th></tr>${s.recent.map(g => `<tr${g.counts ? '' : ' style="color:#707580"'}><td>${when(g.at)}</td><td>${esc(g.opponents.join(', ') || tr('Solo'))}</td><td><span class="res${g.won ? ' w' : ''}">${g.won ? tr('W') : tr('L')}</span> ${g.score[0]}–${g.score[1]}</td><td>${fmt(g.average, 2)}</td><td>${esc(g.board)}</td></tr>`).join('')}</table>` : `<div class="muted small">${tr('No games in this period.')}</div>`}</div>`;
   }
 
   function act(el) {
@@ -261,7 +270,7 @@
     if (lastSaved !== null && id && id !== lastSaved && Date.now() / 1000 - s.at < 120) {
       if (!noticeHost.isConnected && document.body) document.documentElement.appendChild(noticeHost);
       const el = noticeRoot.getElementById('t');
-      el.innerHTML = `<div class="toast">🎯 ${esc(s.text)}</div>`;
+      el.innerHTML = `<div class="toast">🎯 ${esc(srv(s.text))}</div>`;
       setTimeout(() => { el.innerHTML = ''; }, 6000);
       data = null;
       if (isOpen()) render();
@@ -311,7 +320,7 @@
   // Split button: a gear segment on the right opens AutoGlow's Players page
   const lmGear = document.createElement('span');
   lmGear.setAttribute('role', 'button');
-  lmGear.title = 'AutoGlow Players';
+  lmGear.title = tr('AutoGlow Players');
   lmGear.style.cssText = 'position:absolute;top:0;right:0;bottom:0;width:44px;display:grid;place-items:center;background:#00000024;border-radius:0 12px 12px 0;cursor:pointer';
   lmGear.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
   lmGear.addEventListener('mouseenter', () => { lmGear.style.background = '#00000040'; });
@@ -323,9 +332,8 @@
   lmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span></span>';
   lmBtn.appendChild(lmGear);
   const lmPop = lobbyRoot.getElementById('lmPop');
-  // Autodarts' language decides ours: its Add player button reads German or English
-  let de = false;
-  const lmWords = () => de ? { add: 'Lokalen Spieler hinzufügen', search: 'Lokale Spieler suchen', local: 'Lokaler Spieler', create: 'Neuen lokalen Spieler erstellen', name: 'Name', createBtn: 'Erstellen und hinzufügen', back: 'Zurück', addBtn: 'Hinzufügen', added: 'Hinzugefügt', none: 'Niemand gefunden.', empty: 'Noch keine lokalen Spieler. Lege sie in AutoGlow unter Spieler an.' } : { add: 'Add local player', search: 'Search local players', local: 'Local Player', create: 'Create new local player', name: 'Name', createBtn: 'Create and add', back: 'Back', addBtn: 'Add', added: 'Added', none: 'Nobody matches.', empty: 'No local players yet. Add them in AutoGlow under Players.' };
+  // Autodarts' language decides ours (i18n.js)
+  const lmWords = () => ({ add: tr('Add local player'), search: tr('Search local players'), local: tr('Local Player'), create: tr('Create new local player'), name: tr('Name'), createBtn: tr('Create and add'), back: tr('Back'), addBtn: tr('Add'), added: tr('Added'), none: tr('Nobody matches.'), empty: tr('No local players yet. Add them in AutoGlow under Players.') });
   let lm = { creating: false, draft: '', members: [], lobby: [], query: '', busy: '', done: new Set(), autoShown: '' };
 
   const textIs = (el, re) => re.test((el.textContent || '').trim());
@@ -359,10 +367,10 @@
   }
   async function addToLobbyDialog(name) {
     const open = addPlayerButton();
-    if (!open) throw new Error('Open a local game lobby first');
+    if (!open) throw new Error(tr('Open a local game lobby first'));
     open.click();
     const dlg = await waitFor(() => { const d = document.querySelector('[role="dialog"]'); return d && d.querySelector('input') ? d : null; });
-    if (!dlg) throw new Error('The Add player dialog did not open');
+    if (!dlg) throw new Error(tr('The Add player dialog did not open'));
     typeInto(dlg.querySelector('input'), name);
     const same = (el) => [...el.querySelectorAll('span')].some(s => s.textContent.trim().toUpperCase() === name.toUpperCase());
     // The guest Autodarts still knows (its own row, shown once its search answers), else the button that creates the guest
@@ -380,7 +388,7 @@
     const still = document.querySelector('[role="dialog"]');
     if (still) (([...still.querySelectorAll('button')].find(b => textIs(b, /^(close|schließen)$/i))) || still.querySelector('button')).click();
     await waitFor(() => !document.querySelector('[role="dialog"]'), 600, 50);
-    if (!target && !already) throw new Error(`Autodarts did not offer to add ${name}`);
+    if (!target && !already) throw new Error(tr('Autodarts did not offer to add {name}', { name }));
   }
 
   function renderMenu() {
@@ -389,7 +397,7 @@
     const typing = lobbyRoot.activeElement && lobbyRoot.activeElement.id === 'lmQ';
     const W = lmWords();
     if (lm.creating) {
-      lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="${tr('Close')}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         <h2 class="lm-title">${W.create}</h2>
         <div class="lm-body"><input id="lmName" placeholder="${W.name}" value="${esc(lm.draft)}" maxlength="60" autocomplete="off">
           <button class="lm-btn lm-go" id="lmCreate" ${lm.busy ? 'disabled' : ''}>${lm.busy ? '…' : W.createBtn}</button>
@@ -398,11 +406,11 @@
       if (n && !lm.busy) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
       return;
     }
-    lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    lmPop.innerHTML = `<button class="lm-x" id="lmX" aria-label="${tr('Close')}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       <h2 class="lm-title">${W.add}</h2>
       <div class="lm-body"><input id="lmQ" placeholder="${W.search}" value="${esc(lm.query)}" autocomplete="off"><button class="lm-new" id="lmNew"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>${W.create}</button>${list.length ? list.map(m => {
         const here = inLobby(m), busy = lm.busy === m.id;
-        return `<div class="lm-row"><div class="lm-who"><span class="lm-av">${esc(initials(m.name))}</span><span class="lm-tag"><span>${esc(adName(m))}</span>${m.summary && m.summary.games ? `<small>${fmt(m.summary.average)} avg</small>` : ''}</span></div>
+        return `<div class="lm-row"><div class="lm-who"><span class="lm-av">${esc(initials(m.name))}</span><span class="lm-tag"><span>${esc(adName(m))}</span>${m.summary && m.summary.games ? `<small>${tr('{avg} avg', { avg: fmt(m.summary.average) })}</small>` : ''}</span></div>
           <button class="lm-btn" data-m="${esc(m.id)}" ${here || lm.busy ? 'disabled' : ''}>${busy ? '…' : here ? W.added : W.addBtn}</button></div>`;
       }).join('') : `<div class="lm-empty">${lm.members.length ? W.none : W.empty}</div>`}</div>`;
     if (typing) { const i = lobbyRoot.getElementById('lmQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
@@ -444,7 +452,7 @@
       lm.draft = '';
       lm.creating = false;
     } catch (err) {
-      flashLobby(err.message);
+      flashLobby(srv(err.message));
     }
     lm.busy = '';
     await loadMembers();
@@ -468,7 +476,7 @@
       await addToLobby(adName(m));
       lm.done.add(m.id);
     } catch (err) {
-      flashLobby(err.message);
+      flashLobby(srv(err.message));
     }
     lm.busy = '';
     await loadMembers();
@@ -525,7 +533,6 @@
       return;
     }
     if (!lobbyHost.isConnected) document.documentElement.appendChild(lobbyHost);
-    de = /spieler/i.test(add.textContent);
     const lbl = lmBtn.querySelector('span');
     if (lbl.textContent !== lmWords().add) lbl.textContent = lmWords().add;
     // Between Add player and Add bot, wearing Add player's classes so it looks like Autodarts' own button
@@ -550,6 +557,11 @@
   // ---------------------------------------------------------------------------
   // Start
   // ---------------------------------------------------------------------------
+  window.agI18n.onChange(() => {
+    labelNav();
+    if (isOpen()) render();
+    if (!lmPop.hidden) renderMenu();
+  });
   window.addEventListener('popstate', sync);
   window.addEventListener('hashchange', sync);
   window.addEventListener('resize', () => { if (isOpen()) placePage(); });

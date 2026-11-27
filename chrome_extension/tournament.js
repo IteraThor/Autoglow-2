@@ -8,20 +8,23 @@
   const POLL_CLOSED_MS = 4000;
   const NAV_PATHS = ['/play', '/online', '/lobbies', '/boards', '/tournaments', '/statistics', '/history', '/matches', '/friends', '/settings'];
 
+  // `t` is the tournament in this file, so the translator is tr
+  const { tn, srv } = window.agI18n;
+  const tr = window.agI18n.t;
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /** "Updated" only when it was: any other failure means the extension's background did not answer */
-  const bridgeError = m => (/context invalidated/i.test(m || '') ? 'AutoGlow Bridge was updated. Reload this page.' : 'AutoGlow Bridge did not answer. Restart the browser, or reload the extension in chrome://extensions.');
+  const bridgeError = m => (/context invalidated/i.test(m || '') ? tr('AutoGlow Bridge was updated. Reload this page.') : tr('AutoGlow Bridge did not answer. Restart the browser, or reload the extension in chrome://extensions.'));
 
   function api(path, body) {
     return new Promise((resolve, reject) => {
       try {
         chrome.runtime.sendMessage({ type: 'tournament', path, body }, (r) => {
           if (chrome.runtime.lastError) return reject(new Error(bridgeError(chrome.runtime.lastError.message)));
-          if (r && r.ok) resolve(r.data); else reject(new Error(r ? r.error : 'AutoGlow is not reachable'));
+          if (r && r.ok) resolve(r.data); else reject(new Error(r ? srv(r.error) : tr('AutoGlow is not reachable')));
         });
       } catch {
-        reject(new Error('AutoGlow Bridge was updated. Reload this page.'));
+        reject(new Error(tr('AutoGlow Bridge was updated. Reload this page.')));
       }
     });
   }
@@ -223,10 +226,10 @@
       try {
         chrome.runtime.sendMessage({ type: 'club', path }, (r) => {
           if (chrome.runtime.lastError) return reject(new Error(bridgeError(chrome.runtime.lastError.message)));
-          if (r && r.ok) resolve(r.data); else reject(new Error(r ? r.error : 'AutoGlow is not reachable'));
+          if (r && r.ok) resolve(r.data); else reject(new Error(r ? srv(r.error) : tr('AutoGlow is not reachable')));
         });
       } catch {
-        reject(new Error('AutoGlow Bridge was updated. Reload this page.'));
+        reject(new Error(tr('AutoGlow Bridge was updated. Reload this page.')));
       }
     });
   }
@@ -246,7 +249,6 @@
     :host{display:block}:host(.top){display:flex}
     a{display:flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer;color:inherit;font:inherit;border-radius:8px;white-space:nowrap}
     a:hover{background:#ffffff0d}a.on{background:#ffffff14;color:#fff}
-    :host(.compact) .long,:host(.compact) .short{display:none!important}
     :host(.top) .sec{display:none}:host(.top) a{position:relative;border-radius:0;background:none;gap:7px}:host(.top) a:hover,:host(.top) a.on{color:#fff!important}
     :host(.top) a.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:#fff}
     :host(.bottom) a{flex-direction:column;gap:4px;justify-content:center}:host(.bottom) .long{display:none}:host(.bottom) .short{display:inline!important}
@@ -255,12 +257,18 @@
     .sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.55;margin:12px 0 4px 10px}
     .b{margin-left:auto;font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;background:#0b55df;color:#f0f5fd}.b.live{background:#da3954}.b:empty{display:none}
     svg{width:18px;height:18px;flex:none}
-    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere */ :host(.top) svg{display:none}
+    /* Top bar: text only, like Autodarts' own Start / Spielen / Turniere; the bottom tab bar has icons */ :host(.top) svg{display:none}:host(.bottom) svg{display:block}
     /* AutoGlow's teal (the app's --accent-bright), so the extension's items stand apart from Autodarts' own */
     a{color:#2dd4bf!important}:host(.top) a:hover,:host(.top) a.on,a:hover,a.on{color:#5eead4!important}
     :host(.top) a.on::after{background:#2dd4bf!important}
-  </style><div class="sec">AutoGlow</div><a id="item" title="Local Tournament">${ICON.trophy.replace('width="22" height="22"', '')}<span class="long">Local Tournament</span><span class="short" style="display:none">Local</span><span class="b" id="badge"></span></a>`;
+  </style><div class="sec">AutoGlow</div><a id="item">${ICON.trophy.replace('width="22" height="22"', '')}<span class="long"></span><span class="short" style="display:none"></span><span class="b" id="badge"></span></a>`;
   const navItem = navRoot.getElementById('item');
+  function labelNav() {
+    navItem.title = tr('Local Tournament');
+    navItem.querySelector('.long').textContent = tr('Local Tournament');
+    navItem.querySelector('.short').textContent = tr('Local');
+  }
+  labelNav();
   navItem.addEventListener('click', (e) => { e.preventDefault(); openPage(); });
 
   /** The element holding Autodarts' sidebar links, found by the links it contains */
@@ -295,31 +303,12 @@
     navHost.classList.toggle('bottom', box.height < 120 && box.top > window.innerHeight / 2);
     dimNative(found.box);
     const cs = getComputedStyle(found.sample);
-    navItem.style.cssText = `padding:${cs.padding};font-size:${cs.fontSize};font-weight:${cs.fontWeight};font-family:${cs.fontFamily};min-height:${cs.height}`;
-    fitTopBar(found.box);
+    // Top bar: the font size is inherited from the menu, so content.js can shrink all items at once
+    navItem.style.cssText = `padding:${cs.padding};${navHost.classList.contains('bottom') ? `font-size:${cs.fontSize};` : ''}font-weight:${cs.fontWeight};font-family:${cs.fontFamily};min-height:${cs.height}`;
   }
 
-  // Narrow screens (portrait): the centred top bar runs into the logo and the icons on its right.
-  // Then our items show only their icons. The full width is remembered, so it doesn't flip each tick.
-  let fullWidth = 0, fitWidth = 0;
-  function fitTopBar(box) {
-    if (!navHost.classList.contains('top') || navHost.classList.contains('bottom')) {
-      navHost.classList.remove('compact');
-      return;
-    }
-    if (fitWidth !== window.innerWidth) { fitWidth = window.innerWidth; fullWidth = 0; navHost.classList.remove('compact'); }
-    const r = box.getBoundingClientRect();
-    if (!navHost.classList.contains('compact')) fullWidth = r.width;
-    const mid = r.left + r.width / 2;
-    let room = Infinity;
-    for (const s of box.parentElement.children) {
-      if (s === box || s.contains(box)) continue;
-      const o = s.getBoundingClientRect();
-      if (!o.width) continue;
-      room = Math.min(room, o.right <= mid ? mid - o.right : o.left - mid);
-    }
-    navHost.classList.toggle('compact', fullWidth / 2 + 16 > room);
-  }
+  // Narrow screens: our items keep their text (the top bar shows no icons). content.js makes the room:
+  // the Winmau Autodarts logo goes and the menu moves left (fitHeader).
 
   /** While our page is open, Autodarts' own active entry and its underline must not look active too */
   function dimNative(box) {
@@ -369,7 +358,7 @@
       data = await api('local');
       error = '';
     } catch (e) {
-      error = e.message;
+      error = srv(e.message);
     }
     badge();
     toast();
@@ -399,10 +388,10 @@
       const a = data.board && data.board.assignment;
       if (data.role === 'host') {
         const n = ((data.tournament || {}).matches || []).filter(m => m.state === 'live').length;
-        txt = n ? `${n} live` : '';
+        txt = n ? tr('{n} live', { n }) : '';
         live = n > 0;
       } else if (a) {
-        txt = data.board.linked ? 'LIVE' : 'Next';
+        txt = data.board.linked ? 'LIVE' : tr('Next');
         live = !!data.board.linked;
       }
     }
@@ -447,7 +436,7 @@
   }
 
   let calledOut = '';
-  const startButton = (attr = 'data-n', match = '') => (starting && !starting.error ? '' : `<button class="btn" ${attr}="start"${match ? ` data-m="${esc(match)}"` : ''}>▶ Start game</button>`);
+  const startButton = (attr = 'data-n', match = '') => (starting && !starting.error ? '' : `<button class="btn" ${attr}="start"${match ? ` data-m="${esc(match)}"` : ''}>▶ ${tr('Start game')}</button>`);
   /** A new match for this board: shown in the page the players are on, until the game is linked */
   function callout(force) {
     const a = data && data.board && data.board.assignment;
@@ -466,10 +455,10 @@
     if (calledOut === key && !force && el.innerHTML) return;
     calledOut = key;
     const s = a.settings;
-    el.innerHTML = `<div class="nx"><div><span class="chip">Local Tournament</span>
+    el.innerHTML = `<div class="nx"><div><span class="chip">${tr('Local Tournament')}</span>
       <div class="who">${esc(a.players[0].name)} <span class="muted">vs</span> ${esc(a.players[1].name)}</div>
-      <div class="muted">X01 ${s.base_score} · ${esc(s.in_mode)} in · ${esc(s.out_mode)} out · first to ${s.sets ? `${s.sets} set${s.sets > 1 ? 's' : ''} (${s.legs} leg${s.legs > 1 ? 's' : ''} each)` : `${s.legs} leg${s.legs > 1 ? 's' : ''}`}</div></div>
-      <div class="r">${startButton()}${starting && !starting.error ? '' : '<button class="btn sec" data-n="open" title="All upcoming matches: someone isn\'t here? Play another one first">Change match…</button><button class="btn sec" data-n="hide">Hide</button>'}</div></div>`;
+      <div class="muted">X01 ${s.base_score} · ${esc(s.in_mode)} in · ${esc(s.out_mode)} out · ${matchLength(s)}</div></div>
+      <div class="r">${startButton()}${starting && !starting.error ? '' : `<button class="btn sec" data-n="open" title="${tr('All upcoming matches: someone isn’t here? Play another one first')}">${tr('Change match…')}</button><button class="btn sec" data-n="hide">${tr('Hide')}</button>`}</div></div>`;
   }
   cardRoot.addEventListener('click', (e) => {
     const b = e.target.closest('[data-n]');
@@ -479,6 +468,12 @@
     if (b.dataset.n === 'hide') calledOut = `x${calledOut}`;
     callout(true);
   });
+
+  /** "first to 2 sets (3 legs each)" */
+  function matchLength(s) {
+    const legs = tn(s.legs, '{n} leg', '{n} legs');
+    return s.sets ? tn(s.sets, 'first to {n} set ({legs} each)', 'first to {n} sets ({legs} each)', { legs }) : tr('first to {legs}', { legs });
+  }
 
   function flash(msg) {
     ensureNotices();
@@ -494,7 +489,7 @@
     const el = noticeRoot.getElementById('toast');
     if (n && n !== lastNotice) {
       lastNotice = n;
-      el.innerHTML = `<div class="toast">${esc(n)}</div>`;
+      el.innerHTML = `<div class="toast">${esc(srv(n))}</div>`;
       setTimeout(() => { el.innerHTML = ''; }, 4000);
     }
     if (!n) lastNotice = '';
@@ -523,9 +518,9 @@
     const el = noticeRoot.getElementById('cover');
     if (!starting) { el.innerHTML = ''; return; }
     const [p0, p1] = starting.names;
-    el.innerHTML = `<div class="cover"><div class="box">${starting.error ? '<div class="lbl">Could not start the game</div>' : '<div class="spin"></div><div class="lbl">Starting game</div>'}
+    el.innerHTML = `<div class="cover"><div class="box">${starting.error ? `<div class="lbl">${tr('Could not start the game')}</div>` : `<div class="spin"></div><div class="lbl">${tr('Starting game')}</div>`}
       <div class="who">${esc(p0)} <span class="x">vs</span> ${esc(p1)}</div>
-      ${starting.error ? `<div class="muted">${esc(starting.error)}</div><div style="margin-top:18px"><button class="btn sec" id="cover-close">Close</button></div>` : ''}</div></div>`;
+      ${starting.error ? `<div class="muted">${esc(srv(starting.error))}</div><div style="margin-top:18px"><button class="btn sec" id="cover-close">${tr('Close')}</button></div>` : ''}</div></div>`;
   }
   noticeRoot.addEventListener('click', (e) => { if (e.target.id === 'cover-close') { starting = null; cover(); callout(true); } });
 
@@ -538,7 +533,7 @@
         if (ev.source !== window || !ev.data || ev.data.source !== 'autoglow-start-result' || ev.data.id !== id) return;
         if (ev.data.ok) done(resolve, ev.data.match); else done(reject, new Error(ev.data.error));
       };
-      const timer = setTimeout(() => done(reject, new Error('Autodarts did not answer. Reload the page and try again.')), 15000);
+      const timer = setTimeout(() => done(reject, new Error(tr('Autodarts did not answer. Reload the page and try again.'))), 15000);
       window.addEventListener('message', on);
       window.postMessage({ source: 'autoglow-start', id, game, finished }, location.origin);
     });
@@ -563,7 +558,7 @@
           await refresh(false);
         }
         a = data.board.assignment;
-        if (!a || a.match !== m.id) throw new Error('The host did not hand this match over. Try again.');
+        if (!a || a.match !== m.id) throw new Error(tr('The host did not hand this match over. Try again.'));
       }
       picked = null;
       const players = a.players.map(p => ({ name: (p.ad_name || p.name).trim() }));
@@ -572,7 +567,7 @@
       // Autodarts may still ask "End this game?" on a running match: then the cover goes so it can be answered
       if (await waitFor(() => location.pathname === `/matches/${id}`, 3000)) await sleep(700);
     } catch (e) {
-      starting = { ...starting, error: e.message };
+      starting = { ...starting, error: srv(e.message) };
       cover();
       callout(true);
       return;
@@ -601,7 +596,7 @@
       error = '';
       if (after) after();
     } catch (e) {
-      error = e.message;
+      error = srv(e.message);
     }
     busy = false;
     lastJson = '';
@@ -636,22 +631,23 @@
     }
     return by;
   }
-  const boardTags = (bs, me) => bs.map(b => `<span class="bd" style="--bc:${boardColor(b)}"><i></i>${b.node_id === me ? 'This board' : `Board ${b.number}`}</span>`).join('');
+  const boardTags = (bs, me) => bs.map(b => `<span class="bd" style="--bc:${boardColor(b)}"><i></i>${b.node_id === me ? tr('This board') : tr('Board {n}', { n: b.number })}</span>`).join('');
 
   function boardName(node) {
     const b = T() && (T().boards || []).find(x => x.node_id === node);
-    return b ? `Board ${b.number}` : '';
+    return b ? tr('Board {n}', { n: b.number }) : '';
   }
   function sideName(m, i) {
     const s = m.sides[i];
     if (s.player) return esc(pname(s.player));
-    if (s.bye) return '<span class="src">bye</span>';
+    if (s.bye) return `<span class="src">${tr('bye')}</span>`;
     const f = s.from || '';
-    const txt = f.startsWith('W:') ? `Winner ${f.slice(2)}` : f.startsWith('L:') ? `Loser ${f.slice(2)}` : f.startsWith('G:') ? `${ordinal(+f.split(':')[2])} Group ${f.split(':')[1]}` : '—';
+    const txt = f.startsWith('W:') ? tr('Winner {m}', { m: f.slice(2) }) : f.startsWith('L:') ? tr('Loser {m}', { m: f.slice(2) }) : f.startsWith('G:') ? tr('{place} Group {name}', { place: ordinal(+f.split(':')[2]), name: f.split(':')[1] }) : '—';
     return `<span class="src">${esc(txt)}</span>`;
   }
-  const ordinal = n => `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10 < 4 ? n % 10 : 0]}`;
-  const FORMAT_NAME = { single_ko: 'Single KO', double_ko: 'Double KO', groups: 'Groups → KO', league: 'League', swiss: 'Swiss' };
+  const ordinal = n => (window.agI18n.lang() === 'de' ? `${n}.` : `${n}${['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10 < 4 ? n % 10 : 0]}`);
+  const FORMAT_EN = { single_ko: 'Single KO', double_ko: 'Double KO', groups: 'Groups → KO', league: 'League', swiss: 'Swiss' };
+  const FORMAT_NAME = new Proxy(FORMAT_EN, { get: (o, k) => (o[k] ? tr(o[k]) : undefined) });
 
   function matchBox(m, by = {}) {
     const r = m.result;
@@ -666,9 +662,9 @@
     const bs = m.state === 'ready' || m.state === 'assigned' ? (by[m.id] || []).slice().sort((p, q) => p.number - q.number) : [];
     const meta = m.state === 'live' ? `<span style="color:#ff6b84">● LIVE</span> · ${esc(boardName(m.board))}`
       : bs.length ? `<span class="bt">${boardTags(bs, data.node.id)}</span>`
-      : m.state === 'assigned' ? `Setting up · ${esc(boardName(m.board))}`
-      : m.state === 'ready' ? (m.held ? 'On hold' : 'Waiting for a free board')
-      : m.state === 'skipped' ? 'Not needed' : '';
+      : m.state === 'assigned' ? `${tr('Setting up')} · ${esc(boardName(m.board))}`
+      : m.state === 'ready' ? (m.held ? tr('On hold') : tr('Waiting for a free board'))
+      : m.state === 'skipped' ? tr('Not needed') : '';
     return `<div class="m ${m.state === 'live' ? 'live' : ''}${bs.length ? ' by' : ''}"${bs.length ? ` style="--bc:${boardColor(bs[0])}"` : ''}><span class="ref">${esc(m.id)}</span>
       <div class="p ${w === 0 ? 'win' : w === 1 ? 'lose' : ''}"><span>${sideName(m, 0)}</span><span class="scv">${sc(0)}</span></div>
       <div class="p ${w === 1 ? 'win' : w === 0 ? 'lose' : ''}"><span>${sideName(m, 1)}</span><span class="scv">${sc(1)}</span></div>
@@ -688,13 +684,13 @@
     const rounds = [...new Set(ms.map(m => m.round))].sort((a, b) => a - b);
     return `<div class="bracket">${rounds.map(r => {
       const rm = ms.filter(m => m.round === r).sort((a, b) => a.order - b.order);
-      return `<div class="round"><h5>${esc(rm[0].label)}</h5>${rm.map(m => matchBox(m, lu)).join('')}</div>`;
+      return `<div class="round"><h5>${esc(srv(rm[0].label))}</h5>${rm.map(m => matchBox(m, lu)).join('')}</div>`;
     }).join('')}</div>`;
   }
 
   function tablesHTML(t) {
-    return (t.tables || []).map(tb => `<div class="card" style="margin-bottom:14px"><h3>${esc(tb.name.length === 1 ? `Group ${tb.name}` : tb.name)}</h3>
-      <table><tr><th>#</th><th>Player</th><th>Played</th><th>Won</th><th>Lost</th><th>Legs</th><th>+/-</th>${t.format === 'swiss' ? '<th>Buchholz</th>' : ''}<th>Avg</th><th>180s</th></tr>
+    return (t.tables || []).map(tb => `<div class="card" style="margin-bottom:14px"><h3>${esc(tb.name.length === 1 ? tr('Group {name}', { name: tb.name }) : srv(tb.name))}</h3>
+      <table><tr><th>#</th><th>${tr('Player')}</th><th>${tr('Played')}</th><th>${tr('Won')}</th><th>${tr('Lost')}</th><th>Legs</th><th>+/-</th>${t.format === 'swiss' ? '<th>Buchholz</th>' : ''}<th>${tr('Avg')}</th><th>${tr('180s')}</th></tr>
       ${tb.rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.name)}</b></td><td>${r.played}</td><td>${r.won}</td><td>${r.lost}</td><td>${r.legs_for}:${r.legs_against}</td><td>${r.legs_for - r.legs_against}</td>${t.format === 'swiss' ? `<td>${r.buchholz}</td>` : ''}<td>${r.average ? r.average.toFixed(2) : '–'}</td><td>${r.t180 || 0}</td></tr>`).join('')}</table></div>`).join('');
   }
 
@@ -703,20 +699,20 @@
     const by = (s) => ms.filter(m => m.stage === s);
     const lu = t.status === 'running' ? lineups(t) : {};
     let h = '';
-    if (t.champion) h += `<div class="card" style="margin-bottom:16px;border-color:#f7d45866"><h2 style="color:var(--yellow)">🏆 ${esc(pname(t.champion))} wins ${esc(t.name)}</h2></div>`;
+    if (t.champion) h += `<div class="card" style="margin-bottom:16px;border-color:#f7d45866"><h2 style="color:var(--yellow)">🏆 ${tr('{player} wins {name}', { player: esc(pname(t.champion)), name: esc(t.name) })}</h2></div>`;
     if (t.format === 'single_ko') h += bracketCols(by('main'), lu);
     if (t.format === 'double_ko') {
-      h += `<div class="sect">Winners bracket</div>${bracketCols(by('wb'), lu)}`;
-      if (by('lb').length) h += `<div class="sect">Losers bracket</div>${bracketCols(by('lb'), lu)}`;
-      h += `<div class="sect">Grand final</div>${bracketCols(by('gf'), lu)}`;
+      h += `<div class="sect">${tr('Winners bracket')}</div>${bracketCols(by('wb'), lu)}`;
+      if (by('lb').length) h += `<div class="sect">${tr('Losers bracket')}</div>${bracketCols(by('lb'), lu)}`;
+      h += `<div class="sect">${tr('Grand final')}</div>${bracketCols(by('gf'), lu)}`;
     }
     if (t.format === 'groups') {
       h += tablesHTML(t);
-      h += `<div class="sect">Knockout</div>${bracketCols(by('ko'), lu)}`;
-      h += `<div class="sect">Group matches</div>${matchList(by('group'), lu)}`;
+      h += `<div class="sect">${tr('Knockout')}</div>${bracketCols(by('ko'), lu)}`;
+      h += `<div class="sect">${tr('Group matches')}</div>${matchList(by('group'), lu)}`;
     }
-    if (t.format === 'swiss') h += tablesHTML(t) + `<div class="sect">Rounds</div>${bracketCols(by('swiss'), lu)}`;
-    if (t.format === 'league') h += tablesHTML(t) + `<div class="sect">Matches${t.return_round ? ' (with return round)' : ''}</div>${matchList(by('group'), lu)}`;
+    if (t.format === 'swiss') h += tablesHTML(t) + `<div class="sect">${tr('Rounds')}</div>${bracketCols(by('swiss'), lu)}`;
+    if (t.format === 'league') h += tablesHTML(t) + `<div class="sect">${t.return_round ? tr('Matches (with return round)') : tr('Matches')}</div>${matchList(by('group'), lu)}`;
     return h;
   }
 
@@ -732,7 +728,7 @@
     placePage();
     let h = error ? `<div class="err">${esc(error)}</div>` : '';
     if (!data) {
-      pg.innerHTML = h + `<div class="ph"><h1>Local Tournament</h1></div><div class="card">Connecting to AutoGlow… Is AutoGlow running on this PC?</div>`;
+      pg.innerHTML = h + `<div class="ph"><h1>${tr('Local Tournament')}</h1></div><div class="card">${tr('Connecting to AutoGlow… Is AutoGlow running on this PC?')}</div>`;
       return;
     }
     if (data.role === 'host') h += hostPage();
@@ -779,24 +775,24 @@
   function freshPage() {
     if (screen === 'mode') return modePage();
     if (screen === 'join') {
-      return `<div class="ph"><div><h1>Join a tournament</h1><div class="sub">AutoGlows found on your network</div></div><div class="r"><button class="btn sec sm" data-act="rescan">Search again</button><button class="btn sec sm" data-act="screen" data-v="start">← Back</button></div></div>
-        ${hosts === null ? '<div class="card">Searching…</div>' : (hosts.filter(x => x.tournament).length ? hosts.filter(x => x.tournament).map(x => `<div class="card row" style="margin-bottom:8px"><div class="ic">${ICON.trophy}</div><div style="flex:1"><b>${esc(x.tournament)}</b><div class="small muted">hosted by ${esc(x.name)} · ${esc(x.address)}</div></div><button class="btn sm" data-act="join" data-addr="${esc(x.address)}" data-host="${esc(x.name)}" data-tour="${esc(x.tournament)}">Join</button></div>`).join('') : '<div class="card muted">No tournament found. Is it hosted on a PC in this network?</div>')}
-        <div class="card" style="margin-top:14px"><h3>Not listed?</h3><div class="muted small" style="margin-bottom:10px">Type the host's address, e.g. 192.168.1.20</div><div class="row"><input id="addr" placeholder="192.168.1.20" style="width:240px"><button class="btn sec" data-act="join-addr">Connect</button></div></div>`;
+      return `<div class="ph"><div><h1>${tr('Join a tournament')}</h1><div class="sub">${tr('AutoGlows found on your network')}</div></div><div class="r"><button class="btn sec sm" data-act="rescan">${tr('Search again')}</button><button class="btn sec sm" data-act="screen" data-v="start">← ${tr('Back')}</button></div></div>
+        ${hosts === null ? `<div class="card">${tr('Searching…')}</div>` : (hosts.filter(x => x.tournament).length ? hosts.filter(x => x.tournament).map(x => `<div class="card row" style="margin-bottom:8px"><div class="ic">${ICON.trophy}</div><div style="flex:1"><b>${esc(x.tournament)}</b><div class="small muted">${tr('hosted by {name}', { name: esc(x.name) })} · ${esc(x.address)}</div></div><button class="btn sm" data-act="join" data-addr="${esc(x.address)}" data-host="${esc(x.name)}" data-tour="${esc(x.tournament)}">${tr('Join')}</button></div>`).join('') : `<div class="card muted">${tr('No tournament found. Is it hosted on a PC in this network?')}</div>`)}
+        <div class="card" style="margin-top:14px"><h3>${tr('Not listed?')}</h3><div class="muted small" style="margin-bottom:10px">${tr('Type the host’s address, e.g. 192.168.1.20')}</div><div class="row"><input id="addr" placeholder="192.168.1.20" style="width:240px"><button class="btn sec" data-act="join-addr">${tr('Connect')}</button></div></div>`;
     }
     if (screen === 'exists') {
       const h = (hosts || []).find(x => x.tournament);
-      return `<div class="ph"><div><h1>There is already a host</h1><div class="sub"><b style="color:#fff">${esc(h.name)}</b> is hosting <b style="color:#fff">${esc(h.tournament)}</b> on this network.</div></div></div>
-        <div class="grid2"><button class="choice" data-act="join" data-addr="${esc(h.address)}" data-host="${esc(h.name)}" data-tour="${esc(h.tournament)}"><div class="ic">${ICON.link}</div><h2>Join that one</h2><div class="muted">Recommended. This PC becomes a board of ${esc(h.tournament)}.</div></button>
-        <button class="choice" data-act="wizard"><div class="ic">${ICON.trophy}</div><h2>Host a separate one</h2><div class="muted">For a second, independent event on the same network.</div></button></div>
-        <div class="row" style="margin-top:20px"><button class="btn danger" data-act="end-at" data-addr="${esc(h.address)}" data-tour="${esc(h.tournament)}">End ${esc(h.tournament)}</button><span class="muted small">Ends it on ${esc(h.name)} and every board. For when the host's screen is out of reach.</span></div>`;
+      return `<div class="ph"><div><h1>${tr('There is already a host')}</h1><div class="sub">${tr('<b style="color:#fff">{host}</b> is hosting <b style="color:#fff">{name}</b> on this network.', { host: esc(h.name), name: esc(h.tournament) })}</div></div></div>
+        <div class="grid2"><button class="choice" data-act="join" data-addr="${esc(h.address)}" data-host="${esc(h.name)}" data-tour="${esc(h.tournament)}"><div class="ic">${ICON.link}</div><h2>${tr('Join that one')}</h2><div class="muted">${tr('Recommended. This PC becomes a board of {name}.', { name: esc(h.tournament) })}</div></button>
+        <button class="choice" data-act="wizard"><div class="ic">${ICON.trophy}</div><h2>${tr('Host a separate one')}</h2><div class="muted">${tr('For a second, independent event on the same network.')}</div></button></div>
+        <div class="row" style="margin-top:20px"><button class="btn danger" data-act="end-at" data-addr="${esc(h.address)}" data-tour="${esc(h.tournament)}">${tr('End {name}', { name: esc(h.tournament) })}</button><span class="muted small">${tr('Ends it on {host} and every board. For when the host’s screen is out of reach.', { host: esc(h.name) })}</span></div>`;
     }
-    return `<div class="ph"><div><h1>Local Tournament</h1><div class="sub">Run a tournament on your own boards. Every match is a normal local game.</div></div><div class="r"><button class="btn sec sm" data-act="help">How it works</button></div></div>
+    return `<div class="ph"><div><h1>${tr('Local Tournament')}</h1><div class="sub">${tr('Run a tournament on your own boards. Every match is a normal local game.')}</div></div><div class="r"><button class="btn sec sm" data-act="help">${tr('How it works')}</button></div></div>
       <div class="grid2">
-        <button class="choice" data-act="host"><div class="ic">${ICON.trophy}</div><h2>Host a tournament here</h2><div class="muted">This PC runs the tournament: players, bracket and boards. It can also play matches on its own board.</div></button>
-        <button class="choice" data-act="screen" data-v="join"><div class="ic">${ICON.link}</div><h2>Join a tournament</h2><div class="muted">This board plays the matches another PC hands out. Results are sent back automatically.</div></button>
+        <button class="choice" data-act="host"><div class="ic">${ICON.trophy}</div><h2>${tr('Host a tournament here')}</h2><div class="muted">${tr('This PC runs the tournament: players, bracket and boards. It can also play matches on its own board.')}</div></button>
+        <button class="choice" data-act="screen" data-v="join"><div class="ic">${ICON.link}</div><h2>${tr('Join a tournament')}</h2><div class="muted">${tr('This board plays the matches another PC hands out. Results are sent back automatically.')}</div></button>
       </div>
-      <div class="card" style="margin-top:16px"><div class="row"><span class="muted">This PC is called</span><input id="pcname" value="${esc(data.node.name)}" style="width:220px"><button class="btn sec sm" data-act="rename">Save</button></div></div>
-      <div class="note">The PC where you press <b>Host</b> becomes the host. Only one host per network: AutoGlow checks before it starts.</div>`;
+      <div class="card" style="margin-top:16px"><div class="row"><span class="muted">${tr('This PC is called')}</span><input id="pcname" value="${esc(data.node.name)}" style="width:220px"><button class="btn sec sm" data-act="rename">${tr('Save')}</button></div></div>
+      <div class="note">${tr('The PC where you press <b>Host</b> becomes the host. Only one host per network: AutoGlow checks before it starts.')}</div>`;
   }
 
   // ---------------------------------------------------------------------------
@@ -822,16 +818,18 @@
 
   /** Step 1 of hosting: how the tournament is played */
   function modePage() {
-    return `<div class="ph"><div><h1>Host a tournament</h1><div class="sub">How is it played? Rules and players come next, and everything can still be changed in the lobby.</div></div><div class="r"><button class="btn sec sm" data-act="screen" data-v="start">← Back</button></div></div>
-      <div class="modes">${FORMATS.map(([k, n, d, ps]) => `<button class="mode" data-act="mode" data-v="${k}"><svg viewBox="0 0 80 72" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet">${MODE_ART[k]}</svg><b>${n}</b><span class="muted">${d}</span><span class="small">${ps}</span></button>`).join('')}</div>
-      <div class="note">Every match is a normal local X01 game in Autodarts, on as many boards as you have.</div>`;
+    return `<div class="ph"><div><h1>${tr('Host a tournament')}</h1><div class="sub">${tr('How is it played? Rules and players come next, and everything can still be changed in the lobby.')}</div></div><div class="r"><button class="btn sec sm" data-act="screen" data-v="start">← ${tr('Back')}</button></div></div>
+      <div class="modes">${FORMATS.map(([k, n, d, ps]) => `<button class="mode" data-act="mode" data-v="${k}"><svg viewBox="0 0 80 72" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet">${MODE_ART[k]}</svg><b>${tr(n)}</b><span class="muted">${tr(d)}</span><span class="small">${tr(ps)}</span></button>`).join('')}</div>
+      <div class="note">${tr('Every match is a normal local X01 game in Autodarts, on as many boards as you have.')}</div>`;
   }
 
   /** The organizer's copy, taken from AutoGlow once per lobby (another PC may have opened it) */
   function lobbyState(t) {
     if (lob && lob.tid === t.id) return lob;
     const s = t.lobby || {};
-    lob = { tid: t.id, name: s.name || t.name, format: s.format || 'single_ko', groups: s.groups || 0, advance: s.advance || 2, swiss_rounds: s.swiss_rounds || 0,
+    // AutoGlow's default name is English: it becomes the page's language
+    const name = s.name || t.name;
+    lob = { tid: t.id, name: name === 'Local Tournament' ? tr('Local Tournament') : name, format: s.format || 'single_ko', groups: s.groups || 0, advance: s.advance || 2, swiss_rounds: s.swiss_rounds || 0,
       return_round: !!s.return_round, ko_legs: s.ko_legs || 0, semi_legs: s.semi_legs || 0, final_legs: s.final_legs || 0, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
       players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, visitor: false, rulesOpen: false,
       phone_signup: !!s.phone_signup, phoneSeen: s.phone_count || 0, qr: null };
@@ -856,7 +854,7 @@
       lob.phoneSeen = Math.max(lob.phoneSeen, p.phone);
       if (!lob.players.some(q => q.name.trim().toLowerCase() === p.name.trim().toLowerCase())) addPlayer(p.name, { phone: p.phone });
     }
-    flash(`${fresh.map(p => p.name).join(', ')} signed up by phone`);
+    flash(tr('{names} signed up by phone', { names: fresh.map(p => p.name).join(', ') }));
     lastJson = '';
     saveLobby(true);
   }
@@ -865,27 +863,27 @@
   function saveLobby(now) {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
-      try { data = await api('lobby', spec()); error = ''; } catch (e) { error = e.message; }
+      try { data = await api('lobby', spec()); error = ''; } catch (e) { error = srv(e.message); }
       if (typing()) { paintLobbyBoards(); paintStartBar(); } else { lastJson = ''; render(); }
     }, now ? 0 : 500);
   }
   const opt = (vals, cur) => vals.map(v => `<option ${String(v) === String(cur) ? 'selected' : ''}>${v}</option>`).join('');
   const optKV = (vals, cur) => vals.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
-  const firstTo = same => [[0, same], ...[2, 3, 4, 5, 6, 7].map(n => [n, `First to ${n}`])];
+  const firstTo = same => [[0, same], ...[2, 3, 4, 5, 6, 7].map(n => [n, tr('First to {n}', { n })])];
 
   /** One line for the rules: format, game and match length */
   function rulesLine(r) {
     const s = r.settings || DEFAULT_SETTINGS;
-    const len = s.sets ? `first to ${s.sets} set${s.sets > 1 ? 's' : ''} (${s.legs} legs each)` : `first to ${s.legs} leg${s.legs > 1 ? 's' : ''}`;
-    const extra = [r.format === 'groups' ? `${+r.groups ? `${r.groups} groups` : 'groups of about 4'}, ${r.advance} go through` : '', r.return_round ? 'return round' : '',
-      +r.final_legs ? `final first to ${r.final_legs}` : ''].filter(Boolean);
+    const len = matchLength(s);
+    const extra = [r.format === 'groups' ? `${+r.groups ? tr('{n} groups', { n: r.groups }) : tr('groups of about 4')}, ${tr('{n} go through', { n: r.advance })}` : '', r.return_round ? tr('return round') : '',
+      +r.final_legs ? tr('final first to {n}', { n: r.final_legs }) : ''].filter(Boolean);
     return `${esc(FORMAT_NAME[r.format] || '')} · X01 ${s.base_score} · ${esc(s.in_mode)} in · ${esc(s.out_mode)} out · ${len}${extra.length ? ` · ${esc(extra.join(' · '))}` : ''}`;
   }
 
   function lobbyPage(t) {
     const l = lobbyState(t);
-    return `<div class="ph"><div><input class="title-in" data-l="name" value="${esc(l.name)}" title="Click to rename" maxlength="60"><div class="sub">Lobby on ${esc(data.node.name)} · boards on your network can join now</div></div>
-        <div class="r"><button class="btn sec sm" data-act="help">How it works</button><button class="btn danger sm" data-act="lcancel">Close lobby</button></div></div>
+    return `<div class="ph"><div><input class="title-in" data-l="name" value="${esc(l.name)}" title="${tr('Click to rename')}" maxlength="60"><div class="sub">${tr('Lobby on {name} · boards on your network can join now', { name: esc(data.node.name) })}</div></div>
+        <div class="r"><button class="btn sec sm" data-act="help">${tr('How it works')}</button><button class="btn danger sm" data-act="lcancel">${tr('Close lobby')}</button></div></div>
       ${rulesCard(l)}
       <div class="lobby">${playersCard(l)}<div class="side"><div class="card" id="lboards">${lobbyBoards(t, true)}</div>${phoneCard(l)}</div></div>
       <div class="card startbar" id="lstart">${startBar(t)}</div>`;
@@ -895,38 +893,38 @@
   function rulesCard(l) {
     const s = l.settings, f = l.format;
     const body = !l.rulesOpen ? '' : `<div class="body"><div class="ff">
-      <label>Format<select data-l="format">${optKV(FORMATS.map(([k, n]) => [k, n]), f)}</select></label>
-      ${f === 'groups' ? `<label>Groups<select data-l="groups">${optKV([[0, 'Automatic'], ...[1, 2, 3, 4, 5, 6, 7, 8].map(n => [n, n])], l.groups)}</select></label>
-        <label>Advance per group<select data-l="advance">${opt([1, 2, 3, 4], l.advance)}</select></label>` : ''}
-      ${f === 'swiss' ? `<label>Rounds<select data-l="swiss_rounds">${optKV([[0, 'Automatic'], ...[2, 3, 4, 5, 6, 7].map(n => [n, n])], l.swiss_rounds)}</select></label>` : ''}
-      <label>Base score<select data-s="base_score">${opt([301, 501, 701], s.base_score)}</select></label>
+      <label>${tr('Format')}<select data-l="format">${optKV(FORMATS.map(([k, n]) => [k, tr(n)]), f)}</select></label>
+      ${f === 'groups' ? `<label>${tr('Groups')}<select data-l="groups">${optKV([[0, tr('Automatic')], ...[1, 2, 3, 4, 5, 6, 7, 8].map(n => [n, n])], l.groups)}</select></label>
+        <label>${tr('Advance per group')}<select data-l="advance">${opt([1, 2, 3, 4], l.advance)}</select></label>` : ''}
+      ${f === 'swiss' ? `<label>${tr('Rounds')}<select data-l="swiss_rounds">${optKV([[0, tr('Automatic')], ...[2, 3, 4, 5, 6, 7].map(n => [n, n])], l.swiss_rounds)}</select></label>` : ''}
+      <label>${tr('Base score')}<select data-s="base_score">${opt([301, 501, 701], s.base_score)}</select></label>
       <label>In<select data-s="in_mode">${opt(['Straight', 'Double', 'Master'], s.in_mode)}</select></label>
       <label>Out<select data-s="out_mode">${opt(['Straight', 'Double', 'Master'], s.out_mode)}</select></label>
-      <label>Legs (first to)<select data-s="legs">${opt([1, 2, 3, 4, 5, 6, 7], s.legs)}</select></label>
-      <label>Sets (first to)<select data-s="sets">${optKV([[0, 'No sets'], ...[1, 2, 3, 4, 5].map(n => [n, n])], s.sets)}</select></label>
-      <label>Bull-off<select data-s="bull_off">${optKV([['Off', 'Off'], ['Normal', 'WDF'], ['Official', 'PDC']], s.bull_off)}</select></label>
-      ${f === 'groups' ? `<label>Knockout<select data-l="ko_legs">${optKV(firstTo('Same as groups'), l.ko_legs)}</select></label>` : ''}
-      ${f === 'league' || f === 'swiss' ? '' : `<label>Semi-finals<select data-l="semi_legs">${optKV(firstTo('Same'), l.semi_legs)}</select></label>
-        <label>Final<select data-l="final_legs">${optKV(firstTo('Same'), l.final_legs)}</select></label>`}
-      ${f === 'groups' || f === 'league' ? `<label class="w ck"><input type="checkbox" data-l="return_round" ${l.return_round ? 'checked' : ''}> Return round: every pairing plays twice, the other player throws first</label>` : ''}
-      </div><div class="small muted" style="margin-top:14px">${esc((FORMATS.find(x => x[0] === f) || [])[2] || '')} ${s.sets ? 'Legs are per set; the rounds count sets. ' : ''}The match length can still be changed while the tournament runs.</div></div>`;
-    return `<div class="card rules ${l.rulesOpen ? 'open' : ''}"><button data-act="rules"><span class="k">Rules</span><span class="v">${rulesLine(l)}</span><span class="ed">${l.rulesOpen ? 'Done' : 'Change'} <i>▾</i></span></button>${body}</div>`;
+      <label>${tr('Legs (first to)')}<select data-s="legs">${opt([1, 2, 3, 4, 5, 6, 7], s.legs)}</select></label>
+      <label>${tr('Sets (first to)')}<select data-s="sets">${optKV([[0, tr('No sets')], ...[1, 2, 3, 4, 5].map(n => [n, n])], s.sets)}</select></label>
+      <label>Bull-off<select data-s="bull_off">${optKV([['Off', tr('Off')], ['Normal', 'WDF'], ['Official', 'PDC']], s.bull_off)}</select></label>
+      ${f === 'groups' ? `<label>${tr('Knockout')}<select data-l="ko_legs">${optKV(firstTo(tr('Same as groups')), l.ko_legs)}</select></label>` : ''}
+      ${f === 'league' || f === 'swiss' ? '' : `<label>${tr('Semi-finals')}<select data-l="semi_legs">${optKV(firstTo(tr('Same')), l.semi_legs)}</select></label>
+        <label>${tr('Final')}<select data-l="final_legs">${optKV(firstTo(tr('Same')), l.final_legs)}</select></label>`}
+      ${f === 'groups' || f === 'league' ? `<label class="w ck"><input type="checkbox" data-l="return_round" ${l.return_round ? 'checked' : ''}> ${tr('Return round: every pairing plays twice, the other player throws first')}</label>` : ''}
+      </div><div class="small muted" style="margin-top:14px">${esc(tr((FORMATS.find(x => x[0] === f) || [])[2] || ''))} ${s.sets ? tr('Legs are per set; the rounds count sets.') + ' ' : ''}${tr('The match length can still be changed while the tournament runs.')}</div></div>`;
+    return `<div class="card rules ${l.rulesOpen ? 'open' : ''}"><button data-act="rules"><span class="k">${tr('Rules')}</span><span class="v">${rulesLine(l)}</span><span class="ed">${l.rulesOpen ? tr('Done') : tr('Change')} <i>▾</i></span></button>${body}</div>`;
   }
 
   function playersCard(l) {
     const taken = new Set(l.players.map(p => p.name.trim().toLowerCase()));
     const free = (l.roster || []).filter(m => !taken.has(m.name.trim().toLowerCase()));
-    const tag = (p, i) => (p.member ? '<span class="tag mem" title="Club member: the games count for their stats">★ Member</span>'
-      : `<button class="tag ${p.visitor ? 'vis' : ''}" data-act="pvis" data-i="${i}" title="${p.visitor ? 'Visitor: no club profile. Click to give them one.' : 'Gets a club profile when the tournament starts. Click to make them a visitor.'}">${p.visitor ? 'Visitor' : 'New profile'}</button>`);
-    const sub = p => [p.ad_name && p.ad_name.toUpperCase() !== p.name.toUpperCase() ? `in Autodarts: ${esc(p.ad_name)}` : '', p.phone ? 'signed up by phone' : ''].filter(Boolean).join(' · ');
-    return `<div class="card"><h3>Players <span class="chip">${l.players.length} / 32</span></h3>
-      <div class="addbar"><input id="pnew" placeholder="Type a name and press Enter"><label class="sw" title="Visitors get no club profile"><input type="checkbox" id="pvisnew" ${l.visitor ? 'checked' : ''}><span></span>Visitor</label><button class="btn" data-act="padd">Add</button><button class="btn sec sm" data-act="ppaste">Paste a list…</button></div>
-      ${l.roster && l.roster.length && free.length ? `<div class="club"><span class="lbl">From the club</span>${free.map(m => `<button class="pick" data-act="radd" data-v="${esc(m.id)}">${avatar(m.name)}${esc(m.name)}${m.summary && m.summary.games ? ` <span class="muted">${m.summary.average.toFixed(1)}</span>` : ''}</button>`).join('')}
-        ${free.length > 1 ? '<button class="btn sec sm" data-act="radd-all">Add all</button>' : ''}</div>` : ''}
+    const tag = (p, i) => (p.member ? `<span class="tag mem" title="${tr('Club member: the games count for their stats')}">★ ${tr('Member')}</span>`
+      : `<button class="tag ${p.visitor ? 'vis' : ''}" data-act="pvis" data-i="${i}" title="${p.visitor ? tr('Visitor: no club profile. Click to give them one.') : tr('Gets a club profile when the tournament starts. Click to make them a visitor.')}">${p.visitor ? tr('Visitor') : tr('New profile')}</button>`);
+    const sub = p => [p.ad_name && p.ad_name.toUpperCase() !== p.name.toUpperCase() ? tr('in Autodarts: {name}', { name: esc(p.ad_name) }) : '', p.phone ? tr('signed up by phone') : ''].filter(Boolean).join(' · ');
+    return `<div class="card"><h3>${tr('Players')} <span class="chip">${l.players.length} / 32</span></h3>
+      <div class="addbar"><input id="pnew" placeholder="${tr('Type a name and press Enter')}"><label class="sw" title="${tr('Visitors get no club profile')}"><input type="checkbox" id="pvisnew" ${l.visitor ? 'checked' : ''}><span></span>${tr('Visitor')}</label><button class="btn" data-act="padd">${tr('Add')}</button><button class="btn sec sm" data-act="ppaste">${tr('Paste a list…')}</button></div>
+      ${l.roster && l.roster.length && free.length ? `<div class="club"><span class="lbl">${tr('From the club')}</span>${free.map(m => `<button class="pick" data-act="radd" data-v="${esc(m.id)}">${avatar(m.name)}${esc(m.name)}${m.summary && m.summary.games ? ` <span class="muted">${m.summary.average.toFixed(1)}</span>` : ''}</button>`).join('')}
+        ${free.length > 1 ? `<button class="btn sec sm" data-act="radd-all">${tr('Add all')}</button>` : ''}</div>` : ''}
       <div class="plist">${l.players.length ? l.players.map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b>${sub(p) ? `<span>${sub(p)}</span>` : ''}</div>${tag(p, i)}
-          <span class="act"><button class="ib" data-act="pedit" data-i="${i}" title="Edit">✎</button><button class="ib" data-act="pup" data-i="${i}" title="Seed higher" ${i ? '' : 'disabled'}>↑</button><button class="ib" data-act="pdel" data-i="${i}" title="Remove">✕</button></span></div>`).join('')
-        : '<div class="muted" style="padding:28px 0;text-align:center">No players yet. Type a name above or pick club members.</div>'}</div>
-      ${l.players.length > 1 ? `<div class="seedbar">Seeding is the list order<span style="flex:1"></span><button class="btn sec sm" data-act="pshuffle">Shuffle</button>${l.roster && l.roster.length ? '<button class="btn sec sm" data-act="rseed">By club average</button>' : ''}</div>` : ''}
+          <span class="act"><button class="ib" data-act="pedit" data-i="${i}" title="${tr('Edit')}">✎</button><button class="ib" data-act="pup" data-i="${i}" title="${tr('Seed higher')}" ${i ? '' : 'disabled'}>↑</button><button class="ib" data-act="pdel" data-i="${i}" title="${tr('Remove')}">✕</button></span></div>`).join('')
+        : `<div class="muted" style="padding:28px 0;text-align:center">${tr('No players yet. Type a name above or pick club members.')}</div>`}</div>
+      ${l.players.length > 1 ? `<div class="seedbar">${tr('Seeding is the list order')}<span style="flex:1"></span><button class="btn sec sm" data-act="pshuffle">${tr('Shuffle')}</button>${l.roster && l.roster.length ? `<button class="btn sec sm" data-act="rseed">${tr('By club average')}</button>` : ''}</div>` : ''}
       </div>`;
   }
 
@@ -934,32 +932,33 @@
   function phoneCard(l) {
     if (l.phone_signup && !l.qr) {
       l.qr = 'loading';
-      api('signup-qr').then(r => { l.qr = r; }, e => { l.qr = null; flash(e.message || 'Could not make the QR code'); })
+      api('signup-qr').then(r => { l.qr = r; }, e => { l.qr = null; flash(srv(e.message) || tr('Could not make the QR code')); })
         .then(() => { if (!typing()) { lastJson = ''; render(); } });
     }
-    const qr = l.qr && l.qr.svg ? `<div class="qrbox" role="img" aria-label="QR code to sign up">${l.qr.svg}</div><div class="small muted" style="text-align:center;margin-top:8px">Scan with a phone on the same network.<br>${esc(l.qr.url)}</div>` : '';
-    return `<div class="card"><h3 style="margin-bottom:${l.phone_signup ? 14 : 0}px">Phone sign-up<span style="flex:1"></span><label class="sw" title="Players scan a QR code to put themselves on the list"><input type="checkbox" data-l="phone_signup" ${l.phone_signup ? 'checked' : ''}><span></span></label></h3>
-      ${l.phone_signup ? qr : '<div class="small muted" style="margin-top:8px">Show a QR code: players scan it and put themselves on the list.</div>'}</div>`;
+    const qr = l.qr && l.qr.svg ? `<div class="qrbox" role="img" aria-label="${tr('QR code to sign up')}">${l.qr.svg}</div><div class="small muted" style="text-align:center;margin-top:8px">${tr('Scan with a phone on the same network.')}<br>${esc(l.qr.url)}</div>` : '';
+    return `<div class="card"><h3 style="margin-bottom:${l.phone_signup ? 14 : 0}px">${tr('Phone sign-up')}<span style="flex:1"></span><label class="sw" title="${tr('Players scan a QR code to put themselves on the list')}"><input type="checkbox" data-l="phone_signup" ${l.phone_signup ? 'checked' : ''}><span></span></label></h3>
+      ${l.phone_signup ? qr : `<div class="small muted" style="margin-top:8px">${tr('Show a QR code: players scan it and put themselves on the list.')}</div>`}</div>`;
   }
 
   /** Who has joined, like a game lobby. The host can switch a board's playing on or off, or remove it */
   function lobbyBoards(t, host) {
     const bs = (t.boards || []).filter(b => b.approved && !b.left).sort((a, b) => a.number - b.number);
-    return `<h3>Boards <span class="chip">${bs.length}</span></h3>
-      ${bs.map(b => `<div class="slot"><span class="num">${b.number}</span><div class="t"><b>${esc(b.name)}</b><span class="small muted"><span class="dot ${b.online ? '' : 'off'}"></span>${b.online ? 'Ready' : 'Offline'}${b.this_pc ? ' · this PC' : ''}${b.plays ? '' : ' · only runs it'}</span></div>
-        ${host ? `<label class="sw go" title="Plays matches"><input type="checkbox" data-act-change="plays" data-node="${esc(b.node_id)}" ${b.plays ? 'checked' : ''}><span></span></label>${b.this_pc ? '' : `<button class="ib" data-act="reject" data-node="${esc(b.node_id)}" title="Remove this board">✕</button>`}` : ''}</div>`).join('')}
-      <div class="slot empty"><span class="num pulse">+</span><div class="t small">${host ? 'Waiting for boards…<br>On another board’s PC: <b style="color:#fff">Local Tournament → Join</b>' : 'More boards can still join.'}</div></div>
-      ${host ? '<div class="small muted" style="margin-top:4px">One board is enough: every match is then played here, one after the other.</div>' : ''}`;
+    return `<h3>${tr('Boards')} <span class="chip">${bs.length}</span></h3>
+      ${bs.map(b => `<div class="slot"><span class="num">${b.number}</span><div class="t"><b>${esc(b.name)}</b><span class="small muted"><span class="dot ${b.online ? '' : 'off'}"></span>${b.online ? tr('Ready') : tr('Offline')}${b.this_pc ? ` · ${tr('this PC')}` : ''}${b.plays ? '' : ` · ${tr('only runs it')}`}</span></div>
+        ${host ? `<label class="sw go" title="${tr('Plays matches')}"><input type="checkbox" data-act-change="plays" data-node="${esc(b.node_id)}" ${b.plays ? 'checked' : ''}><span></span></label>${b.this_pc ? '' : `<button class="ib" data-act="reject" data-node="${esc(b.node_id)}" title="${tr('Remove this board')}">✕</button>`}` : ''}</div>`).join('')}
+      <div class="slot empty"><span class="num pulse">+</span><div class="t small">${host ? tr('Waiting for boards…<br>On another board’s PC: <b style="color:#fff">Local Tournament → Join</b>') : tr('More boards can still join.')}</div></div>
+      ${host ? `<div class="small muted" style="margin-top:4px">${tr('One board is enough: every match is then played here, one after the other.')}</div>` : ''}`;
   }
 
   function startBar(t) {
     const c = t.lobby_check || {};
     const playing = (t.boards || []).filter(b => b.approved && b.plays && !b.left).length;
     const fmt = FORMAT_NAME[(lob && lob.format) || t.format];
-    const why = !c.ok ? c.error : !playing ? 'No board plays: switch one on under Boards.' : '';
-    return `<div style="flex:1;min-width:220px"><b style="font-size:16px">${esc(fmt)} · ${(t.players || []).length} players${c.ok ? ` · ${c.matches} matches` : ''} · ${playing} board${playing === 1 ? '' : 's'}</b>
-        <div class="small ${why ? '' : 'muted'}" style="${why ? 'color:#f3e3a0' : ''}">${why ? esc(why) : 'Ready. Boards get their first matches when you start.'}</div></div>
-      <button class="btn" data-act="lstart" ${why ? 'disabled' : ''}>🏆 Start tournament</button>`;
+    const why = !c.ok ? srv(c.error) : !playing ? tr('No board plays: switch one on under Boards.') : '';
+    const np = (t.players || []).length;
+    return `<div style="flex:1;min-width:220px"><b style="font-size:16px">${esc(fmt)} · ${tn(np, '{n} player', '{n} players')}${c.ok ? ` · ${tn(c.matches, '{n} match', '{n} matches')}` : ''} · ${tn(playing, '{n} board', '{n} boards')}</b>
+        <div class="small ${why ? '' : 'muted'}" style="${why ? 'color:#f3e3a0' : ''}">${why ? esc(why) : tr('Ready. Boards get their first matches when you start.')}</div></div>
+      <button class="btn" data-act="lstart" ${why ? 'disabled' : ''}>🏆 ${tr('Start tournament')}</button>`;
   }
 
   function paintLobbyBoards() {
@@ -973,17 +972,17 @@
 
   /** A board in the lobby sees what the host has set up, and waits for the start */
   function lobbyWaiting(t) {
-    return `<div class="note" style="margin:0 0 16px"><span class="pulse">⏳</span> Waiting for <b>${esc(data.join.host_name || 'the host')}</b> to start the tournament. This board gets its matches by itself.</div>
-      <div class="card rules"><button style="cursor:default"><span class="k">Rules</span><span class="v">${rulesLine(t.lobby || t)}</span></button></div>
-      <div class="lobby"><div class="card"><h3>Players <span class="chip">${(t.players || []).length}</span></h3><div class="plist">${(t.players || []).map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b></div>${p.visitor ? '<span class="tag vis" style="cursor:default">Visitor</span>' : ''}</div>`).join('') || '<div class="muted" style="padding:20px 0">No players yet.</div>'}</div></div>
+    return `<div class="note" style="margin:0 0 16px"><span class="pulse">⏳</span> ${tr('Waiting for <b>{host}</b> to start the tournament. This board gets its matches by itself.', { host: esc(data.join.host_name || tr('the host')) })}</div>
+      <div class="card rules"><button style="cursor:default"><span class="k">${tr('Rules')}</span><span class="v">${rulesLine(t.lobby || t)}</span></button></div>
+      <div class="lobby"><div class="card"><h3>${tr('Players')} <span class="chip">${(t.players || []).length}</span></h3><div class="plist">${(t.players || []).map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b></div>${p.visitor ? `<span class="tag vis" style="cursor:default">${tr('Visitor')}</span>` : ''}</div>`).join('') || `<div class="muted" style="padding:20px 0">${tr('No players yet.')}</div>`}</div></div>
       <div class="card" id="lboards">${lobbyBoards(t, false)}</div></div>`;
   }
 
   function addPlayer(name, extra) {
     const n = name.trim();
     if (!n) return false;
-    if (lob.players.length >= 32) { flash('At most 32 players'); return false; }
-    if (lob.players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) { flash(`${n} is already in`); return false; }
+    if (lob.players.length >= 32) { flash(tr('At most 32 players')); return false; }
+    if (lob.players.some(p => p.name.trim().toLowerCase() === n.toLowerCase())) { flash(tr('{name} is already in', { name: n })); return false; }
     // A typed name that is a club member is that member
     const m = !extra.member && (lob.roster || []).find(x => x.name.trim().toLowerCase() === n.toLowerCase());
     lob.players.push({ name: n, ad_name: '', visitor: false, member: '', ...extra, ...(m ? { member: m.id, visitor: false, ad_name: m.alias || '' } : {}) });
@@ -997,8 +996,8 @@
   // ---------------------------------------------------------------------------
   function pageHead(t, hostName, right) {
     const done = t.matches.filter(m => m.state === 'done').length;
-    const who = data.role === 'host' ? `Hosted by <b style="color:#fff">${esc(data.node.name)}</b> (this PC)` : `Hosted by ${hostName} · this PC is <b style="color:#fff">${esc(data.node.name)}</b>`;
-    return `<div class="ph"><div><h1>${esc(t.name)}</h1><div class="sub">${who} · ${FORMAT_NAME[t.format]} · ${t.players.length} players · ${done}/${t.matches.length} played${t.status === 'finished' ? ' · finished' : ''}</div></div>
+    const who = data.role === 'host' ? tr('Hosted by <b style="color:#fff">{name}</b> (this PC)', { name: esc(data.node.name) }) : tr('Hosted by {host} · this PC is <b style="color:#fff">{name}</b>', { host: hostName, name: esc(data.node.name) });
+    return `<div class="ph"><div><h1>${esc(t.name)}</h1><div class="sub">${who} · ${FORMAT_NAME[t.format]} · ${tn(t.players.length, '{n} player', '{n} players')} · ${tr('{done}/{all} played', { done, all: t.matches.length })}${t.status === 'finished' ? ` · ${tr('finished')}` : ''}</div></div>
       <div class="r">${right}</div></div>`;
   }
 
@@ -1011,21 +1010,21 @@
   /** Groups, league and Swiss have tables too; they open from the header */
   function viewButtons(t, cur) {
     if (!['groups', 'league', 'swiss'].includes(t.format)) return '';
-    return cur === 'bracket' ? '<button class="btn sm" data-act="tab" data-v="mine">← Back</button>'
-      : `<button class="btn sec sm" data-act="tab" data-v="bracket">${t.format === 'league' ? 'Table' : 'Tables'}</button>`;
+    return cur === 'bracket' ? `<button class="btn sm" data-act="tab" data-v="mine">← ${tr('Back')}</button>`
+      : `<button class="btn sec sm" data-act="tab" data-v="bracket">${t.format === 'league' ? tr('Table') : tr('Tables')}</button>`;
   }
 
   /** Everything rarely needed sits behind one ⋯ button */
   let menuOpen = false;
   function moreMenu(items) {
-    return `<span class="more"><button class="btn sec sm" data-act="menu" aria-label="More">⋯</button>${menuOpen ? `<div class="menu">${items}</div>` : ''}</span>`;
+    return `<span class="more"><button class="btn sec sm" data-act="menu" aria-label="${tr('More')}">⋯</button>${menuOpen ? `<div class="menu">${items}</div>` : ''}</span>`;
   }
 
   function hostPage() {
     const t = T();
     if (t.status === 'lobby') return lobbyPage(t);
-    const more = '<button class="mi" data-act="help">How it works</button><button class="mi" data-act="tv">TV dashboard</button><button class="mi danger" data-act="end">End tournament</button>';
-    return pageHead(t, '', `<span class="chip ok"><span class="d"></span>Hosting</span>${viewButtons(t, tab.host)}${moreMenu(more)}`)
+    const more = `<button class="mi" data-act="help">${tr('How it works')}</button><button class="mi" data-act="tv">${tr('TV dashboard')}</button><button class="mi danger" data-act="end">${tr('End tournament')}</button>`;
+    return pageHead(t, '', `<span class="chip ok"><span class="d"></span>${tr('Hosting')}</span>${viewButtons(t, tab.host)}${moreMenu(more)}`)
       + (tab.host === 'bracket' ? bracketHTML(t) : thisBoard());
   }
 
@@ -1035,11 +1034,12 @@
       const b = t.boards.find(x => x.node_id === m.board);
       if (!b || (b.online && (b.status || {}).bridge !== false)) return '';
       const l = m.last_live && m.last_live.legs;
-      const what = b.online ? `Autodarts is closed on ${esc(boardName(b.node_id))}` : `${esc(boardName(b.node_id))} went offline`;
-      return `<div class="card alert"><span>${what} during <b>${sideName(m, 0)} vs ${sideName(m, 1)}</b>${l ? ` (${l[0]} – ${l[1]})` : ''}</span><button class="btn sm yb" data-act="result" data-m="${esc(m.id)}">Enter result</button><button class="btn sec sm" data-act="replay" data-m="${esc(m.id)}">Play again</button></div>`;
+      const vs = `<b>${sideName(m, 0)} vs ${sideName(m, 1)}</b>`;
+      const what = b.online ? tr('Autodarts is closed on {board} during {match}', { board: esc(boardName(b.node_id)), match: vs }) : tr('{board} went offline during {match}', { board: esc(boardName(b.node_id)), match: vs });
+      return `<div class="card alert"><span>${what}${l ? ` (${l[0]} – ${l[1]})` : ''}</span><button class="btn sm yb" data-act="result" data-m="${esc(m.id)}">${tr('Enter result')}</button><button class="btn sec sm" data-act="replay" data-m="${esc(m.id)}">${tr('Play again')}</button></div>`;
     });
     if (t.status === 'running' && !t.boards.some(b => b.approved && b.plays && !b.left)) {
-      lines.push('<div class="card alert"><span>No board plays matches yet. On a board PC, open <b>Local Tournament → Join a tournament</b>.</span></div>');
+      lines.push(`<div class="card alert"><span>${tr('No board plays matches yet. On a board PC, open <b>Local Tournament → Join a tournament</b>.')}</span></div>`);
     }
     return lines.join('');
   }
@@ -1050,25 +1050,25 @@
   function boardPage() {
     const j = data.join;
     const status = {
-      connecting: ['warn', 'Connecting to the host…'], offline: ['warn', 'Host not reachable, retrying'], waiting: ['warn', 'Waiting for the host to approve this board'],
-      approved: ['ok', 'Connected to host'], rejected: ['', 'Not accepted'], ended: ['', 'Tournament ended'],
+      connecting: ['warn', tr('Connecting to the host…')], offline: ['warn', tr('Host not reachable, retrying')], waiting: ['warn', tr('Waiting for the host to approve this board')],
+      approved: ['ok', tr('Connected to host')], rejected: ['', tr('Not accepted')], ended: ['', tr('Tournament ended')],
     }[j.status] || ['', j.status];
     const t0 = T();
     const views = t0 && t0.matches && t0.status !== 'lobby' && (j.status === 'approved' || j.status === 'offline') ? viewButtons(t0, tab.board) : '';
-    const right = `<span class="chip ${status[0]}"><span class="d"></span>${status[1]}</span>${views}${moreMenu(`<button class="mi" data-act="help">How it works</button><button class="mi danger" data-act="leave">Leave</button><button class="mi danger" data-act="end-at" data-addr="" data-tour="${esc((T() || {}).name || 'the tournament')}">End tournament</button>`)}`;
+    const right = `<span class="chip ${status[0]}"><span class="d"></span>${status[1]}</span>${views}${moreMenu(`<button class="mi" data-act="help">${tr('How it works')}</button><button class="mi danger" data-act="leave">${tr('Leave')}</button><button class="mi danger" data-act="end-at" data-addr="" data-tour="${esc((T() || {}).name || tr('the tournament'))}">${tr('End tournament')}</button>`)}`;
     // Before the bracket exists there are no counts to show yet
     let h = t0 && t0.status !== 'lobby' && t0.matches ? pageHead(t0, `<b style="color:#fff">${esc(j.host_name || j.address)}</b>`, right)
-      : `<div class="ph"><div><h1>${esc(j.tournament_name || 'Local Tournament')}</h1><div class="sub">Hosted by ${esc(j.host_name || j.address)} · this PC is <b style="color:#fff">${esc(data.node.name)}</b></div></div><div class="r">${right}</div></div>`;
+      : `<div class="ph"><div><h1>${esc(j.tournament_name || tr('Local Tournament'))}</h1><div class="sub">${tr('Hosted by {host} · this PC is <b style="color:#fff">{name}</b>', { host: esc(j.host_name || j.address), name: esc(data.node.name) })}</div></div><div class="r">${right}</div></div>`;
     if (j.status === 'rejected' || j.status === 'ended') {
-      return h + `<div class="card"><h3>${esc(status[1])}</h3><div class="muted">${esc(j.reason || '')}</div><div style="margin-top:12px"><button class="btn sec" data-act="leave">OK</button></div></div>`;
+      return h + `<div class="card"><h3>${esc(status[1])}</h3><div class="muted">${esc(srv(j.reason || ''))}</div><div style="margin-top:12px"><button class="btn sec" data-act="leave" data-ok="1">OK</button></div></div>`;
     }
     if (!T()) {
-      return h + `<div class="card"><h3>${j.status === 'waiting' ? 'Almost there' : 'Connecting'}</h3><div class="muted">${j.status === 'waiting' ? 'Ask the organizer to press <b style="color:#fff">Approve</b> for this board on the host.' : `Trying to reach ${esc(j.address)}.`}</div></div>`;
+      return h + `<div class="card"><h3>${j.status === 'waiting' ? tr('Almost there') : tr('Connecting')}</h3><div class="muted">${j.status === 'waiting' ? tr('Ask the organizer to press <b style="color:#fff">Approve</b> for this board on the host.') : tr('Trying to reach {address}.', { address: esc(j.address) })}</div></div>`;
     }
     if (j.status === 'offline') {
       h += j.can_take_over
-        ? `<div class="card" style="margin-bottom:16px;border-color:#f7d45855"><h3>The host is gone</h3><div class="muted">${esc(j.host_name || j.address)} hasn't answered for ${Math.round(j.offline_for / 60) || 1} min, and AutoGlow didn't find it anywhere on the network. Matches on the boards go on; results wait here.<br>If the host won't be back, this PC can carry on as the host: it has a copy of the whole tournament, and the other boards find it by themselves. Only do this on <b style="color:#fff">one</b> board.</div><div class="row" style="margin-top:12px"><button class="btn" data-act="take-over">Take over as host</button></div></div>`
-        : `<div class="note warn" style="margin:0 0 16px">The host ${esc(j.host_name || j.address)} isn't answering${j.offline_for ? ` (${j.offline_for} s)` : ''}. AutoGlow keeps trying and searches the network for it. Play on: results wait here until it's back.</div>`;
+        ? `<div class="card" style="margin-bottom:16px;border-color:#f7d45855"><h3>${tr('The host is gone')}</h3><div class="muted">${tr('{host} hasn’t answered for {min} min, and AutoGlow didn’t find it anywhere on the network. Matches on the boards go on; results wait here.<br>If the host won’t be back, this PC can carry on as the host: it has a copy of the whole tournament, and the other boards find it by themselves. Only do this on <b style="color:#fff">one</b> board.', { host: esc(j.host_name || j.address), min: Math.round(j.offline_for / 60) || 1 })}</div><div class="row" style="margin-top:12px"><button class="btn" data-act="take-over">${tr('Take over as host')}</button></div></div>`
+        : `<div class="note warn" style="margin:0 0 16px">${tr('The host {host} isn’t answering{secs}. AutoGlow keeps trying and searches the network for it. Play on: results wait here until it’s back.', { host: esc(j.host_name || j.address), secs: j.offline_for ? ` (${j.offline_for} s)` : '' })}</div>`;
     }
     if (T().status === 'lobby') return h + lobbyWaiting(T());
     return h + (tab.board === 'mine' ? thisBoard() : bracketHTML(T()));
@@ -1097,21 +1097,21 @@
     }
     const box = (m) => {
       if (m.state === 'pending' || !m.sides.every(s => s.player)) {
-        return { m, kind: 'no', why: m.sides.some(s => !s.player && (s.from || '').startsWith('G:')) ? 'Starts when the groups are done' : 'Waiting for earlier results' };
+        return { m, kind: 'no', why: m.sides.some(s => !s.player && (s.from || '').startsWith('G:')) ? tr('Starts when the groups are done') : tr('Waiting for earlier results') };
       }
       if (m.state === 'done') {
         const r = m.result;
-        return { m, kind: 'done', why: r && !r.walkover ? `${pname(m.sides[r.winner].player)} won ${Math.max(...r.legs)}:${Math.min(...r.legs)}` : '' };
+        return { m, kind: 'done', why: r && !r.walkover ? tr('{player} won {score}', { player: pname(m.sides[r.winner].player), score: `${Math.max(...r.legs)}:${Math.min(...r.legs)}` }) : '' };
       }
       const clashSide = m.sides.find(s => onBoard[s.player] && onBoard[s.player] !== m);
       const clash = clashSide && onBoard[clashSide.player];
       let kind = 'pick', why = '';
       if (m === mine) kind = m.state === 'live' ? 'live' : 'pick';
-      else if (m.state === 'live') { kind = 'live'; why = `${pname(m.sides[0].player)} vs ${pname(m.sides[1].player)} is on ${boardName(m.board)}`; }
-      else if (m.state === 'assigned') { kind = 'no'; why = `Being set up on ${boardName(m.board)}`; }
-      else if (m.held) { kind = 'no'; why = 'On hold'; }
-      else if (clash) { kind = 'no'; why = `${pname(clashSide.player)} is ${clash.state === 'live' ? 'playing' : 'about to play'} on ${boardName(clash.board)}`; }
-      else if (!canPick) { kind = 'no'; why = mine && mine.state === 'live' ? 'Finish this match first' : 'This board can\'t take matches right now'; }
+      else if (m.state === 'live') { kind = 'live'; why = tr('{a} vs {b} is on {board}', { a: pname(m.sides[0].player), b: pname(m.sides[1].player), board: boardName(m.board) }); }
+      else if (m.state === 'assigned') { kind = 'no'; why = tr('Being set up on {board}', { board: boardName(m.board) }); }
+      else if (m.held) { kind = 'no'; why = tr('On hold'); }
+      else if (clash) { kind = 'no'; why = tr(clash.state === 'live' ? '{player} is playing on {board}' : '{player} is about to play on {board}', { player: pname(clashSide.player), board: boardName(clash.board) }); }
+      else if (!canPick) { kind = 'no'; why = mine && mine.state === 'live' ? tr('Finish this match first') : tr('This board can’t take matches right now'); }
       return { m, kind, why };
     };
     const boxes = shown.map(box);
@@ -1122,7 +1122,7 @@
         const rounds = [...new Set(xs.map(x => x.m.round))].sort((p, q) => p - q);
         return rounds.map((r) => {
           const col = xs.filter(x => x.m.round === r).sort((p, q) => p.m.order - q.m.order);
-          return { label: col[0].m.label.replace(/^Group \S+ · /, ''), boxes: col, cur: col.some(x => x.kind === 'pick' || x.kind === 'live') };
+          return { label: srv(col[0].m.label.replace(/^Group \S+ · /, '')), boxes: col, cur: col.some(x => x.kind === 'pick' || x.kind === 'live') };
         });
       }),
       // The losers' side opens once its first players are known
@@ -1160,7 +1160,7 @@
     const sc = i => (live ? (live.legs || [0, 0])[i] : x.kind === 'done' && r ? (r.walkover ? (i === r.winner ? 'W' : '–') : r.legs[i]) : '');
     const win = x.kind === 'done' && r ? r.winner : -1;
     const mins = live && m.live_at ? Math.max(1, Math.round((Date.now() / 1000 - m.live_at) / 60)) : 0;
-    const tag = live ? `${m.board === data.node.id ? 'This board' : esc(boardName(m.board))}${mins ? ` · ${mins}'` : ''}` : '';
+    const tag = live ? `${m.board === data.node.id ? tr('This board') : esc(boardName(m.board))}${mins ? ` · ${mins}'` : ''}` : '';
     const bs = live || x.kind === 'done' ? [] : linedUp(m, by);
     const cls = x.kind === 'pick' ? '' : x.kind;
     // Still empty: '–', or the group place it waits for
@@ -1178,7 +1178,7 @@
     const done = x.kind === 'done' && r;
     const sc = live ? (live.legs || [0, 0]).join(' : ') : done ? (r.walkover ? 'W/O' : r.legs.join(' : ')) : 'vs';
     const bs = live || done ? [] : linedUp(m, by);
-    const tag = live ? `<span class="t">● ${m.board === data.node.id ? 'This board' : esc(boardName(m.board))}</span>`
+    const tag = live ? `<span class="t">● ${m.board === data.node.id ? tr('This board') : esc(boardName(m.board))}</span>`
       : bs.length ? `<span class="t bt">${boardTags(bs, data.node.id)}</span>` : '';
     const nm = i => `<span class="${done ? (r.winner === i ? 'w' : 'l') : ''}">${sideName(m, i)}</span>`;
     return `<div class="pk gm ${x.kind === 'pick' ? '' : x.kind}${bs.length ? ' by' : ''}"${bs.length ? ` style="--bc:${boardColor(bs[0])}"` : ''} data-act="pick" data-m="${esc(m.id)}" data-why="${esc(x.why)}">${nm(0)}<span class="s">${sc}</span>${nm(1)}${tag}</div>`;
@@ -1192,7 +1192,7 @@
     const [gd, gn] = tally(t.matches.filter(m => m.stage === 'group' && real(m)));
     const [kd, kn] = tally(t.matches.filter(m => m.stage === 'ko' && real(m)));
     const koOn = gd === gn;
-    const bar = `<div class="phase"><span class="${koOn ? 'done' : 'on'}">1 · Groups <b>${gd}/${gn}</b></span><span class="${koOn ? 'on' : ''}">2 · Knockout <b>${kd}/${kn}</b></span></div>`;
+    const bar = `<div class="phase"><span class="${koOn ? 'done' : 'on'}">1 · ${tr('Groups')} <b>${gd}/${gn}</b></span><span class="${koOn ? 'on' : ''}">2 · ${tr('Knockout')} <b>${kd}/${kn}</b></span></div>`;
     const gs = r.stages.find(x => x.key === 'group');
     const boxes = gs ? gs.cols.flatMap(c => c.boxes) : [];
     const adv = t.advance || 1;
@@ -1201,14 +1201,14 @@
       const [pd, pn] = tally(xs.map(x => x.m));
       const rows = tb.rows.map((row, i) => `<tr class="${i < adv ? 'q' : ''}${i === adv - 1 && tb.rows.length > adv ? ' cut' : ''}"><td>${i + 1}</td><td>${esc(row.name)}</td><td>${row.played}</td><td>${row.won}</td><td>${row.lost}</td><td>${row.legs_for}:${row.legs_against}</td></tr>`).join('');
       const rounds = [...new Set(xs.map(x => x.m.round))].sort((p, q) => p - q);
-      return `<div class="card gc"><div class="gh"><h3>Group ${esc(tb.name)}</h3><span class="chip ${pd === pn ? 'ok' : ''}">${pd === pn ? 'Done' : `${pd}/${pn} played`}</span></div>
-        <table class="gt"><tr><th>#</th><th>Player</th><th>P</th><th>W</th><th>L</th><th>Legs</th></tr>${rows}</table>
+      return `<div class="card gc"><div class="gh"><h3>${tr('Group {name}', { name: esc(tb.name) })}</h3><span class="chip ${pd === pn ? 'ok' : ''}">${pd === pn ? tr('Done') : tr('{done}/{all} played', { done: pd, all: pn })}</span></div>
+        <table class="gt"><tr><th>#</th><th>${tr('Player')}</th><th>${tr('P')}</th><th>${tr('W')}</th><th>${tr('L')}</th><th>Legs</th></tr>${rows}</table>
         <div class="gr">${rounds.map(rd => `<span class="rn">R${rd}</span><div>${xs.filter(x => x.m.round === rd).sort((p, q) => p.m.order - q.m.order).map(x => groupRow(x, by)).join('')}</div>`).join('')}</div></div>`;
     });
     const n = cards.length;
     const groups = `<div class="gcards" style="--gc:${n <= 3 ? n : n === 4 ? 2 : n <= 6 ? 3 : 4}">${cards.join('')}</div>`;
     const ko = r.stages.filter(x => x.key === 'ko').map(strip).join('');
-    return bar + (koOn ? `${ko}<div class="sect">Groups</div>${groups}` : `${groups}<div class="sect">Knockout</div>${ko}`);
+    return bar + (koOn ? `${ko}<div class="sect">${tr('Groups')}</div>${groups}` : `${groups}<div class="sect">${tr('Knockout')}</div>${ko}`);
   }
 
   /** Double KO shows one side at a time: Winners, or Losers once it has players */
@@ -1219,7 +1219,7 @@
     const lb = r.stages.find(x => x.key === 'lb');
     const two = lb && lb.started;
     const side = two ? bracketSide || (r.mine && r.mine.stage === 'lb' ? 'lb' : 'wb') : 'wb';
-    const sw = two ? `<div class="subtabs" style="margin-top:20px">${[['wb', 'Winners'], ['lb', 'Losers']].map(([k, n]) => `<button data-act="side" data-v="${k}" class="${side === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
+    const sw = two ? `<div class="subtabs" style="margin-top:20px">${[['wb', tr('Winners')], ['lb', tr('Losers')]].map(([k, n]) => `<button data-act="side" data-v="${k}" class="${side === k ? 'on' : ''}">${n}</button>`).join('')}</div>` : '';
     return sw + r.stages.filter(x => x.key !== (side === 'wb' ? 'lb' : 'wb')).map(strip).join('');
   }
 
@@ -1237,30 +1237,31 @@
       const legs = (b.live || {}).legs || [0, 0];
       top = `<div class="vs"><b>${esc(b.assignment.players[0].name)}</b><span class="sc">${legs[0]}</span><span class="x">:</span><span class="sc">${legs[1]}</span><b>${esc(b.assignment.players[1].name)}</b></div><span class="chip live"><span class="d"></span>LIVE</span>`;
     } else if (t && t.champion) {
-      top = `<div class="vs"><b style="color:var(--yellow)">🏆 ${esc(pname(t.champion))} wins</b></div>`;
+      top = `<div class="vs"><b style="color:var(--yellow)">🏆 ${tr('{player} wins', { player: esc(pname(t.champion)) })}</b></div>`;
     } else if (sel) {
       top = `<div class="vs"><b>${sideName(sel, 0)}</b><span class="x">VS</span><b>${sideName(sel, 1)}</b></div>${startButton('data-act', sel.id)}`;
     } else if (!t || playsHere(t)) {
-      top = `<div class="vs"><b class="muted">Waiting for the next match</b></div>`;
+      top = `<div class="vs"><b class="muted">${tr('Waiting for the next match')}</b></div>`;
     }
     return (t && data.role === 'host' ? alerts(t) : '') + (top ? `<div class="card banner">${top}</div>` : '')
       + bracketStrips(r, sel, by);
   }
 
-  const HELP_HTML = `<h3>How it works</h3><ol style="margin:0;padding-left:20px;line-height:1.6">
-    <li><b>Press Host a tournament</b> and pick how it's played. The lobby opens: players, the boards that joined, and the rules folded into one line (press <b>Change</b> to open them). Everything is saved as you go.</li>
-    <li><b>Players:</b> pick club members, or type new names. A new name gets a club profile when the tournament starts, so their games count for their stats. Mark guests as <b>Visitor</b> and they get none.</li>
-    <li><b>More boards?</b> Each board needs its own PC with AutoGlow. Open Local Tournament there and choose <b>Join a tournament</b>: it shows up in the lobby right away. One board is enough too: then every match is played here, one after the other.</li>
-    <li><b>Press Start tournament.</b> The bracket is built and the boards get their first matches. A board can still join later: it's in at once.</li>
-    <li><b>Boards get their matches by themselves.</b> When a board is free, a box pops up on it: who plays next and how to set up the game.</li>
-    <li><b>Press ▶ Start game</b> on the board. AutoGlow creates the local X01 game with both players and the match length, starts it and opens the match screen.</li>
-    <li><b>Someone isn't there yet?</b> Below Start game is the whole bracket. Tap another open match, then Start game: it comes to this board and the match it had goes back to the others. Faded matches can't be played right now: tap one to see why.</li>
-    <li><b>During the match</b> Autodarts' screen shows the round, the race to the winning leg, each player's seed and run so far, and what's at stake. Its own buttons work as always.</li>
-    <li><b>Results go to the host by themselves</b> when the match is won, with averages and 180s. Was a board offline? It sends the result when it's back. Autodarts closed during a match? Open it again: the match carries on.</li>
-    <li><b>A board is gone?</b> A match it had not started goes to another board after a minute offline (at once when it presses Leave). A match it was playing shows up on top of the host's page: enter the result there, or press <b>Play again</b>.</li>
-    <li><b>The host PC is gone?</b> Boards keep playing and search the network for it. After a while a board can <b>Take over as host</b> from its copy of the tournament; the others follow, and the old host becomes a board when it's back.</li>
-    <li><b>A result is wrong or missing?</b> On the host, tap the match in the bracket, tap the winner and Save. <b>Walkover</b> is for a player who can't play. The TV dashboard and End tournament are under <b>⋯</b>.</li></ol>
-    <div class="row" style="margin-top:14px"><button class="btn" data-act="close">Got it</button></div>`;
+  const helpHtml = () => `<h3>${tr('How it works')}</h3><ol style="margin:0;padding-left:20px;line-height:1.6">${[
+    tr('<b>Press Host a tournament</b> and pick how it’s played. The lobby opens: players, the boards that joined, and the rules folded into one line (press <b>Change</b> to open them). Everything is saved as you go.'),
+    tr('<b>Players:</b> pick club members, or type new names. A new name gets a club profile when the tournament starts, so their games count for their stats. Mark guests as <b>Visitor</b> and they get none.'),
+    tr('<b>More boards?</b> Each board needs its own PC with AutoGlow. Open Local Tournament there and choose <b>Join a tournament</b>: it shows up in the lobby right away. One board is enough too: then every match is played here, one after the other.'),
+    tr('<b>Press Start tournament.</b> The bracket is built and the boards get their first matches. A board can still join later: it’s in at once.'),
+    tr('<b>Boards get their matches by themselves.</b> When a board is free, a box pops up on it: who plays next and how to set up the game.'),
+    tr('<b>Press ▶ Start game</b> on the board. AutoGlow creates the local X01 game with both players and the match length, starts it and opens the match screen.'),
+    tr('<b>Someone isn’t there yet?</b> Below Start game is the whole bracket. Tap another open match, then Start game: it comes to this board and the match it had goes back to the others. Faded matches can’t be played right now: tap one to see why.'),
+    tr('<b>During the match</b> Autodarts’ screen shows the round, the race to the winning leg, each player’s seed and run so far, and what’s at stake. Its own buttons work as always.'),
+    tr('<b>Results go to the host by themselves</b> when the match is won, with averages and 180s. Was a board offline? It sends the result when it’s back. Autodarts closed during a match? Open it again: the match carries on.'),
+    tr('<b>A board is gone?</b> A match it had not started goes to another board after a minute offline (at once when it presses Leave). A match it was playing shows up on top of the host’s page: enter the result there, or press <b>Play again</b>.'),
+    tr('<b>The host PC is gone?</b> Boards keep playing and search the network for it. After a while a board can <b>Take over as host</b> from its copy of the tournament; the others follow, and the old host becomes a board when it’s back.'),
+    tr('<b>A result is wrong or missing?</b> On the host, tap the match in the bracket, tap the winner and Save. <b>Walkover</b> is for a player who can’t play. The TV dashboard and End tournament are under <b>⋯</b>.'),
+  ].map(li => `<li>${li}</li>`).join('')}</ol>
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="close">${tr('Got it')}</button></div>`;
 
   // ---------------------------------------------------------------------------
   // Dialogs
@@ -1282,9 +1283,9 @@
   function drawSheet() {
     const m = T().matches.find(x => x.id === sheet.id), s = sheet;
     const tile = i => `<button class="nm ${s.winner === i ? 'win' : ''}" data-act="rwin" data-v="${i}"><span>${sideName(m, i)}</span><b class="leg" data-act="rleg" data-v="${i}">${s.walkover ? (s.winner === i ? 'W' : '–') : s.legs[i]}</b></button>`;
-    dialog(`<h3 style="text-align:center">Tap the winner</h3>${m.state === 'done' ? '<div class="small muted" style="text-align:center;margin-top:4px">Later matches that haven\'t started are reset</div>' : ''}
-      <div class="row rs">${tile(0)}${tile(1)}</div><div class="small muted" style="text-align:center">Tap a number to change it</div>
-      <div class="row" style="margin-top:16px"><button class="btn sec sm ${s.walkover ? 'on' : ''}" data-act="rwo">Walkover</button><span style="flex:1"></span><button class="btn sec" data-act="close">Cancel</button><button class="btn" data-act="rsave">Save</button></div>`);
+    dialog(`<h3 style="text-align:center">${tr('Tap the winner')}</h3>${m.state === 'done' ? `<div class="small muted" style="text-align:center;margin-top:4px">${tr('Later matches that haven’t started are reset')}</div>` : ''}
+      <div class="row rs">${tile(0)}${tile(1)}</div><div class="small muted" style="text-align:center">${tr('Tap a number to change it')}</div>
+      <div class="row" style="margin-top:16px"><button class="btn sec sm ${s.walkover ? 'on' : ''}" data-act="rwo">${tr('Walkover')}</button><span style="flex:1"></span><button class="btn sec" data-act="close">${tr('Cancel')}</button><button class="btn" data-act="rsave">${tr('Save')}</button></div>`);
   }
 
   // ---------------------------------------------------------------------------
@@ -1325,7 +1326,7 @@
     if (a === 'rescan') scan();
     if (a === 'host') {
       hosts = null;
-      pg.innerHTML = '<div class="card">Checking the network for other hosts…</div>';
+      pg.innerHTML = `<div class="card">${tr('Checking the network for other hosts…')}</div>`;
       try { hosts = (await api('discover')).hosts; } catch { hosts = []; }
       screen = hosts.some(x => x.tournament) ? 'exists' : 'mode';
       rerender();
@@ -1335,11 +1336,11 @@
     if (a === 'rules') { lob.rulesOpen = !lob.rulesOpen; rerender(); }
     if (a === 'join') act('join', { address: el.dataset.addr, host_name: el.dataset.host, tournament_name: el.dataset.tour }, () => { screen = 'start'; });
     if (a === 'join-addr') act('join', { address: root.getElementById('addr').value }, () => { screen = 'start'; });
-    if (a === 'end-at' && confirm(`End "${el.dataset.tour}" on every board? This can't be undone.`)) {
-      act('end-at', { address: el.dataset.addr || '' }, () => { flash('Tournament ended'); screen = 'start'; hosts = null; });
+    if (a === 'end-at' && confirm(tr('End “{name}” on every board? This can’t be undone.', { name: el.dataset.tour }))) {
+      act('end-at', { address: el.dataset.addr || '' }, () => { flash(tr('Tournament ended')); screen = 'start'; hosts = null; });
     }
-    if (a === 'leave' && (el.textContent.trim() === 'OK' || confirm('Leave the tournament? This board gets no more matches. A match not started yet goes to another board.'))) act('leave', {});
-    if (a === 'take-over' && confirm('Carry on the tournament with this PC as the host? Do this on one board only. If the old host comes back, it becomes a board.')) act('take-over', {}, () => flash('This PC is now the host'));
+    if (a === 'leave' && (el.dataset.ok || confirm(tr('Leave the tournament? This board gets no more matches. A match not started yet goes to another board.')))) act('leave', {});
+    if (a === 'take-over' && confirm(tr('Carry on the tournament with this PC as the host? Do this on one board only. If the old host comes back, it becomes a board.'))) act('take-over', {}, () => flash(tr('This PC is now the host')));
     if (a === 'rename') act('name', { name: root.getElementById('pcname').value });
     // Lobby: every change goes to AutoGlow, so joined boards see the players too
     const changed = () => { rerender(); saveLobby(true); };
@@ -1348,9 +1349,9 @@
       root.getElementById('pnew').focus();
     }
     if (a === 'ppaste') {
-      dialog(`<h3>Paste players</h3><div class="muted small" style="margin-bottom:8px">One name per line, best seed first</div><textarea id="plist"></textarea>
-        <label class="row small" style="margin-top:10px;color:#e3e5ea"><input type="checkbox" id="plvis" ${lob.visitor ? 'checked' : ''}> All visitors (no club profile)</label>
-        <div class="row" style="margin-top:12px"><button class="btn" data-act="ppaste-ok">Add</button><button class="btn sec" data-act="close">Cancel</button></div>`);
+      dialog(`<h3>${tr('Paste players')}</h3><div class="muted small" style="margin-bottom:8px">${tr('One name per line, best seed first')}</div><textarea id="plist"></textarea>
+        <label class="row small" style="margin-top:10px;color:#e3e5ea"><input type="checkbox" id="plvis" ${lob.visitor ? 'checked' : ''}> ${tr('All visitors (no club profile)')}</label>
+        <div class="row" style="margin-top:12px"><button class="btn" data-act="ppaste-ok">${tr('Add')}</button><button class="btn sec" data-act="close">${tr('Cancel')}</button></div>`);
     }
     if (a === 'ppaste-ok') {
       const visitor = root.getElementById('plvis').checked;
@@ -1374,37 +1375,37 @@
     if (a === 'pvis') { const p = lob.players[+el.dataset.i]; p.visitor = !p.visitor; changed(); }
     if (a === 'pedit') {
       const i = +el.dataset.i, p = lob.players[i];
-      dialog(`<h3>Edit player</h3><div class="ff">
-        ${p.member ? '' : `<label class="w">Name<input id="pe-name" value="${esc(p.name)}"></label>`}
-        <label class="w">Name in Autodarts<input id="pe-ad" value="${esc(p.ad_name)}" placeholder="${esc(p.name.toUpperCase())}"><span class="small muted" style="font-weight:500">Guests: Autodarts writes their name in capitals, which is fine.</span></label>
-        ${p.member ? '' : `<label class="w ck"><input type="checkbox" id="pe-vis" ${p.visitor ? 'checked' : ''}> Visitor: no club profile, games not in the club stats</label>`}</div>
-        <div class="row" style="margin-top:14px"><button class="btn" data-act="pedit-ok" data-i="${i}">Save</button><button class="btn sec" data-act="close">Cancel</button></div>`);
+      dialog(`<h3>${tr('Edit player')}</h3><div class="ff">
+        ${p.member ? '' : `<label class="w">${tr('Name')}<input id="pe-name" value="${esc(p.name)}"></label>`}
+        <label class="w">${tr('Name in Autodarts')}<input id="pe-ad" value="${esc(p.ad_name)}" placeholder="${esc(p.name.toUpperCase())}"><span class="small muted" style="font-weight:500">${tr('Guests: Autodarts writes their name in capitals, which is fine.')}</span></label>
+        ${p.member ? '' : `<label class="w ck"><input type="checkbox" id="pe-vis" ${p.visitor ? 'checked' : ''}> ${tr('Visitor: no club profile, games not in the club stats')}</label>`}</div>
+        <div class="row" style="margin-top:14px"><button class="btn" data-act="pedit-ok" data-i="${i}">${tr('Save')}</button><button class="btn sec" data-act="close">${tr('Cancel')}</button></div>`);
     }
     if (a === 'pedit-ok') {
       const p = lob.players[+el.dataset.i], vis = root.getElementById('pe-vis'), nm = root.getElementById('pe-name');
       const name = nm ? nm.value.trim() : p.name;
-      if (!name || lob.players.some(o => o !== p && o.name.trim().toLowerCase() === name.toLowerCase())) { flash(name ? `${name} is already in` : 'The name is empty'); return; }
+      if (!name || lob.players.some(o => o !== p && o.name.trim().toLowerCase() === name.toLowerCase())) { flash(name ? tr('{name} is already in', { name }) : tr('The name is empty')); return; }
       p.name = name;
       p.ad_name = root.getElementById('pe-ad').value.trim();
       if (vis) p.visitor = vis.checked;
       dialog('');
       changed();
     }
-    if (a === 'lcancel' && confirm('Close the lobby? Boards that joined are let go.')) { clearTimeout(saveTimer); act('end', {}, () => { lob = null; }); }
+    if (a === 'lcancel' && confirm(tr('Close the lobby? Boards that joined are let go.'))) { clearTimeout(saveTimer); act('end', {}, () => { lob = null; }); }
     if (a === 'lstart') {
       clearTimeout(saveTimer);
-      try { await api('lobby', spec()); } catch (err) { error = err.message; rerender(); return; }
+      try { await api('lobby', spec()); } catch (err) { error = srv(err.message); rerender(); return; }
       act('lobby-start', {}, () => {
         const n = data.profiles_added || [];
-        flash(data.profiles_error ? `Started, but no club profiles were made: ${data.profiles_error}`
-          : n.length ? `Started. New club profile${n.length > 1 ? 's' : ''}: ${n.join(', ')}` : 'Tournament started');
+        flash(data.profiles_error ? tr('Started, but no club profiles were made: {error}', { error: srv(data.profiles_error) })
+          : n.length ? tn(n.length, 'Started. New club profile: {names}', 'Started. New club profiles: {names}', { names: n.join(', ') }) : tr('Tournament started'));
         lob = null;
         // Same page as the boards: Start game on top, the bracket below
         tab.host = 'mine';
       });
     }
     if (a === 'reject') act('approve', { node: el.dataset.node, approve: false });
-    if (a === 'claim') act('claim', { match: el.dataset.m }, () => { flash(data.role === 'host' ? 'The match is on this board now' : 'Asked the host for the match…'); tab.host = 'mine'; tab.board = 'mine'; });
+    if (a === 'claim') act('claim', { match: el.dataset.m }, () => { flash(data.role === 'host' ? tr('The match is on this board now') : tr('Asked the host for the match…')); tab.host = 'mine'; tab.board = 'mine'; });
     if (a === 'result') resultDialog(el.dataset.m);
     if (a === 'rwin' || a === 'rleg') {
       const i = +v, o = 1 - i, s = sheet;
@@ -1418,17 +1419,17 @@
     }
     if (a === 'rwo') { sheet.walkover = !sheet.walkover; drawSheet(); }
     if (a === 'rsave') {
-      if (sheet.winner < 0) { flash('Tap the winner first'); return; }
+      if (sheet.winner < 0) { flash(tr('Tap the winner first')); return; }
       const id = sheet.id;
       dialog('');
       act('result', sheet.walkover ? { match: id, walkover_winner: sheet.winner } : { match: id, legs: sheet.legs });
     }
     if (a === 'close') dialog('');
-    if (a === 'help') dialog(HELP_HTML);
+    if (a === 'help') dialog(helpHtml());
     if (a === 'tv') window.open('http://127.0.0.1:8080/tournament/live', '_blank', 'noopener');
     if (a === 'replay') {
       const m = T().matches.find(x => x.id === el.dataset.m);
-      if (m && confirm(`Play ${pname(m.sides[0].player)} vs ${pname(m.sides[1].player)} again from the start? The score so far is dropped and the match goes to the next free board.`)) act('replay', { match: m.id });
+      if (m && confirm(tr('Play {a} vs {b} again from the start? The score so far is dropped and the match goes to the next free board.', { a: pname(m.sides[0].player), b: pname(m.sides[1].player) }))) act('replay', { match: m.id });
     }
     if (a === 'start') runStart(false, el.dataset.m);
     if (a === 'side') { bracketSide = v; rerender(); }
@@ -1440,7 +1441,7 @@
       else if (el.dataset.why) flash(el.dataset.why);
       else if (!el.classList.contains('done') && !data.board.linked) { picked = el.dataset.m; rerender(); }
     }
-    if (a === 'end' && confirm('End the tournament on every board? This can\'t be undone.')) act('end', {});
+    if (a === 'end' && confirm(tr('End the tournament on every board? This can’t be undone.'))) act('end', {});
   });
 
   async function scan() {
@@ -1465,6 +1466,13 @@
     history.replaceState(history.state, '', location.pathname + location.search);
     window.dispatchEvent(new HashChangeEvent('hashchange'));
   }, true);
+  window.agI18n.onChange(() => {
+    labelNav();
+    badge();
+    cover();
+    callout(true);
+    if (isOpen() && !root.getElementById('dlg').innerHTML) { lastJson = ''; render(); }
+  });
   window.addEventListener('popstate', () => { sync(); if (isOpen()) refresh(true); });
   window.addEventListener('hashchange', () => { sync(); if (isOpen()) refresh(true); });
   window.addEventListener('resize', () => { if (isOpen()) placePage(); });

@@ -1,6 +1,7 @@
 // AutoGlow Bridge - content script (isolated world).
 // Forwards what page_hook.js observed to the background service worker over a long-lived port.
 const TAG = 'autoglow-bridge';
+const { t } = window.agI18n;
 const KEEPALIVE_MS = 20000;
 
 let port = null;
@@ -10,7 +11,7 @@ function getPort() {
   try {
     port = chrome.runtime.connect({ name: 'autodarts-tab' });
     port.onDisconnect.addListener(() => { port = null; });
-    port.postMessage({ type: 'tab', attached: true, url: location.href });
+    port.postMessage({ type: 'tab', attached: true, url: location.href, lang: window.agI18n.lang() });
   } catch {
     // Extension was reloaded or updated: this tab needs a page refresh to reconnect
     port = null;
@@ -34,7 +35,7 @@ window.addEventListener('message', (ev) => {
 });
 
 // Keeps the service worker awake while a game tab is open
-setInterval(() => send({ type: 'tab', attached: true, url: location.href }), KEEPALIVE_MS);
+setInterval(() => send({ type: 'tab', attached: true, url: location.href, lang: window.agI18n.lang() }), KEEPALIVE_MS);
 
 // In-app navigation (lobby -> match -> back) is reported right away: AutoGlow uses the page to know
 // whether a lobby is still open
@@ -42,7 +43,7 @@ let lastUrl = location.href;
 setInterval(() => {
   if (location.href === lastUrl) return;
   lastUrl = location.href;
-  send({ type: 'tab', attached: true, url: lastUrl });
+  send({ type: 'tab', attached: true, url: lastUrl, lang: window.agI18n.lang() });
 }, 1000);
 
 getPort();
@@ -89,7 +90,7 @@ wledRoot.innerHTML = `
   .msg { padding: 6px 4px; color: #9aa0a6; }
   .msg.err { color: #fca5a5; }
 </style>
-<button class="trigger" type="button" title="AutoGlow lights" aria-label="AutoGlow lights" aria-haspopup="true" aria-expanded="false">${BULB_ICON}</button>
+<button class="trigger" type="button" aria-haspopup="true" aria-expanded="false">${BULB_ICON}</button>
 <div class="menu" role="menu" hidden>
   <div class="head">AutoGlow · WLED</div>
   <div class="list"></div>
@@ -99,7 +100,15 @@ const wledTrigger = wledRoot.querySelector('.trigger');
 const wledMenu = wledRoot.querySelector('.menu');
 const wledListEl = wledRoot.querySelector('.list');
 
-const RELOAD_NOTE = 'The AutoGlow Bridge was updated or restarted. Reload this page (F5).';
+function labelTrigger() {
+  wledTrigger.title = t('AutoGlow lights');
+  wledTrigger.setAttribute('aria-label', wledTrigger.title);
+}
+labelTrigger();
+// Autodarts switched its language: the button's label, and the menu if it is open
+window.agI18n.onChange(() => { labelTrigger(); if (!wledMenu.hidden) loadWled(); });
+
+const RELOAD_NOTE = () => t('The AutoGlow Bridge was updated or restarted. Reload this page (F5).');
 
 function ask(msg) {
   return new Promise((resolve) => {
@@ -117,27 +126,27 @@ function ask(msg) {
 }
 
 function failNote(res, what) {
-  if (res.reload) return RELOAD_NOTE;
-  return `${what} (${res.error || 'unknown error'})`;
+  if (res.reload) return RELOAD_NOTE();
+  return `${what} (${window.agI18n.srv(res.error) || t('unknown error')})`;
 }
 
 function stateOf(d) {
-  if (d.online === false) return ['offline', 'offline'];
-  if (d.on === false) return ['', 'off'];
-  return ['on', d.online === null ? 'live' : 'on']; // online null: AutoGlow streams to it right now
+  if (d.online === false) return ['offline', t('offline')];
+  if (d.on === false) return ['', t('off')];
+  return ['on', d.online === null ? t('live') : t('on')]; // online null: AutoGlow streams to it right now
 }
 
 async function loadWled(note) {
-  wledListEl.innerHTML = '<div class="msg">Loading…</div>';
+  wledListEl.innerHTML = `<div class="msg">${t('Loading…')}</div>`;
   const res = await ask({ type: 'wledList' });
   if (!res.ok) {
     wledListEl.innerHTML = '<div class="msg err"></div>';
-    wledListEl.firstChild.textContent = failNote(res, 'AutoGlow is not reachable');
+    wledListEl.firstChild.textContent = failNote(res, t('AutoGlow is not reachable'));
     return;
   }
   const devices = res.data;
   if (!devices.length) {
-    wledListEl.innerHTML = '<div class="msg">No WLED controllers set up in AutoGlow.</div>';
+    wledListEl.innerHTML = `<div class="msg">${t('No WLED controllers set up in AutoGlow.')}</div>`;
     return;
   }
   wledListEl.textContent = '';
@@ -152,7 +161,7 @@ async function loadWled(note) {
     const btn = row.querySelector('.off');
     const turnOn = d.on === false;
     btn.classList.toggle('on', turnOn);
-    btn.title = `Switch ${d.name} ${turnOn ? 'on' : 'off'}`;
+    btn.title = t(turnOn ? 'Switch {name} on' : 'Switch {name} off', { name: d.name });
     btn.disabled = d.online === false;
     btn.addEventListener('click', () => setPower(btn, turnOn, d.ip));
     wledListEl.append(row);
@@ -161,7 +170,7 @@ async function loadWled(note) {
     const all = document.createElement('button');
     all.className = 'all';
     all.type = 'button';
-    all.innerHTML = `${POWER_ICON}<span>All off</span>`;
+    all.innerHTML = `${POWER_ICON}<span>${t('All off')}</span>`;
     all.addEventListener('click', () => setPower(all, false, null));
     wledListEl.append(all);
   }
@@ -176,10 +185,9 @@ async function loadWled(note) {
 async function setPower(btn, on, ip) {
   btn.disabled = true;
   const res = await ask({ type: 'wledPower', on, ip });
-  const word = on ? 'on' : 'off';
   let note = '';
-  if (!res.ok) note = failNote(res, `AutoGlow did not switch it ${word}`);
-  else if (res.data.status !== 'ok') note = `Sent, but not every controller confirmed it is ${word}.`;
+  if (!res.ok) note = failNote(res, t(on ? 'AutoGlow did not switch it on' : 'AutoGlow did not switch it off'));
+  else if (res.data.status !== 'ok') note = t(on ? 'Sent, but not every controller confirmed it is on.' : 'Sent, but not every controller confirmed it is off.');
   loadWled(note);
 }
 
@@ -220,7 +228,10 @@ function placeWledButton() {
 const tightStyle = document.createElement('style');
 tightStyle.textContent = 'header[data-autoglow-tight] > a:first-child { visibility: hidden !important; } '
   + 'html[data-autoglow-home] main [class*="container/card"] { display: none !important; } ' // the account holder's stats card on the start page
-  + 'header[data-autoglow-tight] > nav { left: var(--ag-nav-left, 16px) !important; transform: none !important; translate: none !important; }';
+  + 'header[data-autoglow-tight] > nav { left: var(--ag-nav-left, 16px) !important; transform: none !important; translate: none !important; } '
+  // Still too narrow without the logo: less room between the items, then a smaller font
+  + 'header[data-autoglow-squeeze] > nav { gap: 14px !important; } '
+  + 'header[data-autoglow-squeeze="2"] > nav { gap: 10px !important; } header[data-autoglow-squeeze="2"] > nav { font-size: 15px !important; }';
 document.documentElement.appendChild(tightStyle);
 function fitHeader() {
   const header = document.querySelector('header');
@@ -228,14 +239,28 @@ function fitHeader() {
   const right = wledHost.parentElement;
   if (!nav || !right || !nav.offsetParent) return;
   header.removeAttribute('data-autoglow-tight');
-  const last = [...nav.children].filter(c => c.offsetWidth).pop();
-  const navEnd = last ? last.getBoundingClientRect().right : nav.getBoundingClientRect().right;
+  header.removeAttribute('data-autoglow-squeeze');
+  /** Where the menu's items start and end (the nav box itself can be cut short by Autodarts' centring) */
+  const span = () => {
+    const shown = [...nav.children].filter(c => c.offsetWidth);
+    const r = nav.getBoundingClientRect();
+    return shown.length ? [shown[0].getBoundingClientRect().left, shown[shown.length - 1].getBoundingClientRect().right] : [r.left, r.right];
+  };
+  const [navStart, navEnd] = span();
   // our button is the left-most thing on the right-hand side
   const free = wledTrigger.getBoundingClientRect().left - 12;
-  if (navEnd > free) {
-    // centre the menu in the room the right-hand side leaves, not in the window
-    header.style.setProperty('--ag-nav-left', `${Math.max(16, Math.round((16 + free - nav.offsetWidth) / 2))}px`);
+  const logo = header.querySelector(':scope > a:first-child');
+  const logoEnd = logo && logo.offsetWidth ? logo.getBoundingClientRect().right + 12 : 0;
+  // The menu runs into the icons on the right, or into the logo on the left (longer German labels)
+  if (navEnd > free || navStart < logoEnd) {
     header.setAttribute('data-autoglow-tight', '');
+    for (const level of ['', '1', '2']) {
+      if (level) header.setAttribute('data-autoglow-squeeze', level);
+      // centre the menu in the room the right-hand side leaves, not in the window
+      const [a, b] = span();
+      header.style.setProperty('--ag-nav-left', `${Math.max(16, Math.round((16 + free - (b - a)) / 2))}px`);
+      if (b - a <= free - 16) break;
+    }
   }
 }
 function markHome() {
