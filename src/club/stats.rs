@@ -329,6 +329,10 @@ pub fn game_from_state(state: &Obj, bests: &LegBests, log: &DartLog, board: &str
     if !crate::autodarts::is_match_over(state) {
         return None;
     }
+    // Only local games: an online match (type Online, Tournament, …) is not a club game
+    if state.get("type").and_then(Value::as_str).map_or(false, |t| !t.is_empty() && !t.eq_ignore_ascii_case("Local")) {
+        return None;
+    }
     let id = state.get("id").map(py_str).filter(|s| !s.is_empty())?;
     let players = state.get("players").and_then(Value::as_array)?;
     if players.is_empty() {

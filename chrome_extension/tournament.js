@@ -96,25 +96,26 @@
   .ff label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:700;min-width:0}
   .ff .w{grid-column:1/-1}.ff select,.ff input{width:100%}.ff input[type=checkbox]{width:16px;flex:none}.ff label.ck{flex-direction:row;align-items:center;gap:8px;color:#e3e5ea;font-size:13px}
   .lobby{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
-  @media (max-width:860px){.lobby{grid-template-columns:1fr}}
+  @media (max-width:860px){.lobby{grid-template-columns:minmax(0,1fr)}}
   .lobby .side{display:flex;flex-direction:column;gap:16px}
   .qrbox{background:#fff;border-radius:12px;padding:8px;margin:0 auto;max-width:220px}.qrbox svg{display:block;width:100%;height:auto}
-  .lobby .card{padding:20px}.lobby h3{display:flex;align-items:center;gap:10px;margin-bottom:14px}.lobby h3 .chip{font-family:var(--sans)}
+  .lobby .card{padding:20px}.lobby h3{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}.lobby h3 .chip{font-family:var(--sans)}
   .addbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.addbar input#pnew{flex:1;min-width:160px}
   .sw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:#e3e5ea;font-weight:700;font-size:13px;user-select:none}
   .sw input{position:absolute;opacity:0;width:0;height:0}.sw span{width:34px;height:20px;border-radius:99px;background:var(--chipbg);position:relative;transition:background .15s;box-shadow:inset 0 0 0 1px rgb(255 255 255 / .15)}
   .sw span::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#cacfd9;transition:transform .15s}
   .sw input:checked+span{background:var(--yellow)}.sw.go input:checked+span{background:var(--green)}.sw input:checked+span::after{transform:translateX(14px);background:#01040b}
-  .club{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}.club .lbl{color:var(--muted);font-size:12px;font-weight:700;margin-right:4px}
-  .pick{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 4px;border-radius:99px;border:0;background:var(--chipbg);color:#fff;font:700 12px var(--sans);cursor:pointer}
-  .pick:hover{background:var(--blue)}.pick .av{width:22px;height:22px;font-size:11px}.pick .muted{font-weight:600}
+  .lobby h3 .padd-local{margin-left:auto;font-family:var(--sans)}
+  .rlist{margin-top:12px;max-height:min(50vh,420px);overflow:auto;border-top:1px solid var(--line)}
+  .rrow{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)}.rrow b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .plist{margin-top:16px;border-top:1px solid var(--line)}
   .prow{display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--line)}
   .prow .n{width:20px;color:var(--muted);font-weight:800;font-size:12px;text-align:right;flex:none}
-  .prow .who{flex:1;min-width:0}.prow .who b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.prow .who span{font-size:12px;color:var(--muted)}
+  .prow .who{flex:1;min-width:0}.prow .who b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.prow .who > span:not(.tag-in){font-size:12px;color:var(--muted)}
   .prow .act{display:flex;gap:2px;opacity:.45;transition:opacity .15s}.prow:hover .act{opacity:1}
   .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:800 14px var(--sans);color:#fff;flex:none}
   .tag{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px;border-radius:99px;border:0;font:700 11px/1 var(--sans);cursor:pointer;white-space:nowrap;background:#0b55df33;color:var(--blue2)}
+  .tag-in{display:none!important}@media (max-width:560px){.tag-r{display:none}.prow .who .tag-in{display:block!important;margin-top:4px}}
   .tag.vis{background:#f7d45826;color:var(--yellow)}.tag.mem{background:#12cf8126;color:var(--green);cursor:default}
   .ib{width:30px;height:30px;padding:0;border-radius:8px;border:0;background:none;color:var(--muted);cursor:pointer;font:700 14px var(--sans)}.ib:hover{background:#ffffff14;color:#fff}.ib:disabled{opacity:.3;cursor:default;background:none}
   .seedbar{display:flex;gap:8px;align-items:center;margin-top:12px;color:var(--muted);font-size:12px;font-weight:700}
@@ -831,9 +832,9 @@
     const name = s.name || t.name;
     lob = { tid: t.id, name: name === 'Local Tournament' ? tr('Local Tournament') : name, format: s.format || 'single_ko', groups: s.groups || 0, advance: s.advance || 2, swiss_rounds: s.swiss_rounds || 0,
       return_round: !!s.return_round, ko_legs: s.ko_legs || 0, semi_legs: s.semi_legs || 0, final_legs: s.final_legs || 0, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
-      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, visitor: false, rulesOpen: false,
+      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, saveLocal: false, rulesOpen: false,
       phone_signup: !!s.phone_signup, phoneSeen: s.phone_count || 0, qr: null };
-    clubApi('members').then(r => { lob.roster = r.players || []; }, () => { lob.roster = []; }).then(() => { if (!typing()) { lastJson = ''; render(); } });
+    clubApi('members').then(r => { lob.roster = r.players || []; }, () => { lob.roster = []; }).then(() => { paintPick(); if (!typing()) { lastJson = ''; render(); } });
     return lob;
   }
   function spec() {
@@ -912,18 +913,14 @@
   }
 
   function playersCard(l) {
-    const taken = new Set(l.players.map(p => p.name.trim().toLowerCase()));
-    const free = (l.roster || []).filter(m => !taken.has(m.name.trim().toLowerCase()));
-    const tag = (p, i) => (p.member ? `<span class="tag mem" title="${tr('Club member: the games count for their stats')}">★ ${tr('Member')}</span>`
-      : `<button class="tag ${p.visitor ? 'vis' : ''}" data-act="pvis" data-i="${i}" title="${p.visitor ? tr('Visitor: no club profile. Click to give them one.') : tr('Gets a club profile when the tournament starts. Click to make them a visitor.')}">${p.visitor ? tr('Visitor') : tr('New profile')}</button>`);
+    const tag = (p, i) => (p.member ? `<span class="tag mem" title="${tr('Local player: the games count for their stats')}">★ ${tr('Local player')}</span>`
+      : `<button class="tag ${p.visitor ? 'vis' : ''}" data-act="pvis" data-i="${i}" title="${p.visitor ? tr('Guest: no stats. Click to save them as a local player.') : tr('Saved as a local player when the tournament starts. Click to make them a guest.')}">${p.visitor ? tr('Guest') : tr('New local player')}</button>`);
     const sub = p => [p.ad_name && p.ad_name.toUpperCase() !== p.name.toUpperCase() ? tr('in Autodarts: {name}', { name: esc(p.ad_name) }) : '', p.phone ? tr('signed up by phone') : ''].filter(Boolean).join(' · ');
-    return `<div class="card"><h3>${tr('Players')} <span class="chip">${l.players.length} / 32</span></h3>
-      <div class="addbar"><input id="pnew" placeholder="${tr('Type a name and press Enter')}"><label class="sw" title="${tr('Visitors get no club profile')}"><input type="checkbox" id="pvisnew" ${l.visitor ? 'checked' : ''}><span></span>${tr('Visitor')}</label><button class="btn" data-act="padd">${tr('Add')}</button><button class="btn sec sm" data-act="ppaste">${tr('Paste a list…')}</button></div>
-      ${l.roster && l.roster.length && free.length ? `<div class="club"><span class="lbl">${tr('From the club')}</span>${free.map(m => `<button class="pick" data-act="radd" data-v="${esc(m.id)}">${avatar(m.name)}${esc(m.name)}${m.summary && m.summary.games ? ` <span class="muted">${m.summary.average.toFixed(1)}</span>` : ''}</button>`).join('')}
-        ${free.length > 1 ? `<button class="btn sec sm" data-act="radd-all">${tr('Add all')}</button>` : ''}</div>` : ''}
-      <div class="plist">${l.players.length ? l.players.map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b>${sub(p) ? `<span>${sub(p)}</span>` : ''}</div>${tag(p, i)}
+    return `<div class="card"><h3>${tr('Players')} <span class="chip">${l.players.length} / 32</span><button class="btn sec sm padd-local" data-act="rpick">＋ ${tr('Add local player')}</button></h3>
+      <div class="addbar"><input id="pnew" placeholder="${l.saveLocal ? tr('Type a name and press Enter') : tr('Guest name + Enter')}"><label class="sw" title="${tr('Off: a guest, their games stay out of the stats')}"><input type="checkbox" id="psavenew" ${l.saveLocal ? 'checked' : ''}><span></span>${tr('Save as local player')}</label><button class="btn" data-act="padd">${tr('Add')}</button><button class="btn sec sm" data-act="ppaste">${tr('Paste a list…')}</button></div>
+      <div class="plist">${l.players.length ? l.players.map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b>${sub(p) ? `<span>${sub(p)}</span>` : ''}<span class="tag-in">${tag(p, i)}</span></div><span class="tag-r">${tag(p, i)}</span>
           <span class="act"><button class="ib" data-act="pedit" data-i="${i}" title="${tr('Edit')}">✎</button><button class="ib" data-act="pup" data-i="${i}" title="${tr('Seed higher')}" ${i ? '' : 'disabled'}>↑</button><button class="ib" data-act="pdel" data-i="${i}" title="${tr('Remove')}">✕</button></span></div>`).join('')
-        : `<div class="muted" style="padding:28px 0;text-align:center">${tr('No players yet. Type a name above or pick club members.')}</div>`}</div>
+        : `<div class="muted" style="padding:28px 0;text-align:center">${tr('No players yet. Add local players or type a guest’s name.')}</div>`}</div>
       ${l.players.length > 1 ? `<div class="seedbar">${tr('Seeding is the list order')}<span style="flex:1"></span><button class="btn sec sm" data-act="pshuffle">${tr('Shuffle')}</button>${l.roster && l.roster.length ? `<button class="btn sec sm" data-act="rseed">${tr('By club average')}</button>` : ''}</div>` : ''}
       </div>`;
   }
@@ -974,9 +971,29 @@
   function lobbyWaiting(t) {
     return `<div class="note" style="margin:0 0 16px"><span class="pulse">⏳</span> ${tr('Waiting for <b>{host}</b> to start the tournament. This board gets its matches by itself.', { host: esc(data.join.host_name || tr('the host')) })}</div>
       <div class="card rules"><button style="cursor:default"><span class="k">${tr('Rules')}</span><span class="v">${rulesLine(t.lobby || t)}</span></button></div>
-      <div class="lobby"><div class="card"><h3>${tr('Players')} <span class="chip">${(t.players || []).length}</span></h3><div class="plist">${(t.players || []).map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b></div>${p.visitor ? `<span class="tag vis" style="cursor:default">${tr('Visitor')}</span>` : ''}</div>`).join('') || `<div class="muted" style="padding:20px 0">${tr('No players yet.')}</div>`}</div></div>
+      <div class="lobby"><div class="card"><h3>${tr('Players')} <span class="chip">${(t.players || []).length}</span></h3><div class="plist">${(t.players || []).map((p, i) => `<div class="prow"><span class="n">${i + 1}</span>${avatar(p.name)}<div class="who"><b>${esc(p.name)}</b></div>${p.visitor ? `<span class="tag vis" style="cursor:default">${tr('Guest')}</span>` : ''}</div>`).join('') || `<div class="muted" style="padding:20px 0">${tr('No players yet.')}</div>`}</div></div>
       <div class="card" id="lboards">${lobbyBoards(t, false)}</div></div>`;
   }
+
+  /** The local players (club members) to add, with a search */
+  function pickRows() {
+    const q = (lob.pickQ || '').trim().toLowerCase();
+    const taken = new Set(lob.players.map(p => p.name.trim().toLowerCase()));
+    const all = (lob.roster || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    const list = all.filter(m => !q || [m.name, m.alias].some(v => (v || '').toLowerCase().includes(q)));
+    if (!lob.roster) return `<div class="muted" style="padding:16px 2px">…</div>`;
+    if (!list.length) return `<div class="muted" style="padding:16px 2px">${all.length ? tr('Nobody matches.') : tr('No local players yet. Add them in AutoGlow under Players.')}</div>`;
+    return list.map(m => { const here = taken.has(m.name.trim().toLowerCase());
+      return `<div class="rrow">${avatar(m.name)}<b>${esc(m.name)}</b>${m.summary && m.summary.games ? `<span class="muted small">${m.summary.average.toFixed(1)}</span>` : ''}<button class="btn sm ${here ? 'sec' : ''}" data-act="radd" data-v="${esc(m.id)}" ${here ? 'disabled' : ''}>${here ? tr('Added') : tr('Add')}</button></div>`; }).join('');
+  }
+  function pickDialog() {
+    lob.pickQ = '';
+    dialog(`<h3>${tr('Add local player')}</h3><input id="rq" placeholder="${tr('Search local players')}" autocomplete="off" style="width:100%;margin-top:10px">
+      <div class="rlist" id="rlist">${pickRows()}</div>
+      <div class="row" style="margin-top:12px"><button class="btn sec" data-act="radd-all">${tr('Add all')}</button><span style="flex:1"></span><button class="btn" data-act="close">${tr('Done')}</button></div>`);
+    const q = root.getElementById('rq'); if (q) q.focus();
+  }
+  function paintPick() { const el = root.getElementById('rlist'); if (el && lob) el.innerHTML = pickRows(); }
 
   function addPlayer(name, extra) {
     const n = name.trim();
@@ -1249,7 +1266,7 @@
 
   const helpHtml = () => `<h3>${tr('How it works')}</h3><ol style="margin:0;padding-left:20px;line-height:1.6">${[
     tr('<b>Press Host a tournament</b> and pick how it’s played. The lobby opens: players, the boards that joined, and the rules folded into one line (press <b>Change</b> to open them). Everything is saved as you go.'),
-    tr('<b>Players:</b> pick club members, or type new names. A new name gets a club profile when the tournament starts, so their games count for their stats. Mark guests as <b>Visitor</b> and they get none.'),
+    tr('<b>Players:</b> press <b>Add local player</b> to pick your local players, or type a name to add a guest. Guests’ games stay out of the stats; switch on <b>Save as local player</b> and a typed name is saved as a local player when the tournament starts.'),
     tr('<b>More boards?</b> Each board needs its own PC with AutoGlow. Open Local Tournament there and choose <b>Join a tournament</b>: it shows up in the lobby right away. One board is enough too: then every match is played here, one after the other.'),
     tr('<b>Press Start tournament.</b> The bracket is built and the boards get their first matches. A board can still join later: it’s in at once.'),
     tr('<b>Boards get their matches by themselves.</b> When a board is free, a box pops up on it: who plays next and how to set up the game.'),
@@ -1294,6 +1311,7 @@
   // Lobby fields: text is saved when typing pauses; a pick (select, checkbox) at once, and redrawn
   root.addEventListener('input', (e) => {
     const el = e.target;
+    if (el.id === 'rq' && lob) { lob.pickQ = el.value; paintPick(); return; }
     if (!lob || !(el.dataset.l || el.dataset.s || el.dataset.k)) return;
     const val = el.type === 'checkbox' ? el.checked : el.value;
     if (el.dataset.l) lob[el.dataset.l] = val;
@@ -1309,7 +1327,7 @@
   root.addEventListener('change', (e) => {
     const el = e.target;
     if (lob && (el.dataset.l || el.dataset.s) && (el.tagName === 'SELECT' || el.type === 'checkbox')) { lastJson = ''; render(); saveLobby(true); }
-    if (el.id === 'pvisnew' && lob) lob.visitor = el.checked;
+    if (el.id === 'psavenew' && lob) { lob.saveLocal = el.checked; root.getElementById('pnew').placeholder = el.checked ? tr('Type a name and press Enter') : tr('Guest name + Enter'); }
     if (el.dataset.actChange === 'plays') act('plays', { node: el.dataset.node, plays: el.checked });
   });
 
@@ -1345,23 +1363,26 @@
     // Lobby: every change goes to AutoGlow, so joined boards see the players too
     const changed = () => { rerender(); saveLobby(true); };
     if (a === 'padd') {
-      if (addPlayer(root.getElementById('pnew').value, { visitor: lob.visitor })) changed();
+      if (addPlayer(root.getElementById('pnew').value, { visitor: !lob.saveLocal })) changed();
       root.getElementById('pnew').focus();
     }
     if (a === 'ppaste') {
       dialog(`<h3>${tr('Paste players')}</h3><div class="muted small" style="margin-bottom:8px">${tr('One name per line, best seed first')}</div><textarea id="plist"></textarea>
-        <label class="row small" style="margin-top:10px;color:#e3e5ea"><input type="checkbox" id="plvis" ${lob.visitor ? 'checked' : ''}> ${tr('All visitors (no club profile)')}</label>
+        <label class="row small" style="margin-top:10px;color:#e3e5ea"><input type="checkbox" id="plsave" ${lob.saveLocal ? 'checked' : ''}> ${tr('Save all as local players')}</label>
         <div class="row" style="margin-top:12px"><button class="btn" data-act="ppaste-ok">${tr('Add')}</button><button class="btn sec" data-act="close">${tr('Cancel')}</button></div>`);
     }
     if (a === 'ppaste-ok') {
-      const visitor = root.getElementById('plvis').checked;
+      const visitor = !root.getElementById('plsave').checked;
       root.getElementById('plist').value.split('\n').forEach(n => addPlayer(n, { visitor }));
       dialog('');
       changed();
     }
+    if (a === 'rpick') pickDialog();
     if (a === 'radd' || a === 'radd-all') {
-      for (const m of (lob.roster || []).filter(m => a === 'radd-all' || m.id === v)) addPlayer(m.name, { ad_name: m.alias || '', member: m.id });
+      const taken = new Set(lob.players.map(p => p.name.trim().toLowerCase()));
+      for (const m of (lob.roster || []).filter(m => a === 'radd-all' ? !taken.has(m.name.trim().toLowerCase()) : m.id === v)) addPlayer(m.name, { ad_name: m.alias || '', member: m.id });
       changed();
+      paintPick();
     }
     if (a === 'rseed') {
       // Best club average first; players without games here keep their order behind them

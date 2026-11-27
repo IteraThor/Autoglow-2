@@ -58,6 +58,21 @@ fn unfinished_states_are_not_games() {
 }
 
 #[test]
+fn only_local_matches_are_games() {
+    let last = frames().pop().unwrap();
+    assert_eq!(last["type"], "Local");
+    let take = |t: Value| {
+        let mut f = last.clone();
+        f.insert("type".into(), t);
+        game_from_state(&f, &LegBests::default(), &DartLog::default(), "", "", 0).is_some()
+    };
+    assert!(take(json!("Local")));
+    assert!(take(Value::Null));
+    assert!(!take(json!("Online")));
+    assert!(!take(json!("Tournament")));
+}
+
+#[test]
 fn players_are_recognised_by_name_and_autodarts_name() {
     let mut g = recorded();
     recognise(&mut g, &roster(), &BTreeMap::new());

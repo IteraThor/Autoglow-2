@@ -53,9 +53,9 @@
   .form .dt{fill:var(--card);stroke:var(--blue2);stroke-width:2}.form .dt.w{fill:var(--blue2)}.form .gl{stroke:var(--line)}.form text{fill:var(--muted);font-size:11px}
   td a{color:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:#ffffff40}td a:hover{color:#fff}
   /* The table with a QR card beside it (above it in portrait or on a narrow screen) */
-  .pl-wrap{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:16px;align-items:start}
+  .pl-wrap{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:16px;align-items:start}
   .qrc{text-align:center;position:sticky;top:12px}.qrc h3{margin:0 0 2px}.qrc .small{display:block}
-  .qrbox{background:#fff;border-radius:10px;padding:6px;margin:10px auto 0;width:100%;max-width:200px}.qrbox svg{display:block;width:100%;height:auto}
+  .qrbox{background:#fff;border-radius:10px;padding:6px;margin:10px auto 0;width:100%;max-width:140px}.qrbox svg{display:block;width:100%;height:auto}
   @media (max-width:1000px),(orientation:portrait){.pl-wrap{grid-template-columns:1fr}.qrc{position:static;display:flex;gap:14px;align-items:center;text-align:left;order:-1}.qrbox{width:120px;flex:none;margin:0}}
   `;
 
