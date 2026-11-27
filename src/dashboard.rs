@@ -155,9 +155,9 @@ impl Dashboard {
         let new = clean(Some(&Value::Object(merged)));
         let buf = serde_json::to_vec_pretty(&new).map_err(|e| e.to_string())?;
         crate::storage::write_atomic(&settings_file(), &buf).map_err(|e| e.to_string())?;
-        // A replaced or removed logo leaves no file behind
+        // A replaced or removed logo leaves no file behind, unless a saved event preset still shows it
         let old_logo = get_str(&old, "logo", "");
-        if !old_logo.is_empty() && old_logo != get_str(&new, "logo", "") {
+        if !old_logo.is_empty() && old_logo != get_str(&new, "logo", "") && !crate::event_presets::stored_logos().contains(&old_logo) {
             let _ = std::fs::remove_file(dir().join(&old_logo));
         }
         Ok(new)

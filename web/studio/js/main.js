@@ -5,13 +5,13 @@
 // Scenes can also be cued from AutoGlow › Studio. URL options: ?demo=1 scripted match, ?chroma=green.
 
 import './tv-compat.js';
-import { ctx, displayName, t, tn, el } from './ctx.js';
+import { ctx, displayName, t, tn, el, sleep } from './ctx.js';
 import { initCameras, applyCameras, setLayout, setBlur, fitLayout, camerasInUse } from './cameras.js';
 import { onDarts, outputDelay } from './darts.js';
 import { renderBoard, renderVisit, renderPlayerCard } from './scoreboard.js';
 import { MiniBoard } from './dartboard.js';
 import {
-  stinger, startIdle, stopIdle, playIntro, hideIntro, showLegCard, hideLegCard, showMatchCard, hideMatchCard,
+  stinger, stopStinger, startIdle, stopIdle, playIntro, hideIntro, showLegCard, hideLegCard, showMatchCard, hideMatchCard,
   showMoment, hideMoment, showIdleSlide, setLobby, lobbyReady
 } from './scenes.js';
 import { DemoFeed, sampleState, sampleBullOff } from './demo.js';
@@ -20,6 +20,8 @@ import { renderBullOff, resetBullOff, tieView } from './bulloff.js';
 const params = new URLSearchParams(location.search);
 ctx.demo = params.get('demo') === '1';
 const CHROMA = params.get('chroma') === 'green';
+// The Studio page's preview: a click on a text opens its field there (?edit=<id of that page's preview>)
+const EDIT = ctx.demo ? params.get('edit') || '' : '';
 
 const POLL_MS = 400;
 const SETTINGS_MS = 5000;
@@ -40,6 +42,7 @@ function fit() {
 addEventListener('resize', fit);
 fit();
 document.addEventListener('dblclick', () => {
+  if (EDIT) return;
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(() => {});
 });
@@ -89,24 +92,42 @@ function setScene(name) {
 // Sequences play one after another: one arriving while another plays (a cue, a leg end) waits its turn
 let queue = Promise.resolve();
 let queued = 0;
+// Raised when the Studio page picks a scene: sequences still waiting are dropped, and the one playing
+// stops at its next step (stale), so clicks never pile up into a row of transitions
+let epoch = 0;
+const stale = mine => mine !== epoch;
 
 function run(sequence) {
+  const mine = epoch;
   queued++;
   busy = true;
-  queue = queue.then(sequence).catch(err => console.error('[Studio]', err)).finally(() => {
+  queue = queue.then(() => (stale(mine) ? null : sequence())).catch(err => console.error('[Studio]', err)).finally(() => {
+    if (stale(mine)) return;
     queued--;
     busy = queued > 0;
   });
   return queue;
 }
 
+function interrupt() {
+  epoch++;
+  queue = Promise.resolve();
+  queued = 0;
+  busy = false;
+  stopStinger();
+  hideMoment();
+  hideLegCard();
+  clearTimeout(matchCardTimer);
+}
+
 const transitionTo = name => stinger(() => setScene(name));
 
 async function introSequence(state, next = 'live') {
+  const mine = epoch;
   let intro = Promise.resolve();
   await stinger(() => { setScene('intro'); intro = playIntro(state); });
   await intro;
-  await transitionTo(next);
+  if (!stale(mine)) await transitionTo(next);
 }
 
 // --- Bull-off before the first leg -----------------------------------------------------------------
@@ -156,8 +177,11 @@ function directBullOff(bo) {
 }
 
 async function matchSequence(state, winner) {
+  const mine = epoch;
   await showMoment('match', t('moment_match'), winner ? displayName(winner) : '', winner);
+  if (stale(mine)) return;
   await stinger(() => { setScene('match'); showMatchCard(state, { bestCheckout: session.bestCheckout }); });
+  if (stale(mine) || EDIT) return; // The Studio page's Match end step: the card stays
   matchCardTimer = setTimeout(() => {
     if (scene === 'match') run(() => transitionTo('idle'));
   }, MATCH_CARD_MS);
@@ -216,7 +240,8 @@ function legInfo(state, winner) {
 
 // --- Events between two states of the same match --------------------------------------------------
 function detectEvents(state) {
-  if (!prev || prev.match_id !== state.match_id || scene !== 'live') return;
+  // The Studio page's preview: banners and cards come from its steps, not from the demo match
+  if (EDIT || !prev || prev.match_id !== state.match_id || scene !== 'live') return;
   const turn = state.turn || {};
   const oldTurn = prev.turn || {};
   const turnChanged = turn.id !== oldTurn.id || (turn.darts || []).length !== (oldTurn.darts || []).length;
@@ -230,9 +255,10 @@ function detectEvents(state) {
   }
   if (info) {
     run(async () => {
+      const mine = epoch;
       if (info.nine) await showMoment('nine', t('moment_nine'), displayName(info.player), info.player);
       else await showMoment('leg', info.setWon ? t('moment_set') : t('moment_game_shot'), displayName(info.player));
-      await showLegCard(info);
+      if (!stale(mine)) await showLegCard(info);
     });
     return;
   }
@@ -342,7 +368,7 @@ function playCue(name) {
     layoutSince = 0;
     return;
   }
-  holdUntil = Date.now() + CUE_HOLD_MS;
+  holdUntil = EDIT ? Infinity : Date.now() + CUE_HOLD_MS;
   const state = cueState();
   const first = state.players[0];
   switch (name) {
@@ -350,7 +376,7 @@ function playCue(name) {
     case 'live': run(() => transitionTo('live')); break;
     case 'intro': run(() => introSequence(state)); break;
     case 'stinger': run(() => stinger()); break;
-    case 'leg': run(() => showLegCard({ label: tn('board_leg', state.leg || 1), title: t('leg_title'), player: first, darts: 15, average: '100.20', checkout: 121, oneEighties: 1 })); break;
+    case 'leg': run(() => showLegCard(sampleLeg(state))); break;
     case 'match': run(() => matchSequence({ ...state, finished: true, winner: state.winner ?? 0 }, state.players[state.winner ?? 0])); break;
     case '180': showMoment('max', t('moment_180'), first ? displayName(first) : ''); break;
     case 'bust': showMoment('bust', t('moment_bust'), first ? displayName(first) : ''); break;
@@ -358,11 +384,37 @@ function playCue(name) {
   }
 }
 
+const sampleLeg = state => ({ label: tn('board_leg', state.leg || 1), title: t('leg_title'), player: state.players[0],
+  darts: 15, average: '100.20', checkout: 121, oneEighties: 1 });
+
+// The Studio page's own preview: the scene of the step picked there, which stays until the next pick.
+// quiet: back from a highlighted text or part, so no transition
+async function stepScene(name, quiet) {
+  const state = cueState();
+  const cut = show => (quiet ? show() : stinger(show));
+  switch (name) {
+    case 'idle': return cut(() => setScene('idle'));
+    case 'live': return cut(() => { setScene('live'); renderLive(state); });
+    case 'intro':
+      if (quiet && scene === 'intro') return; // still on screen: no second entrance
+      return cut(() => { setScene('intro'); playIntro(state); });
+    case 'bulloff':
+      if (!quiet) return bullOffCue();
+      setScene('bulloff');
+      renderBullOff(sampleBullOff('decided'));
+      return;
+    case 'leg': return cut(() => { setScene('live'); renderLive(state); showLegCard(sampleLeg(state), { hold: true }); });
+    case 'match': return cut(() => { setScene('match'); showMatchCard({ ...state, finished: true, winner: state.winner ?? 0 }, { bestCheckout: session.bestCheckout }); });
+    default: playCue(name); // The moments and the transition
+  }
+}
+
 // The bull-off scene with sample players: a dart each, then the winner
 async function bullOffCue() {
+  const mine = epoch;
   await stinger(() => { setScene('bulloff'); renderBullOff(sampleBullOff('running')); });
-  await new Promise(resolve => setTimeout(resolve, 2500));
-  if (scene !== 'bulloff') return;
+  await sleep(2500);
+  if (scene !== 'bulloff' || stale(mine)) return;
   const bo = sampleBullOff('decided');
   renderBullOff(bo);
   await showMoment('bulloff', displayName(bo.players[bo.winner]), t('bulloff_first'), bo.players[bo.winner]);
@@ -375,6 +427,8 @@ function handleCue(cue) {
   }
   if (cue && cue.id !== lastCueId) {
     lastCueId = cue.id;
+    // The Studio page's preview already shows its own steps; only the overlay and layout switches apply
+    if (EDIT && !/^(overlay|layout):/.test(cue.scene)) return;
     playCue(cue.scene);
   }
 }
@@ -396,7 +450,7 @@ function onState(state) {
   // Players picked in the Autodarts lobby (only sent while no match runs)
   setLobby(hasMatch && !state.finished ? null : state.lobby || null);
   const bo = state.bull_off || null;
-  if (bo && Date.now() >= holdUntil) {
+  if (bo && !EDIT && Date.now() >= holdUntil) {
     detectBullOff(bo);
     showBullOff(bo);
   } else if (!bo) {
@@ -413,7 +467,8 @@ function onState(state) {
     if (!emptySince) emptySince = Date.now();
   }
   renderIdleStatus(state);
-  if (!busy) direct(state);
+  // The Studio page's preview stays on the step picked there; the demo match only moves the scoreboard
+  if (EDIT) { if (scene === null) setScene('idle'); } else if (!busy) direct(state);
   directLayout(hasMatch ? state : null);
   prev = hasMatch ? state : prev;
 }
@@ -640,8 +695,13 @@ function endShowcase() {
   clearHighlight();
   hideMoment();
   hideLegCard();
-  // Back to the demo where it is
   layoutSince = 0;
+  if (EDIT) {
+    // The Studio page sends its step again (quiet); the scoreboard gets its demo values back
+    if (scene === 'live' && lastState?.players?.length) renderLive(lastState);
+    return;
+  }
+  // Back to the demo where it is
   if (lastState?.players?.length) {
     setScene('live');
     renderLive(lastState);
@@ -661,7 +721,8 @@ function showDraft(settings) {
     showcase(showcaseKey, true);
     return;
   }
-  if (lastState?.players?.length) renderLive(lastState);
+  // (the Studio page's Live step shows sample players until the demo match starts: redrawn too)
+  if (lastState?.players?.length || (EDIT && scene === 'live')) renderLive(cueState());
   layoutSince = 0; // A new camera layout shows right away
   directLayout(lastState?.players?.length ? lastState : null);
   if (scene === 'idle') {
@@ -681,11 +742,15 @@ if (ctx.demo && 'BroadcastChannel' in window) {
       endShowcase();
       loadSettings().then(() => showDraft(ctx.settings));
     } else if (data?.type === 'play' && data.scene) {
-      // A scene played only in this browser's demo outputs (Studio test pages), not on the TVs
+      // A scene played only in this browser's demo outputs (Studio test pages), not on the TVs. It
+      // replaces whatever plays or waits there: quick clicks never queue up
+      interrupt();
       endShowcase();
-      playCue(data.scene);
+      if (EDIT) run(() => stepScene(data.scene, data.quiet));
+      else playCue(data.scene);
     } else if (data?.type === 'focus-text') {
       if (data.key) {
+        if (data.key !== showcaseKey) interrupt();
         showcaseLabel = data.label || '';
         showcase(data.key, data.key === showcaseKey);
       } else {
@@ -693,6 +758,64 @@ if (ctx.demo && 'BroadcastChannel' in window) {
       }
     }
   };
+}
+
+// --- Click a text to change it (the Studio page's preview) -----------------------------------------
+// Hovering a text outlines it; a click tells the Studio page which texts are there (SHOWCASE), and it
+// opens their fields at that spot. Found by position, since the overlay layers let clicks through.
+if (EDIT && 'BroadcastChannel' in window) {
+  const channel = new BroadcastChannel('autoglow-studio-draft');
+  const SETTINGS_TEXTS = ['event_title', 'event_subtitle'];
+  const visible = e => {
+    for (let n = e; n && n !== stage; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return false;
+    }
+    return true;
+  };
+  // The smallest element under the point that shows an editable text, and the texts it shows
+  const textsAt = (x, y) => {
+    const hits = [];
+    for (const [key, spec] of Object.entries(SHOWCASE)) {
+      for (const e of stage.querySelectorAll(spec.sel)) {
+        const r = e.getBoundingClientRect();
+        if (!r.width || x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+        const wording = t(key).toLowerCase();
+        if (spec.text && (!wording || !e.textContent.toLowerCase().includes(wording))) continue;
+        if (visible(e)) hits.push({ e, key, area: r.width * r.height });
+      }
+    }
+    if (!hits.length) return null;
+    const best = hits.reduce((a, b) => (b.area < a.area ? b : a)).e;
+    let keys = hits.filter(x => x.e === best).map(x => x.key);
+    // Several texts share a place (a subtitle or a tagline): the ones it shows now
+    if (keys.length > 1) {
+      const text = best.textContent.toLowerCase();
+      const shown = keys.filter(k => SETTINGS_TEXTS.includes(k) || (t(k) && text.includes(t(k).toLowerCase())));
+      if (shown.length) keys = shown;
+    }
+    return { el: best, keys };
+  };
+  let hovered = null;
+  let moveFrame = 0;
+  const setHover = el => {
+    if (hovered === el) return;
+    hovered?.classList.remove('text-hover');
+    hovered = el;
+    hovered?.classList.add('text-hover');
+    document.body.classList.toggle('edit-hover', !!el);
+  };
+  document.addEventListener('mousemove', e => {
+    cancelAnimationFrame(moveFrame);
+    moveFrame = requestAnimationFrame(() => setHover(textsAt(e.clientX, e.clientY)?.el || null));
+  });
+  document.addEventListener('mouseleave', () => setHover(null));
+  document.addEventListener('click', e => {
+    const hit = textsAt(e.clientX, e.clientY);
+    if (!hit) return;
+    const r = hit.el.getBoundingClientRect();
+    channel.postMessage({ type: 'pick-text', edit: EDIT, keys: hit.keys, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+  });
 }
 
 async function loadSettings() {

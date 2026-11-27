@@ -11,15 +11,25 @@ export const STINGER_COVER_MS = 520;
 export const STINGER_MS = 1250;
 
 // --- Stinger: a short wipe that hides every scene change -------------------------------------
+// A newer stinger (or stopStinger) takes over: the older one neither swaps the scene nor ends the wipe
+let stingerRun = 0;
+
 export async function stinger(onCover) {
+  const mine = ++stingerRun;
   const box = $('stinger');
   box.classList.remove('run');
   void box.offsetWidth; // restart the animation
   box.classList.add('run');
   await sleep(STINGER_COVER_MS);
+  if (mine !== stingerRun) return;
   if (onCover) onCover();
   await sleep(STINGER_MS - STINGER_COVER_MS);
-  box.classList.remove('run');
+  if (mine === stingerRun) box.classList.remove('run');
+}
+
+export function stopStinger() {
+  stingerRun++;
+  $('stinger').classList.remove('run');
 }
 
 // --- Idle: the event title; once two players are picked in the Autodarts lobby, the pre-match slides
@@ -278,7 +288,10 @@ export function hideIntro() {
 
 // --- Leg summary ------------------------------------------------------------------------------
 // hold: stay on screen until hideLegCard() (preview of the texts)
+let legRun = 0; // the newest leg card: an older card's timer or a hide started before it leaves it alone
+
 export async function showLegCard(info, { hold = false } = {}) {
+  const mine = ++legRun;
   const box = $('legCard');
   const head = el('div', 'lc-head');
   head.append(el('span', null, info.label), el('strong', null, info.title));
@@ -298,14 +311,16 @@ export async function showLegCard(info, { hold = false } = {}) {
   box.classList.add('in');
   if (hold) return;
   await sleep(LEG_CARD_MS);
-  hideLegCard();
+  if (mine === legRun) hideLegCard();
 }
 
 export async function hideLegCard() {
+  const mine = legRun;
   const box = $('legCard');
   if (box.hidden) return;
   box.classList.add('out');
   await sleep(450);
+  if (mine !== legRun) return;
   box.hidden = true;
   box.classList.remove('in', 'out');
 }

@@ -1,77 +1,74 @@
-// AutoGlow 2 - Dashboard page: what the Local Tournament TVs show (/tournament/live). Presets, the
-// scenes and what stays on screen, the look and the event's name and logo. Changes save by themselves
-// (/api/dashboard) and every TV follows within a few seconds; the preview shows them at once.
-// "On all TVs now" holds one scene on every TV until it is set back to the rotation. The ticker runs
-// highlights and the event's own messages along the bottom of the TVs.
+// AutoGlow 2 - Dashboard page: what the Local Tournament TVs show (/tournament/live). The screen
+// (layout, the scenes it rotates, what stays on screen), the look, the ticker and the event's name and
+// logo. Pictures instead of notes: hovering a choice shows it in the preview, a click keeps it.
+// Changes save by themselves (/api/dashboard) and every TV follows within a few seconds. "On all TVs
+// now" holds one scene on every TV until it is set back to the rotation. The event preset at the top
+// keeps all of it, with the Studio's look and texts, per event (web/js/features/event-presets.js).
 
 import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
-import { icon } from './studio-core.js';
+import { DASH_LOOKS as LOOKS, icon } from './studio-core.js';
 import { popover, section, segmented } from './studio-parts.js';
+import { presetBar } from './event-presets.js';
 
 const $ = id => document.getElementById(id);
 const SAVE_DELAY_MS = 700;
 const STATUS_MS = 3000;
+const SAFE_FRAME_MS = 1500;
+const SCENE_PEEK_MS = 6000;  // a scene switched on in the rotation shows in the preview this long
 const draftChannel = 'BroadcastChannel' in window ? new BroadcastChannel('autoglow-dashboard-draft') : null;
 
+// id: [name, icon, what it shows]
 const SCENE_INFO = {
-  bracket: ['Bracket', 'Knockout; winners and losers in a double KO'],
-  tables: ['Tables', 'Groups, league table or Swiss standings'],
-  results: ['Results', 'The latest matches'],
-  leaders: ['Leaders', 'Best averages, 180s, wins']
+  bracket: ['Bracket', 'bracket', 'Knockout; winners and losers in a double KO'],
+  tables: ['Tables', 'table', 'Groups, league table or Swiss standings'],
+  results: ['Results', 'list', 'The latest matches'],
+  leaders: ['Leaders', 'bars', 'Best averages, 180s, wins']
 };
 const scenesIn = (...ids) => ids.map(id => ({ id, secs: id === 'bracket' || id === 'tables' ? 14 : 10, on: true }));
 
-// thumb: the screen as a little grid (CSS grid-template and its cells; a = a scene, b = boards)
-const PRESETS = [
-  { id: 'overview', name: 'Overview', note: 'Boards with live scores and up next on the left, one rotating scene on the right.',
+// Ready-made screens. thumb: the screen as a little grid (CSS grid-template and its cells; a = a scene, b = boards)
+const LAYOUTS = [
+  { id: 'overview', name: 'Overview', note: 'Boards with live scores and up next on the left, one rotating scene on the right',
     set: { layout: 'overview', boards: true, upnext: true, scenes: scenesIn('bracket', 'tables', 'results', 'leaders') },
     thumb: ['1fr 1fr 1fr / 42% 1fr', 'b', 'a:1/2/4/3', 'b', 'b'] },
-  { id: 'boards', name: 'Live boards', note: 'Each board as one big row with both scores. Up next, the scenes and leaders below.',
+  { id: 'boards', name: 'Live boards', note: 'Each board as one big row with both scores; up next, the scenes and leaders below',
     set: { layout: 'boards', boards: true, upnext: true, scenes: scenesIn('bracket', 'tables', 'results', 'leaders') },
     thumb: ['1fr 1fr 2fr / 1fr 2fr 1fr', 'b:1/1/2/4', 'b:2/1/3/4', '', 'a', ''] },
-  { id: 'wall', name: 'Bracket wall', note: 'The bracket or table fills the screen; the boards run in a strip below.',
+  { id: 'wall', name: 'Bracket wall', note: 'The bracket or table fills the screen; the boards run in a strip below',
     set: { layout: 'wall', boards: true, upnext: true, scenes: scenesIn('bracket', 'tables', 'results', 'leaders') },
     thumb: ['1fr 24% / 1fr 1fr 1fr', 'a:1/1/2/4', 'b', 'b', 'b'] },
-  { id: 'standings', name: 'Standings', note: 'Tables and standings first, then results and leaders; boards in a strip below.',
+  { id: 'standings', name: 'Standings', note: 'Tables first, then results and leaders; boards in a strip below',
     set: { layout: 'wall', boards: true, upnext: true, scenes: scenesIn('tables', 'results', 'leaders', 'bracket') },
     thumb: ['1fr 1fr 24% / 1fr 1fr', 'a', 'a', 'a', 'a', 'b:3/1/4/3'] },
-  { id: 'minimal', name: 'Minimal', note: 'One thing at a time at full size: the boards, then each scene. For small or far-away TVs.',
+  { id: 'minimal', name: 'One at a time', note: 'One thing at a time at full size: the boards, then each scene. For small or far-away TVs',
     set: { layout: 'single', boards: true, upnext: true, scenes: scenesIn('bracket', 'tables', 'results', 'leaders') },
     thumb: ['1fr / 1fr', 'a'] }
 ];
-const LAYOUTS = [{ value: 'overview', label: 'Overview' }, { value: 'boards', label: 'Board rows' }, { value: 'wall', label: 'Wall' }, { value: 'single', label: 'One at a time' }];
-// Swatches of the TV looks (web/studio/tournament*.css)
-const LOOKS = [
-  { id: 'studio', name: 'Same as Studio', bg: '#1b2330', a: '#004cff', row: '#2a3546' },
-  { id: 'arena', name: 'Arena', bg: '#060a14', a: '#2f7bff', row: '#1a2440' },
-  { id: 'flap', name: 'Flap board', bg: '#09090a', a: '#ffb000', row: '#2c2c31' },
-  { id: 'poster', name: 'Poster', bg: '#efeae0', a: '#ff4a1c', row: '#14110f' },
-  { id: 'mono', name: 'Mono', bg: '#000000', a: '#ffffff', row: '#3a3a3a' },
-  { id: 'gazette', name: 'Gazette', bg: '#f4efe4', a: '#c41e1e', row: '#1a1814' },
-  { id: 'blueprint', name: 'Blueprint', bg: '#12449a', a: '#ffd23f', row: '#eaf2ff' },
-  { id: 'pop', name: 'Pop', bg: '#ffd60a', a: '#2f5bff', row: '#141414' },
-  { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', a: '#f7c948', row: '#ff4fa3' }
-];
 const ACCENTS = ['#2f7bff', '#14b8a6', '#ff3b47', '#ffb000', '#a855f7', '#22c55e', '#ec4899'];
+// key, name, icon, what it tells
 const TICKER_ITEMS = [
-  ['t180', '180s', 'How many so far and who threw them'],
-  ['averages', 'Averages', 'The best match average and the tournament averages'],
-  ['results', 'Latest results', 'The last four matches'],
-  ['upsets', 'Upsets and deciders', 'A low seed beating a high one; matches that went to the last leg'],
-  ['next', 'Up next', 'The next three matches']
+  ['t180', '180s', 'flame', 'How many so far and who threw them'],
+  ['averages', 'Averages', 'gauge', 'The best match average and the tournament averages'],
+  ['results', 'Results', 'list', 'The last four matches'],
+  ['upsets', 'Upsets', 'zap', 'A low seed beating a high one; matches that went to the last leg'],
+  ['next', 'Up next', 'next', 'The next three matches']
 ];
-const SPEEDS = [{ value: 'slow', label: 'Slow' }, { value: 'normal', label: 'Normal' }, { value: 'fast', label: 'Fast' }];
-const TEXT_SIZES = [{ value: 'normal', label: 'Normal' }, { value: 'large', label: 'Large' }];
-const HOLDS = [{ value: '', label: 'Rotation' }, { value: 'boards', label: 'Boards' }, { value: 'bracket', label: 'Bracket' }, { value: 'tables', label: 'Tables' }, { value: 'results', label: 'Results' }, { value: 'leaders', label: 'Leaders' }];
+const SPEEDS = [{ value: 'slow', label: '›', title: 'Slow' }, { value: 'normal', label: '››', title: 'Normal' }, { value: 'fast', label: '›››', title: 'Fast' }];
+// "On all TVs now": the rotation or one scene held on every TV
+const HOLDS = [
+  { value: '', icon: 'refresh', title: 'Rotation: the TVs run by themselves' },
+  { value: 'boards', icon: 'target', title: 'Hold the boards on every TV' },
+  ...Object.entries(SCENE_INFO).map(([id, [name, ico]]) => ({ value: id, icon: ico, title: `Hold ${name} on every TV` }))
+];
 
 let S = null;               // the settings, as the server has them plus edits on their way
 let pending = {};
 let saveTimer = null;
 let page = null;
 let statusTimer = null;
-let tab = 'presets';
+let tab = 'screen';
 // The demo switch: the preview shows a made-up tournament, so a change can be judged with none running
 const DEMO_FORMATS = [{ value: 'single_ko', label: 'Single KO' }, { value: 'double_ko', label: 'Double KO' }, { value: 'groups', label: 'Groups' }, { value: 'league', label: 'League' }, { value: 'swiss', label: 'Swiss' }];
 const DEMO_STATES = [{ value: 'running', label: 'Running' }, { value: 'finished', label: 'Finished' }];
@@ -94,7 +91,7 @@ function draft() {
   draftChannel?.postMessage({ type: 'draft', settings: S });
 }
 
-// layoutChange: a change that leaves the chosen preset
+// layoutChange: a change that leaves the chosen ready-made screen
 function change(values, layoutChange = false) {
   if (layoutChange) values = { ...values, preset: 'custom' };
   Object.assign(S, values);
@@ -140,11 +137,22 @@ function saveMark() {
   return el;
 }
 
+// --- A scene shown in the preview only, for a moment (null: back to what the TVs hold) ----------------
+let peekTimer = null;
+function peekScene(scene) {
+  clearTimeout(peekTimer);
+  draftChannel?.postMessage({ type: 'peek', scene });
+  if (scene !== null) peekTimer = setTimeout(() => peekScene(null), SCENE_PEEK_MS);
+}
+
 // --- Small parts -----------------------------------------------------------------------------------
-function toggle(label, key, note = '', layoutChange = false) {
-  const sw = h('input', { type: 'checkbox', class: 'stu-switch', checked: S[key] !== false });
-  sw.addEventListener('change', () => change({ [key]: sw.checked }, layoutChange));
-  return h('label', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, label, note ? h('small', {}, note) : null), sw);
+// An on/off setting as a picture tile
+function tile(label, key, ico, note, layoutChange = false) {
+  const on = S[key] !== false;
+  const b = h('button', { type: 'button', class: `stu-tile${on ? ' is-on' : ''}`, 'aria-pressed': String(on), title: note || label, 'data-fk': `tile-${key}` },
+    icon(ico, 22), h('span', {}, label));
+  b.addEventListener('click', () => change({ [key]: !on }, layoutChange));
+  return b;
 }
 
 function thumb(t) {
@@ -164,7 +172,7 @@ function statusChips() {
     try {
       const body = await api('/api/tournament/local');
       const t = body.tournament;
-      if (demo) chips = [['Demo tournament in the preview', true], [t ? 'A real tournament is on this PC' : 'No real tournament on this PC', !!t]];
+      if (demo) chips = [['Demo in the preview', true, 'A made-up tournament; the TVs are not affected'], [t ? 'Tournament on this PC' : 'No tournament', !!t]];
       else if (!t) chips = [['No tournament on this PC', false]];
       else {
         const boards = (t.boards || []).filter(b => b.approved && !b.left).length;
@@ -172,11 +180,11 @@ function statusChips() {
         const done = ms.filter(m => m.state === 'done').length;
         const live = ms.filter(m => m.state === 'live').length;
         chips = [
-          [t.status === 'lobby' ? 'Lobby open' : t.status === 'finished' ? 'Tournament finished' : 'Tournament running', true],
+          [t.status === 'lobby' ? 'Lobby open' : t.status === 'finished' ? 'Finished' : 'Running', true],
           [`${boards} board${boards === 1 ? '' : 's'}`, boards > 0],
-          [t.status === 'lobby' ? `${(t.players || []).length} players` : `${done} of ${ms.length} played${live ? ` · ${live} live` : ''}`, true]
+          [t.status === 'lobby' ? `${(t.players || []).length} players` : `${done}/${ms.length} played${live ? ` · ${live} live` : ''}`, true]
         ];
-        if (body.role === 'board') chips.push(['This PC is a board; the host has all scores', true]);
+        if (body.role === 'board') chips.push(['Board PC', true, 'This PC is a board; the host has all scores']);
       }
     } catch (err) {
       chips = [['AutoGlow not reachable', false]];
@@ -184,7 +192,7 @@ function statusChips() {
     const key = JSON.stringify(chips);
     if (root.dataset.key === key) return;
     root.dataset.key = key;
-    root.replaceChildren(...chips.map(([label, ok]) => h('span', { class: 'stu-dot', 'data-state': ok ? 'ok' : 'wait' }, h('i'), label)));
+    root.replaceChildren(...chips.map(([label, ok, note]) => h('span', { class: 'stu-dot', 'data-state': ok ? 'ok' : 'wait', title: note || '' }, h('i'), label)));
   };
   return root;
 }
@@ -198,61 +206,70 @@ function tvButton() {
     popover(btn, h('div', { class: 'stu-tv' },
       h('span', { class: 'stu-h' }, 'Open this on every TV'),
       h('div', { class: 'stu-tv-url' }, h('code', {}, url), copy),
-      h('div', { class: 'stu-row' }, h('a', { class: 'stu-btn', href: '/tournament/live', target: '_blank', rel: 'noopener' }, icon('external', 14), 'Open here')),
-      h('small', { class: 'stu-hint' }, 'Fills 1080p and 4K screens; double-click it for fullscreen. Every TV follows this page a few seconds after a change.')));
+      h('div', { class: 'stu-row' }, h('a', { class: 'stu-btn', href: '/tournament/live', target: '_blank', rel: 'noopener', title: '1080p and 4K; double-click for fullscreen' }, icon('external', 14), 'Open here'))));
   });
   return btn;
 }
 
 // --- Tabs -------------------------------------------------------------------------------------------
-function presetsTab() {
-  const cards = PRESETS.map(p => {
-    const b = h('button', { type: 'button', class: `dsh-preset${S.preset === p.id ? ' is-on' : ''}` }, thumb(p.thumb), h('b', {}, p.name), h('small', {}, p.note));
-    b.addEventListener('click', () => change({ preset: p.id, ...structuredClone(p.set) }));
-    return b;
-  });
-  if (S.preset === 'custom') {
-    cards.push(h('div', { class: 'dsh-preset is-on is-custom' }, thumb(['1fr 1fr / 1fr 1fr 1fr', '', '', '', '', '', '']), h('b', {}, 'Custom'),
-      h('small', {}, 'Your own mix from Content. Pick a preset to start again from it.')));
-  }
-  return [head('Presets', 'A ready-made setup for every TV. Fine-tune it under Content and Look.'), h('div', { class: 'dsh-presets' }, ...cards)];
-}
-
-function contentTab() {
-  const rows = S.scenes.map((sc, i) => {
-    const [name, note] = SCENE_INFO[sc.id];
+// The rotation as a strip: each scene as wide as its seconds; a click skips it, or puts it back and
+// shows it in the preview
+function rotationStrip() {
+  const strip = h('div', { class: 'dsh-strip', role: 'list', 'aria-label': 'Scenes in the rotation' });
+  S.scenes.forEach((sc, i) => {
+    const [name, ico, note] = SCENE_INFO[sc.id];
+    const on = sc.on !== false;
+    const set = patch => change({ scenes: S.scenes.map((x, j) => (j === i ? { ...x, ...patch } : x)) }, true);
     const move = d => {
       const list = S.scenes.slice();
       [list[i], list[i + d]] = [list[i + d], list[i]];
       change({ scenes: list }, true);
     };
-    const up = h('button', { type: 'button', class: 'stu-btn stu-iconbtn dsh-move', title: 'Earlier', 'aria-label': `${name} earlier`, disabled: i === 0 }, '↑');
-    const down = h('button', { type: 'button', class: 'stu-btn stu-iconbtn dsh-move', title: 'Later', 'aria-label': `${name} later`, disabled: i === S.scenes.length - 1 }, '↓');
-    up.addEventListener('click', () => move(-1));
-    down.addEventListener('click', () => move(1));
-    const secs = h('input', { type: 'number', class: 'stu-input dsh-secs', min: 4, max: 60, value: sc.secs, 'aria-label': `${name} seconds` });
-    secs.addEventListener('change', () => {
-      const v = Math.max(4, Math.min(60, Math.round(Number(secs.value) || sc.secs)));
-      change({ scenes: S.scenes.map((x, j) => (j === i ? { ...x, secs: v } : x)) }, true);
-    });
-    const sw = h('input', { type: 'checkbox', class: 'stu-switch', checked: sc.on !== false, 'aria-label': `Show ${name}` });
-    sw.addEventListener('change', () => change({ scenes: S.scenes.map((x, j) => (j === i ? { ...x, on: sw.checked } : x)) }, true));
-    return h('div', { class: `dsh-row${sc.on === false ? ' is-off' : ''}` }, h('span', { class: 'dsh-moves' }, up, down),
-      h('span', { class: 'dsh-name' }, name, h('small', {}, note)), h('label', { class: 'dsh-num' }, secs, h('small', {}, 's')), sw);
+    const main = h('button', { type: 'button', class: 'dsh-block-main', 'aria-pressed': String(on), title: `${note}\n${on ? 'Click to skip it' : 'Click to show it'}`, 'data-fk': `sc-${sc.id}` },
+      icon(ico, 20), h('b', {}, name), h('span', { class: 'dsh-block-secs' }, on ? `${sc.secs}s` : 'off'));
+    main.addEventListener('click', () => { set({ on: !on }); if (!on) peekScene(sc.id); });
+    const btn = (ic, label, fn, disabled) => {
+      const b = h('button', { type: 'button', class: 'dsh-block-btn', title: label, 'aria-label': `${name}: ${label}`, disabled, 'data-fk': `sc-${sc.id}-${ic}` }, icon(ic, 14));
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const tools = h('span', { class: 'dsh-block-tools' },
+      btn('left', 'Earlier', () => move(-1), i === 0),
+      on ? btn('minus', 'Shorter', () => set({ secs: Math.max(4, sc.secs - 2) }), sc.secs <= 4) : null,
+      on ? btn('plus', 'Longer', () => set({ secs: Math.min(60, sc.secs + 2) }), sc.secs >= 60) : null,
+      btn('right', 'Later', () => move(1), i === S.scenes.length - 1));
+    strip.append(h('div', { class: `dsh-block${on ? '' : ' is-off'}`, role: 'listitem', style: `flex-grow:${on ? sc.secs : 5}` }, main, tools));
   });
-  return [head('Content', 'What the TVs show and for how long.'),
-    section('Layout', segmented(LAYOUTS, S.layout, v => change({ layout: v }, true), 'Layout')),
-    section('Scenes in the rotation', ...rows, h('p', { class: 'stu-hint' }, 'A scene the tournament does not have is skipped, like tables in a knockout.')),
-    section('Always on screen',
-      toggle('Boards with live scores', 'boards', '', true),
-      toggle('Up next', 'upnext', '', true),
-      toggle('Clock', 'clock'),
-      toggle('Player photos', 'photos', 'From the club players; initials when a player has none'))];
+  const total = S.scenes.filter(x => x.on !== false).reduce((a, x) => a + x.secs, 0);
+  return h('div', { class: 'dsh-rotation' }, strip,
+    h('small', { class: 'dsh-strip-total', title: 'One round of the rotation. A scene the tournament does not have is skipped, like tables in a knockout.' }, icon('refresh', 12), `${total} s`));
+}
+
+function screenTab() {
+  const cards = LAYOUTS.map(p => {
+    const on = S.preset === p.id;
+    const b = h('button', { type: 'button', class: `dsh-preset${on ? ' is-on' : ''}`, 'aria-pressed': String(on), title: p.note, 'data-fk': `lay-${p.id}` }, thumb(p.thumb), h('b', {}, p.name));
+    b.addEventListener('click', () => change({ preset: p.id, ...structuredClone(p.set) }));
+    return b;
+  });
+  if (S.preset === 'custom') {
+    cards.push(h('div', { class: 'dsh-preset is-on is-custom', title: 'Your own mix. Pick a picture to start again from it.' },
+      thumb(['1fr 1fr / 1fr 1fr 1fr', '', '', '', '', '', '']), h('b', {}, 'Custom')));
+  }
+  return [
+    section('Layout', h('div', { class: 'dsh-presets' }, ...cards)),
+    section('Rotation', rotationStrip()),
+    section('Always on screen', h('div', { class: 'stu-tiles' },
+      tile('Boards', 'boards', 'target', 'Boards with live scores', true),
+      tile('Up next', 'upnext', 'next', 'The next matches', true),
+      tile('Clock', 'clock', 'clock'),
+      tile('Photos', 'photos', 'image', 'Player photos from the club players; initials when a player has none')))
+  ];
 }
 
 function lookTab() {
   const looks = LOOKS.map(l => {
-    const b = h('button', { type: 'button', class: `stu-look${S.theme === l.id ? ' is-on' : ''}` },
+    const b = h('button', { type: 'button', class: `stu-look${S.theme === l.id ? ' is-on' : ''}`, title: l.id === 'studio' ? 'Follows the look and accent colour of Studio › Look' : l.name, 'data-fk': `look-${l.id}` },
       h('span', { class: 'dsh-sw', style: `background:${l.bg}` }, h('i', { style: `background:${l.id === 'studio' || !S.accent ? l.a : S.accent}` }), h('i', { style: `background:${l.row}` })), l.name);
     b.addEventListener('click', () => change({ theme: l.id }));
     return b;
@@ -260,50 +277,58 @@ function lookTab() {
   const studio = S.theme === 'studio';
   const own = h('input', { type: 'color', value: S.accent || '#2f7bff', 'aria-label': 'Own colour' });
   own.addEventListener('change', () => change({ accent: own.value }));
-  const accents = h('div', { class: `stu-accents${studio ? ' is-off' : ''}` },
-    h('button', { type: 'button', class: `stu-btn stu-chip${S.accent ? '' : ' is-on'}`, 'aria-pressed': String(!S.accent) }, 'The look\'s own'),
+  const lookOwn = h('button', { type: 'button', class: `stu-btn stu-chip${S.accent ? '' : ' is-on'}`, 'aria-pressed': String(!S.accent), title: 'The look\'s own colour', 'data-c': '' }, 'Auto');
+  const accents = h('div', { class: `stu-accents${studio ? ' is-off' : ''}`, title: studio ? 'Set in Studio › Look' : '' },
+    lookOwn,
     ...ACCENTS.map(c => h('button', { type: 'button', class: `stu-accent${S.accent === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}`, 'data-c': c })),
     h('label', { class: `stu-accent stu-accent-custom${S.accent && !ACCENTS.includes(S.accent) ? ' is-on' : ''}`, title: 'Own colour' }, own));
   accents.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (b) change({ accent: b.dataset.c || '' });
   });
+  const size = v => {
+    const on = (S.text || 'normal') === v;
+    const b = h('button', { type: 'button', class: `stu-tile dsh-aa${on ? ' is-on' : ''}`, 'aria-pressed': String(on), title: v === 'large' ? 'Everything 15 % bigger; the bracket and tables in more pages' : 'Normal text', 'data-fk': `text-${v}` },
+      h('b', { class: v === 'large' ? 'is-large' : '' }, 'Aa'), h('span', {}, v === 'large' ? 'Large' : 'Normal'));
+    b.addEventListener('click', () => change({ text: v }));
+    return b;
+  };
   const safe = h('input', { type: 'range', min: 0, max: 5, step: 1, value: S.safe, class: 'dsh-range', 'aria-label': 'Safe-area margin' });
   const safeVal = h('span', { class: 'dsh-val' }, `${S.safe} %`);
-  safe.addEventListener('input', () => { safeVal.textContent = `${safe.value} %`; });
+  safe.addEventListener('input', () => { safeVal.textContent = `${safe.value} %`; page.safeFrame(Number(safe.value)); });
   safe.addEventListener('change', () => change({ safe: Number(safe.value) }));
-  return [head('Look', 'Colours and type of the dashboard.'),
-    section('Theme', h('div', { class: 'stu-looks dsh-looks' }, ...looks),
-      studio ? h('p', { class: 'stu-hint' }, 'Follows the look and accent colour chosen in Studio › Look.') : null),
+  safe.addEventListener('pointerdown', () => page.safeFrame(Number(safe.value)));
+  return [
+    section('Theme', h('div', { class: 'stu-looks dsh-looks' }, ...looks)),
     section('Accent colour', accents),
-    section('Screen',
-      h('div', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, 'Text size', h('small', {}, 'Large: everything 15 % bigger, the bracket and tables in more pages')),
-        segmented(TEXT_SIZES, S.text || 'normal', v => change({ text: v }), 'Text size')),
-      toggle('Calm animations', 'calm', 'Nothing blinks or drifts; scenes fade instead of sliding'),
-      h('div', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, 'Safe-area margin', h('small', {}, 'For TVs that cut off the edges')), safe, safeVal))];
+    section('Screen', h('div', { class: 'stu-tiles' }, size('normal'), size('large'),
+      tile('Calm', 'calm', 'waves', 'Nothing blinks or drifts; scenes fade instead of sliding')),
+    h('label', { class: 'dsh-safe', title: 'A margin for TVs that cut off the edges' }, icon('frame', 18), safe, safeVal))
+  ];
 }
 
 function tickerTab() {
-  const items = { ...(S.ticker_items || {}) };
-  const rows = TICKER_ITEMS.map(([key, name, note]) => {
-    const sw = h('input', { type: 'checkbox', class: 'stu-switch', checked: items[key] !== false });
-    sw.addEventListener('change', () => change({ ticker_items: { ...S.ticker_items, [key]: sw.checked } }));
-    return h('label', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, name, h('small', {}, note)), sw);
-  });
-  const text = h('textarea', { class: 'stu-input dsh-text', rows: 3, maxlength: 300, placeholder: 'Bar open until 2 am\nNext Friday: doubles night' }, S.ticker_text || '');
-  text.addEventListener('input', () => change({ ticker_text: text.value }));
   const off = S.ticker === false;
-  return [head('Ticker', 'Highlights running along the bottom of every TV. New ones come in when the line has gone round.'),
-    toggle('Show the ticker', 'ticker'),
+  const chips = TICKER_ITEMS.map(([key, name, ico, note]) => {
+    const on = S.ticker_items?.[key] !== false;
+    const b = h('button', { type: 'button', class: `stu-btn stu-chip dsh-tchip${on ? ' is-on' : ''}`, 'aria-pressed': String(on), title: note, 'data-fk': `tk-${key}` }, icon(ico, 14), name);
+    b.addEventListener('click', () => change({ ticker_items: { ...S.ticker_items, [key]: !on } }));
+    return b;
+  });
+  const text = h('textarea', { class: 'stu-input dsh-text', rows: 3, maxlength: 300, placeholder: 'One per line\nBar open until 2 am', 'aria-label': 'Own messages, one per line' }, S.ticker_text || '');
+  text.addEventListener('input', () => change({ ticker_text: text.value }));
+  return [
+    h('div', { class: 'stu-tiles' }, tile('Ticker', 'ticker', 'ticker', 'Highlights running along the bottom of every TV')),
     h('div', { class: `dsh-group${off ? ' is-off' : ''}` },
       section('Speed', segmented(SPEEDS, S.ticker_speed || 'normal', v => change({ ticker_speed: v }), 'Ticker speed')),
-      section('Highlights', ...rows, h('p', { class: 'stu-hint' }, 'From the match stats Autodarts sends; a highlight shows once there is something to tell.')),
-      section('Own messages', h('label', { class: 'dsh-field' }, h('span', {}, 'One message per line, shown between the highlights'), text)))];
+      section('Highlights', h('div', { class: 'stu-row' }, ...chips)),
+      section('Own messages', text))
+  ];
 }
 
 function eventTab() {
   const field = (label, key, placeholder, max) => {
-    const input = h('input', { type: 'text', class: 'stu-input', value: S[key] || '', placeholder, maxlength: max });
+    const input = h('input', { type: 'text', class: 'stu-input', value: S[key] || '', placeholder, maxlength: max, 'aria-label': label, 'data-fk': `ev-${key}` });
     input.addEventListener('input', () => change({ [key]: input.value }));
     return h('label', { class: 'dsh-field' }, h('span', {}, label), input);
   };
@@ -317,36 +342,35 @@ function eventTab() {
       Object.assign(S, await api('/api/dashboard/logo', { body: form, timeout: 30000 }));
       draft();
       page.refresh();
+      page.bar.refresh();
     } catch (err) {
       toast.error(err.message);
     }
   };
   file.addEventListener('change', () => upload(file.files[0]));
-  const drop = h('div', { class: 'dsh-logo', tabindex: 0, role: 'button', 'aria-label': 'Choose a logo' },
-    S.logo ? h('img', { src: `/api/dashboard/logo/${encodeURIComponent(S.logo)}`, alt: '' }) : h('span', { class: 'dsh-logo-empty' }, icon('camera', 22)),
-    h('span', {}, S.logo ? 'Drop or choose another picture to change it.' : 'Drop a picture here or choose a file. PNG, JPEG or WebP; a see-through PNG looks best.'),
+  const drop = h('div', { class: 'dsh-logo', tabindex: 0, role: 'button', 'aria-label': 'Choose a logo', title: 'PNG, JPEG or WebP; a see-through PNG looks best. Drop it here or click.' },
+    S.logo ? h('img', { src: `/api/dashboard/logo/${encodeURIComponent(S.logo)}`, alt: '' }) : h('span', { class: 'dsh-logo-empty' }, icon('image', 22)),
+    h('span', {}, S.logo ? 'Change' : 'Drop or choose a logo'),
     file);
   drop.addEventListener('click', () => file.click());
   drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
   drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('is-over'); upload(e.dataTransfer.files[0]); });
-  const remove = h('button', { type: 'button', class: 'stu-btn' }, icon('trash', 14), 'Remove logo');
-  remove.addEventListener('click', () => change({ logo: '' }));
-  return [head('Event', 'The name on the screens. Empty fields use the tournament\'s own name and rules.'),
+  const remove = h('button', { type: 'button', class: 'stu-btn stu-iconbtn', title: 'Remove the logo', 'aria-label': 'Remove the logo' }, icon('trash', 14));
+  remove.addEventListener('click', () => { change({ logo: '' }); page.bar.refresh(); });
+  return [
     field('Title', 'title', 'The tournament\'s name', 60),
     field('Subtitle', 'subtitle', 'e.g. Club championship 2026', 80),
-    section('Logo', drop, S.logo ? h('div', { class: 'stu-row' }, remove) : null,
-      h('p', { class: 'stu-hint' }, 'Shown in the header and on the lobby screen.'))];
+    section('Logo', h('div', { class: 'dsh-logo-row' }, drop, S.logo ? remove : null))
+  ];
 }
 
-const head = (title, note) => h('div', { class: 'stu-title' }, h('div', {}, h('h2', {}, title), h('small', {}, note)));
 // id, label, builder, icon, hover note
 const TABS = [
-  ['presets', 'Presets', presetsTab, 'tv', 'Ready-made screens'],
-  ['content', 'Content', contentTab, 'eye', 'Which scenes show, and for how long'],
-  ['look', 'Look', lookTab, 'palette', 'Colours of the TVs'],
-  ['ticker', 'Ticker', tickerTab, 'shuffle', 'Messages along the bottom'],
+  ['screen', 'Screen', screenTab, 'layout', 'Layout, the scenes it rotates, what stays on screen'],
+  ['look', 'Look', lookTab, 'palette', 'Colours and text size of the TVs'],
+  ['ticker', 'Ticker', tickerTab, 'ticker', 'Highlights along the bottom'],
   ['event', 'Event', eventTab, 'trophy', 'Name and logo']
 ];
 
@@ -355,6 +379,11 @@ function build(host) {
   const panel = h('div', { class: 'stu-panel dsh-panel' });
   const frame = h('iframe', { src: 'about:blank', title: 'Dashboard preview', tabindex: '-1' });
   const dots = statusChips();
+  const bar = presetBar({
+    beforeSwitch: flush,
+    afterSwitch: async () => { draftChannel?.postMessage({ type: 'clear' }); await renderDashboard(); },
+    suggestName: () => S.title || ''
+  });
   const tabs = h('div', { class: 'stu-group dsh-rail', role: 'tablist', 'aria-label': 'Dashboard' }, h('span', { class: 'stu-pill' }),
     ...TABS.map(([id, label, , ico, note]) => {
       const b = h('button', { type: 'button', role: 'tab', class: 'stu-stage', 'data-id': id, title: note }, icon(ico, 22), h('span', {}, label));
@@ -372,8 +401,10 @@ function build(host) {
     if (tabs.scrollWidth > tabs.clientWidth) tabs.scrollTo({ left: btn.offsetLeft - tabs.clientWidth / 2 + btn.offsetWidth / 2, behavior: 'smooth' });
   };
   new ResizeObserver(placePill).observe(tabs);
-  const holdNote = h('p', { class: 'stu-hint' });
+
+  // On all TVs now: the rotation or one held scene, as icons
   const holdSeg = segmented(HOLDS, S.hold?.scene || '', async v => {
+    peekScene(null);
     draftChannel?.postMessage({ type: 'hold', scene: v });
     try {
       S.hold = (await api('/api/dashboard/hold', { body: { scene: v } })).hold;
@@ -381,28 +412,35 @@ function build(host) {
     } catch (err) {
       toast.error(err.message);
     }
-    note();
   }, 'On all TVs now');
-  const note = () => {
-    holdNote.textContent = S.hold?.scene
-      ? 'Every TV holds this scene until you set it back to Rotation.'
-      : 'The TVs run by themselves. Pick a scene to hold it on every TV right away.';
-  };
-  note();
+  holdSeg.classList.add('dsh-holds');
 
-  const demoSwitch = h('input', { type: 'checkbox', class: 'stu-switch', 'aria-label': 'Demo tournament' });
-  demoSwitch.addEventListener('change', () => setDemo(demoSwitch.checked ? demo || { format: 'single_ko', state: 'running' } : null));
-  const demoOptions = h('div', { class: 'dsh-demo-opts' });
-  const demoBox = h('div', { class: 'dsh-demo' },
-    h('label', { class: 'dsh-row' }, h('span', { class: 'dsh-name' }, 'Demo tournament', h('small', {}, 'Shows a made-up tournament in the preview. The TVs are not affected.')), demoSwitch),
-    demoOptions);
+  // The safe-area margin drawn over the preview while it is changed
+  const safeEl = h('div', { class: 'dsh-safe-frame', hidden: true });
+  let safeTimer = null;
+  const safeFrame = pct => {
+    safeEl.hidden = false;
+    safeEl.style.inset = `${pct}%`;
+    clearTimeout(safeTimer);
+    safeTimer = setTimeout(() => { safeEl.hidden = true; }, SAFE_FRAME_MS);
+  };
+
+  // The demo tournament: a pill on the preview
+  const demoBtn = h('button', { type: 'button', class: 'dsh-demo-pill', 'data-pop': '', title: 'A made-up tournament in the preview; the TVs are not affected' });
   const demoRefresh = () => {
-    demoSwitch.checked = !!demo;
-    demoOptions.hidden = !demo;
-    demoOptions.replaceChildren(...(demo ? [
+    demoBtn.classList.toggle('is-on', !!demo);
+    demoBtn.replaceChildren(h('i'), demo ? `Demo · ${DEMO_FORMATS.find(f => f.value === demo.format)?.label || ''}` : 'Demo');
+  };
+  demoBtn.addEventListener('click', () => {
+    const sw = h('input', { type: 'checkbox', class: 'stu-switch', checked: !!demo, 'aria-label': 'Demo tournament' });
+    const opts = h('div', { class: 'dsh-demo-opts' });
+    const fill = () => opts.replaceChildren(...(demo ? [
       segmented(DEMO_FORMATS, demo.format, v => setDemo({ ...demo, format: v }), 'Demo format'),
       segmented(DEMO_STATES, demo.state, v => setDemo({ ...demo, state: v }), 'Demo state')] : []));
-  };
+    sw.addEventListener('change', () => { setDemo(sw.checked ? demo || { format: 'single_ko', state: 'running' } : null); fill(); });
+    fill();
+    popover(demoBtn, h('div', { class: 'dsh-demo' }, h('label', { class: 'stu-switch-row' }, sw, 'Demo tournament in the preview'), opts));
+  });
   demoRefresh();
 
   // fresh: a new tab (animated in); otherwise the tab is rebuilt quietly after a change
@@ -412,22 +450,22 @@ function build(host) {
     const focused = document.activeElement;
     const typing = panel.contains(focused) && focused.matches('input[type=text], input[type=number], textarea');
     if (typing && !fresh) return;    // keep the field being typed in
+    const fk = panel.contains(focused) ? focused.dataset?.fk : null;
     panel.classList.toggle('is-quiet', !fresh);
     panel.replaceChildren(...TABS.find(t => t[0] === tab)[2]().filter(Boolean));
+    // The rebuilt control keeps the keyboard focus
+    if (fk) panel.querySelector(`[data-fk="${fk}"]`)?.focus();
   };
 
   host.replaceChildren(
-    h('div', { class: 'stu-top' }, dots, h('span', { class: 'stu-spacer' }), saveMark(), tvButton()),
+    h('div', { class: 'stu-top' }, bar, dots, h('span', { class: 'stu-spacer' }), saveMark(), tvButton()),
     tabs,
     h('div', { class: 'stu-body' },
       h('div', { class: 'stu-left' },
-        h('div', { class: 'stu-screen' }, frame),
-        demoBox,
-        h('div', { class: 'dsh-now' }, h('span', { class: 'stu-h' }, 'On all TVs now'), holdSeg),
-        holdNote,
-        h('p', { class: 'stu-hint' }, 'The preview is the real TV page with this PC\'s tournament, or the demo when it is on.')),
+        h('div', { class: 'stu-screen' }, frame, safeEl, demoBtn),
+        h('div', { class: 'dsh-now' }, h('span', { class: 'stu-h', title: 'Holds one scene on every TV until it is set back to the rotation' }, 'On all TVs now'), holdSeg)),
       panel));
-  return { frame, dots, refresh, demoRefresh };
+  return { frame, dots, bar, refresh, demoRefresh, safeFrame };
 }
 
 async function renderDashboard() {
@@ -439,6 +477,7 @@ async function renderDashboard() {
     page.frame.setAttribute('src', previewSrc());
     page.refresh(true);
     page.dots.refresh();
+    page.bar.refresh();
     clearInterval(statusTimer);
     statusTimer = setInterval(page.dots.refresh, STATUS_MS);
   } catch (err) {

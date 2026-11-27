@@ -9,7 +9,7 @@ import { applyFraming, warpOf, ZOOM_MAX, ZOOM_MIN } from '../../studio/js/framin
 import { setMedia } from '../../studio/js/fill.js';
 import * as core from './studio-core.js';
 import { AUTODARTS_STOPPED, change, icon, imageUrl, streamUrl } from './studio-core.js';
-import { segmented } from './studio-parts.js';
+import { infoTip, segmented } from './studio-parts.js';
 
 const $ = id => document.getElementById(id);
 const S = () => core.settings;
@@ -75,6 +75,8 @@ async function showPreview(slot) {
   const cam = S().cameras[slot];
   setMedia(box);
   const add = el => box.append(el);
+  // No camera in this slot: no framing tools for a picture that is not there
+  box.closest('.stu-cam')?.classList.toggle('is-off', !((cam.kind === 'server' || cam.kind === 'device') && cam.device_id) && !(cam.kind === 'url' && cam.url));
   if (cam.kind === 'server' && cam.device_id) {
     const img = h('img', { src: streamUrl(cam.device_id, S().camera_resolution), alt: '' });
     img.onerror = async () => {
@@ -197,12 +199,12 @@ function straightenControls(slot, cam, reframe) {
   remove.addEventListener('click', () => { cam.warp = null; sync(); reframe(); saveCameras(); });
   sync();
   return h('details', { class: 'stu-fold' },
-    h('summary', {}, icon('play', 12), 'Straighten', h('small', {}, 'for a camera at the side of the board')),
+    h('summary', { title: 'For a camera at the side of the board' }, icon('play', 12), 'Straighten',
+      infoTip('For a camera at the side of the board. Click four points on the board once, then choose how far to turn the picture towards a front view. The edges are cropped so no empty corners show.')),
     h('div', { class: 'stu-fold-body studio-straighten' },
       h('div', { class: 'stu-row' }, mark, remove),
       rangeRow('Straighten', strength, value),
-      rangeRow('Sharpen far side', sharpen, sharpValue, 'Straightening stretches the far side of the board, which the camera saw with few pixels. This sharpens it, the more the further away.'),
-      h('small', { class: 'stu-hint' }, 'Click four points on the board once, then choose how far to turn the picture towards a front view. The edges are cropped so no empty corners show.')));
+      rangeRow('Sharpen far side', sharpen, sharpValue, 'Straightening stretches the far side of the board, which the camera saw with few pixels. This sharpens it, the more the further away.')));
 }
 
 // --- Dart zoom: zoom the board camera to each dart before the (delayed) picture shows it -------------
@@ -239,11 +241,10 @@ function dartZoomControls() {
   sync();
   const marked = Array.isArray(S().cameras.board.warp?.points);
   return h('div', { class: 'stu-card stu-dart-zoom' },
-    h('label', { class: 'stu-switch-row' }, enabled, h('strong', {}, 'Dart zoom'), h('small', {}, 'the board camera zooms to each dart')),
+    h('div', { class: 'stu-row' }, h('label', { class: 'stu-switch-row', title: 'The board camera zooms to each dart' }, enabled, h('strong', {}, 'Dart zoom')),
+      infoTip('The board camera zooms to each dart. The screens show the cameras and the scoreboard a few seconds late; meanwhile Autodarts on this computer reports each dart, so the board camera zooms to it before the picture shows it landing. Off: no delay.')),
     body,
-    h('small', { class: 'stu-hint' },
-      marked ? '' : h('strong', {}, 'Mark the board first (Board camera › Straighten). '),
-      'The screens show the cameras and the scoreboard a few seconds late; meanwhile Autodarts on this computer reports each dart, so the board camera zooms to it before the picture shows it landing. Off: no delay.'));
+    marked ? null : h('small', { class: 'stu-hint is-warn' }, 'Mark the board first: Board camera › Straighten'));
 }
 
 // --- Picture of a USB camera (V4L2): automatic, then by hand if wanted ------------------------------
@@ -331,8 +332,7 @@ function manualControls(slot, cam, changed) {
       const entries = [...rows.values()];
       body.replaceChildren(
         h('div', { class: 'studio-picture-switches' }, entries.filter(e => e.ctrl.type !== 'int').map(e => e.row)),
-        h('div', { class: 'studio-picture-grid' }, entries.filter(e => e.ctrl.type === 'int').map(e => e.row)),
-        h('small', { class: 'stu-hint' }, 'Changes go to the camera at once. A switched-on automatic (white balance, exposure) greys out its slider. Double-click a slider for its default.'));
+        h('div', { class: 'studio-picture-grid' }, entries.filter(e => e.ctrl.type === 'int').map(e => e.row)));
       applyState(controls);
     } catch (err) {
       body.replaceChildren(previewNote(err.message));
@@ -392,20 +392,23 @@ function pictureControls(slot, cam, reframe) {
     state.textContent = locked() ? 'Saved: the camera opens with these settings.' : 'Not set yet: the camera adjusts itself, so the picture can change during the game.';
   };
   look = lookControls(cam, reframe);
-  lookBox = h('div', { class: 'studio-look' }, h('strong', {}, 'Look'), h('small', { class: 'stu-hint' }, 'Picture processing like a phone or TV, done by the graphics chip where the picture is shown: white balance from the room, noise filter, brighter shadows, natural skin, sharpening. The camera stream stays as it is.'), look);
+  lookBox = h('div', { class: 'studio-look' }, h('span', { class: 'stu-row' }, h('strong', {}, 'Look'),
+    infoTip('Picture processing like a phone or TV, done by the graphics chip where the picture is shown: white balance from the room, noise filter, brighter shadows, natural skin, sharpening. The camera stream stays as it is.')), look);
   const manual = manualControls(slot, cam, showState);
   const byHand = h('details', { class: 'stu-fold studio-picture-hand' },
-    h('summary', {}, icon('play', 12), 'Adjust by hand', h('small', {}, 'brightness, white balance, exposure…')), manual);
+    h('summary', { title: 'Brightness, white balance, exposure…' }, icon('play', 12), 'Adjust by hand',
+      infoTip('Changes go to the camera at once. A switched-on automatic (white balance, exposure) greys out its slider. Double-click a slider for its default.')), manual);
   let manualFor = null;
   const reloadManual = () => { if (byHand.open) { manualFor = cam.device_id; manual.load(); } else manualFor = null; };
   byHand.addEventListener('toggle', () => { if (byHand.open && manualFor !== cam.device_id) reloadManual(); });
 
   const panel = h('details', { class: 'stu-fold', hidden: !isUsbCam(cam) },
-    h('summary', {}, icon('play', 12), 'Picture', h('small', {}, 'automatic, or by hand')),
+    h('summary', { title: 'Automatic, or by hand' }, icon('play', 12), 'Picture'),
     h('div', { class: 'stu-fold-body' },
-      h('small', { class: 'stu-hint' }, player
-        ? 'Stand where you throw and look at the board, then press Start. AutoGlow finds your face and sets brightness, white balance, contrast, colour and sharpness, then locks them so the picture does not change while you play. Takes about 15 seconds. Fine-tune by hand afterwards if you like.'
-        : 'Light the board as for a game, then press Start. AutoGlow sets the picture from the middle of the view and locks it. Takes about 15 seconds. Fine-tune by hand afterwards if you like.'),
+      h('span', { class: 'stu-row stu-hint' }, player ? 'Stand where you throw, look at the board, press Start.' : 'Light the board as for a game, press Start.',
+        infoTip(player
+          ? 'AutoGlow finds your face and sets brightness, white balance, contrast, colour and sharpness, then locks them so the picture does not change while you play. Takes about 15 seconds. Fine-tune by hand afterwards if you like.'
+          : 'AutoGlow sets the picture from the middle of the view and locks it. Takes about 15 seconds. Fine-tune by hand afterwards if you like.')),
       h('div', { class: 'stu-row' }, start, auto),
       state,
       lookBox,

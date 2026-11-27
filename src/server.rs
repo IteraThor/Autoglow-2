@@ -22,6 +22,7 @@ pub struct AppState {
     pub classic: Arc<crate::classic::ClassicMode>,
     pub studio: Arc<crate::studio::Studio>,
     pub dashboard: Arc<crate::dashboard::Dashboard>,
+    pub presets: Arc<crate::event_presets::EventPresets>,
     pub cameras: Arc<crate::studio_camera::CameraHub>,
     pub darts: Arc<crate::studio_darts::DartTracker>,
     pub video: Arc<crate::studio_video::VideoHub>,

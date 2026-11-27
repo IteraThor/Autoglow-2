@@ -24,6 +24,7 @@ mod flow_routes;
 mod hub;
 mod misc_routes;
 mod power;
+mod preset_routes;
 mod studio_routes;
 mod club_routes;
 mod join_routes;
@@ -204,6 +205,9 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/dashboard/logo", post(dashboard_routes::logo_upload))
         .route("/api/dashboard/logo/{name}", get(dashboard_routes::logo))
         .route("/api/dashboard/hold", post(dashboard_routes::hold))
+        .route("/api/presets", get(preset_routes::list).post(preset_routes::create))
+        .route("/api/presets/{id}", post(preset_routes::rename).merge(delete(preset_routes::remove)))
+        .route("/api/presets/{id}/activate", post(preset_routes::activate))
         .route("/api/studio/remember-name", post(studio_routes::remember_name))
         .route("/api/studio/autodarts", get(studio_routes::autodarts_state))
         .route("/api/studio/autodarts/start", post(studio_routes::autodarts_start))

@@ -131,9 +131,66 @@
 .stu-dot[data-state="wait"] i { background: var(--text-muted); }
 
 .stu-pop { position: fixed; z-index: 200; max-width: min(420px, calc(100vw - 16px)); background: var(--bg-modal); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; box-shadow: var(--shadow-pop); font-size: 13px; color: var(--text-primary); animation: stu-in .2s ease; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* Popovers sit outside the pages: the pages' spacing and colours, for the controls in them */
+.stu-pop { --st-line: var(--border-subtle); --st-fast: .16s; --st-base: .28s; --st-ease: cubic-bezier(.2, .9, .3, 1.2); }
 .stu-tv { display: flex; flex-direction: column; gap: 10px; }
 .stu-tv-url { display: flex; gap: 8px; align-items: center; }
 .stu-tv-url code { flex: 1; font-family: var(--font-mono); color: var(--text-code); background: var(--bg-input); padding: 7px 9px; border-radius: 7px; overflow-wrap: anywhere; }
+
+/* --- Event presets (web/js/features/event-presets.js): little TVs, on Studio and Dashboard -------- */
+.evp-btn { gap: 8px; padding: 5px 10px 5px 6px; max-width: 260px; }
+.evp-name { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.evp-btn > .stu-icon:last-child { color: var(--text-muted); }
+.evp-tv { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; aspect-ratio: 16 / 9; width: 100%; padding: 9% 10%; border-radius: 7px; background: var(--bg); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.evp-tv > i { display: block; height: 11%; border-radius: 2px; background: var(--row); }
+.evp-tv > i:first-of-type { width: 55%; background: var(--a); }
+.evp-tv > img, .evp-tv > b { position: absolute; top: 12%; left: 10%; height: 38%; max-width: 50%; object-fit: contain; }
+.evp-tv > b { display: grid; place-items: center; aspect-ratio: 1; border-radius: 50%; background: var(--a); color: var(--bg); font-size: 11px; font-weight: 700; line-height: 1; }
+.evp-tv.is-small { width: 40px; flex: none; padding: 5px; border-radius: 5px; gap: 2px; }
+.evp-tv.is-small > b { font-size: 7px; }
+.evp-tv-new { display: grid; place-items: center; background: var(--bg-input); border: 1px dashed var(--st-line, var(--border-subtle)); box-shadow: none; color: var(--text-muted); }
+.evp { display: flex; flex-direction: column; width: min(520px, calc(100vw - 40px)); }
+.evp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; transition: opacity var(--st-fast, .16s); }
+.evp-list.is-busy { opacity: .5; pointer-events: none; }
+.evp-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 10px; border: 1px solid transparent; }
+.evp-card.is-on { border-color: var(--accent-primary); background: var(--accent-dim); }
+.evp-pick { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: var(--text-primary); font: inherit; cursor: pointer; text-align: left; }
+.evp-pick .evp-tv { transition: transform var(--st-fast, .16s) var(--st-ease, ease); }
+.evp-pick:hover .evp-tv { transform: translateY(-2px) scale(1.03); }
+.evp-card.is-on .evp-pick { cursor: default; }
+.evp-card.is-on .evp-pick:hover .evp-tv { transform: none; }
+.evp-card-name { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.evp-card.is-on .evp-card-name { color: var(--accent-bright); }
+.evp-add .evp-card-name { color: var(--text-secondary); }
+.evp-card-tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; opacity: 0; transition: opacity var(--st-fast, .16s); }
+.evp-card:hover .evp-card-tools, .evp-card:focus-within .evp-card-tools, .evp-card-tools.is-shown { opacity: 1; }
+.evp-card-tools .stu-iconbtn { width: 26px; height: 26px; background: rgba(12, 14, 18, .8); color: #fff; border-color: transparent; }
+.evp-card.is-confirm .evp-tv { filter: grayscale(1) brightness(.6); }
+.evp-card-tools .evp-yes { background: var(--status-danger); }
+.evp-input.stu-input { padding: 5px 7px; }
+@media (hover: none) { .evp-card-tools { opacity: 1; } }
+
+/* --- Picture tiles: an on/off setting or overlay part as an icon (Studio steps, Dashboard) --------- */
+.stu-tiles { display: flex; gap: 8px; flex-wrap: wrap; }
+.stu-tile { min-width: 78px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 8px; border: 1px solid var(--st-line); border-radius: 10px; background: var(--bg-card); color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; transition: border-color var(--st-fast), color var(--st-fast), background var(--st-fast), transform var(--st-fast) var(--st-ease); }
+.stu-tile:hover { transform: translateY(-1px); color: var(--text-secondary); }
+.stu-tile.is-on { border-color: var(--accent-primary); background: var(--accent-dim); color: var(--accent-bright); }
+.stu-tile:not(.is-on) .stu-icon { opacity: .55; }
+.stu-tile:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+/* --- Texts in the preview: click one to change it ------------------------------------------------ */
+.stu-page .stu-screen iframe { pointer-events: auto; }
+.stu-edit-pill { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); white-space: nowrap; z-index: 1; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: rgba(10, 12, 16, .7); color: #fff; font-size: 11px; pointer-events: none; backdrop-filter: blur(6px); transition: opacity var(--st-base); }
+.stu-screen:hover .stu-edit-pill { opacity: 0; }
+.stu-page.is-wide .stu-edit-pill { display: none; }
+.stu-tedit { display: flex; flex-direction: column; gap: 10px; width: min(340px, calc(100vw - 40px)); }
+.stu-tfield { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.stu-alltexts > summary small { margin-left: auto; font-family: var(--font-mono); }
+
+/* (i): a longer explanation in a popover */
+.stu-info { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-muted); cursor: pointer; vertical-align: middle; flex: none; }
+.stu-info:hover { color: var(--accent-bright); background: var(--bg-card-hover); }
+.stu-info-text { max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
 
 /* --- Look: swatches and accent colours ---------------------------------------------------------- */
 .stu-look-picker { display: flex; flex-direction: column; gap: 18px; }
@@ -258,11 +315,11 @@ details[open] > summary .stu-chev { transform: rotate(90deg); }
 .stu-fold { border: 1px solid var(--st-line); border-radius: 10px; background: var(--bg-input); }
 .stu-fold > summary { list-style: none; display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; cursor: pointer; font-size: 13px; }
 .stu-fold > summary::-webkit-details-marker { display: none; }
-.stu-fold > summary .stu-icon { align-self: center; }
+.stu-fold > summary > .stu-icon { align-self: center; }
 .stu-fold > summary small { color: var(--text-muted); font-size: 12px; }
 .stu-fold-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 12px; animation: stu-in var(--st-base) ease; }
-.stu-fold > summary .stu-icon { color: var(--text-muted); transition: transform var(--st-base) var(--st-ease); }
-.stu-fold[open] > summary .stu-icon { transform: rotate(90deg); }
+.stu-fold > summary > .stu-icon { color: var(--text-muted); transition: transform var(--st-base) var(--st-ease); }
+.stu-fold[open] > summary > .stu-icon { transform: rotate(90deg); }
 
 .stu-dart-zoom { display: flex; flex-direction: column; gap: 12px; }
 .studio-dart-zoom-rows { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; transition: opacity var(--st-fast); }
@@ -359,6 +416,9 @@ details[open] > summary .stu-chev { transform: rotate(90deg); }
 }
 
 .studio-preview.is-marking .studio-split-area { display: none; }
+/* A slot set to "No camera": nothing to turn, mirror, drag or zoom */
+.stu-cam.is-off .stu-cam-tools { visibility: hidden; } /* keeps the head as tall as the other card's */
+.stu-cam.is-off .stu-cam-overlay, .stu-cam.is-off .studio-split-area { display: none; }
 
 /* Straighten: mark the board by clicking four points */
 .studio-mark { position: absolute; inset: 0; z-index: 4; cursor: crosshair; }

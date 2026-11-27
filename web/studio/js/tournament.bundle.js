@@ -813,6 +813,11 @@
   var draft = null;
   var studioLook = { theme: "autodarts", accent: "" };
   var hold = "";
+  var savedHold = "";
+  var peekHold = null;
+  var setHold = () => {
+    hold = peekHold != null ? peekHold : savedHold;
+  };
   var cfg = __spreadValues({}, DEFAULTS);
   function resolveCfg() {
     const src = __spreadValues(__spreadValues(__spreadValues({}, DEFAULTS), saved), draft || {});
@@ -1027,7 +1032,8 @@
         const body = await r.json();
         const _b = (_a2 = body.data) != null ? _a2 : body, { hold: h } = _b, rest = __objRest(_b, ["hold"]);
         saved = rest;
-        hold = (h == null ? void 0 : h.scene) || "";
+        savedHold = (h == null ? void 0 : h.scene) || "";
+        setHold();
         resolveCfg();
       }
     } catch (err) {
@@ -1036,10 +1042,12 @@
   }
   if (preview && "BroadcastChannel" in window) {
     new BroadcastChannel("autoglow-dashboard-draft").onmessage = (e) => {
-      var _a2, _b, _c;
+      var _a2, _b, _c, _d, _e;
       if (((_a2 = e.data) == null ? void 0 : _a2.type) === "draft") draft = e.data.settings;
       else if (((_b = e.data) == null ? void 0 : _b.type) === "clear") draft = null;
-      else if (((_c = e.data) == null ? void 0 : _c.type) === "hold") hold = e.data.scene || "";
+      else if (((_c = e.data) == null ? void 0 : _c.type) === "hold") savedHold = e.data.scene || "";
+      else if (((_d = e.data) == null ? void 0 : _d.type) === "peek") peekHold = (_e = e.data.scene) != null ? _e : null;
+      setHold();
       resolveCfg();
       if (data) render();
     };

@@ -37,7 +37,10 @@ const demo = preview ? query.get('demo') || '' : '';   // "format:state": the Da
 let saved = {};          // the settings from the server
 let draft = null;        // unsaved edits from the Dashboard page (preview only)
 let studioLook = { theme: 'autodarts', accent: '' };
-let hold = '';           // a scene every TV shows now ("" = the rotation)
+let hold = '';           // the scene shown now ("" = the rotation): a peek, else what every TV holds
+let savedHold = '';      // what every TV holds
+let peekHold = null;     // the Dashboard page's preview: a scene shown for a moment (switched on in the rotation)
+const setHold = () => { hold = peekHold ?? savedHold; };
 const cfg = { ...DEFAULTS };
 
 // The settings in force: saved, edits in the preview, the Studio's look, the address
@@ -277,7 +280,8 @@ async function loadSettings() {
       const body = await r.json();
       const { hold: h, ...rest } = body.data ?? body;
       saved = rest;
-      hold = h?.scene || '';
+      savedHold = h?.scene || '';
+      setHold();
       resolveCfg();
     }
   } catch (err) { /* keeps the last settings */ }
@@ -289,7 +293,9 @@ if (preview && 'BroadcastChannel' in window) {
   new BroadcastChannel('autoglow-dashboard-draft').onmessage = e => {
     if (e.data?.type === 'draft') draft = e.data.settings;
     else if (e.data?.type === 'clear') draft = null;
-    else if (e.data?.type === 'hold') hold = e.data.scene || '';
+    else if (e.data?.type === 'hold') savedHold = e.data.scene || '';
+    else if (e.data?.type === 'peek') peekHold = e.data.scene ?? null;
+    setHold();
     resolveCfg();
     if (data) render();
   };

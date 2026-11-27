@@ -70,6 +70,16 @@ export async function flush() {
 // The demo outputs go back to the saved settings
 export function endDraft() { draftChannel?.postMessage({ type: 'clear' }); }
 
+// A text clicked in the preview ({ keys, rect }); only this page's own preview counts (its token)
+export const editToken = Math.random().toString(36).slice(2, 10);
+const pickListeners = new Set();
+export function onPickText(fn) { pickListeners.add(fn); }
+if (draftChannel) {
+  draftChannel.onmessage = ({ data }) => {
+    if (data?.type === 'pick-text' && data.edit === editToken) pickListeners.forEach(fn => fn(data));
+  };
+}
+
 addEventListener('pagehide', () => {
   if (Object.keys(pending).length) navigator.sendBeacon?.('/api/studio', new Blob([JSON.stringify(pending)], { type: 'application/json' }));
   endDraft();
@@ -91,7 +101,8 @@ export function saveMark() {
 
 // --- Preview and scenes ---------------------------------------------------------------------------
 // play(): only the demo outputs in this browser (the preview). cue(): every open output, the TVs included.
-export function play(scene) { draftChannel?.postMessage({ type: 'play', scene }); }
+// quiet: back to the step after a highlighted text or part (no transition; the Studio page's own preview)
+export function play(scene, quiet = false) { draftChannel?.postMessage({ type: 'play', scene, quiet }); }
 export function focusText(key, label = '') { draftChannel?.postMessage({ type: 'focus-text', key, label }); }
 
 export async function cue(scene) {
@@ -165,7 +176,26 @@ const PATHS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/>',
   external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   download: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
-  refresh: '<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/>'
+  refresh: '<path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  left: '<path d="m15 18-6-6 6-6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
+  minus: '<path d="M5 12h14"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  bracket: '<path d="M3 4h5v6H3M3 20h5v-6H3M8 7h4v10H8M12 12h9"/>',
+  table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  bars: '<path d="M4 20V10M10 20V4M16 20v-7M2 20h20"/>',
+  next: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  layout: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/>',
+  ticker: '<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 12h4M13 12h5"/>',
+  waves: '<path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/>',
+  gauge: '<path d="M12 14l4-4M3 15a9 9 0 0 1 18 0"/><circle cx="12" cy="15" r="1"/>',
+  zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
+  frame: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  blur: '<circle cx="12" cy="12" r="9" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="4"/>'
 };
 
 const svgParser = new DOMParser();
@@ -190,6 +220,19 @@ export const THEMES = [
   { id: 'blueprint', name: 'Blueprint', bg: '#12449a', row: 'transparent', text: '#eaf2ff', outline: '#eaf2ff' },
   { id: 'pop', name: 'Pop', bg: '#ffd60a', row: '#fffdf5', text: '#141414', outline: '#141414' },
   { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', row: '#4b1fa8', text: '#f7c948' }
+];
+
+// The Dashboard's TV looks as swatches (web/studio/tournament*.css); "studio" follows the look above
+export const DASH_LOOKS = [
+  { id: 'studio', name: 'Same as Studio', bg: '#1b2330', a: '#004cff', row: '#2a3546' },
+  { id: 'arena', name: 'Arena', bg: '#060a14', a: '#2f7bff', row: '#1a2440' },
+  { id: 'flap', name: 'Flap board', bg: '#09090a', a: '#ffb000', row: '#2c2c31' },
+  { id: 'poster', name: 'Poster', bg: '#efeae0', a: '#ff4a1c', row: '#14110f' },
+  { id: 'mono', name: 'Mono', bg: '#000000', a: '#ffffff', row: '#3a3a3a' },
+  { id: 'gazette', name: 'Gazette', bg: '#f4efe4', a: '#c41e1e', row: '#1a1814' },
+  { id: 'blueprint', name: 'Blueprint', bg: '#12449a', a: '#ffd23f', row: '#eaf2ff' },
+  { id: 'pop', name: 'Pop', bg: '#ffd60a', a: '#2f5bff', row: '#141414' },
+  { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', a: '#f7c948', row: '#ff4fa3' }
 ];
 
 export function themeSwatch(t, accent) {

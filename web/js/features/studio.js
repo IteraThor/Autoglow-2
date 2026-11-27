@@ -1,13 +1,16 @@
 // AutoGlow 2 - Studio page: the broadcast as a timeline. Setup (look, cameras) comes first, then
-// the match in the order it plays on the TV. Picking a step plays it in the preview and lists only what
-// that step shows. Changes save by themselves; "Show on TVs" plays the step on every screen.
+// the match in the order it plays on the TV. Picking a step plays it in the preview and shows only what
+// that step has: its parts as picture tiles (hover outlines one in the preview), and its texts, changed
+// by clicking them in the preview. Changes save by themselves; "Show on TVs" plays the step on every
+// screen. The event preset at the top keeps the look and texts with the Dashboard's, per event.
 // The broadcast itself is web/studio/live.html; it reads the same settings from /api/studio.
 
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
-import { cue, endDraft, flush, focusText, icon, loadSettings, play, saveMark } from './studio-core.js';
-import { layoutPicker, lookPicker, popover, section, statusDots, switchRow, textsEditor } from './studio-parts.js';
+import { cue, editToken, endDraft, flush, focusText, icon, loadSettings, onPickText, play, saveMark } from './studio-core.js';
+import { layoutPicker, lookPicker, partTiles, popover, section, statusDots, textCount, textItems, textRow, textsEditor } from './studio-parts.js';
+import { presetBar } from './event-presets.js';
 import { camerasPanel, stopCameras } from './studio-cameras.js';
 import { matchPanel } from './studio-match.js';
 
@@ -29,6 +32,9 @@ const SETUP = [
 ];
 // Moments that interrupt the live scoreboard
 const MOMENTS = [{ id: '180', label: '180', icon: 'flame' }, { id: 'bust', label: 'Bust', icon: 'x' }, { id: 'stinger', label: 'Transition', icon: 'shuffle' }];
+// The overlay parts each step shows as tiles (studio-parts.js partTiles)
+const PARTS_OF = { idle: ['blur'], intro: ['intro'], live: ['overlay', 'player_card', 'visit', 'dartboard'] };
+const DEFAULT_TITLE = 'AutoGlow Darts Studio';
 const PLAY_THROUGH_MS = 4500;
 const STATUS_MS = 2000;
 
@@ -42,8 +48,9 @@ let matchView = null;
 
 const stepOf = id => STAGES.find(s => s.id === id) || SETUP.find(s => s.id === id);
 
-function showStage(stage) {
-  if (stage.play) play(stage.play);
+// quiet: back after a highlight, without the transition
+function showStage(stage, quiet = false) {
+  if (stage.play) play(stage.play, quiet);
   else if (stage.spot) focusText(stage.spot, stage.label);
 }
 
@@ -58,9 +65,8 @@ function tvButton() {
       h('span', { class: 'stu-h' }, 'Open this on the TV or in OBS'),
       h('div', { class: 'stu-tv-url' }, h('code', {}, url), copy),
       h('div', { class: 'stu-row' },
-        h('a', { class: 'stu-btn', href: '/studio/live', target: '_blank', rel: 'noopener' }, icon('external', 14), 'Output'),
-        h('a', { class: 'stu-btn', href: '/studio/live?demo=1', target: '_blank', rel: 'noopener', title: 'With a made-up match, for trying looks' }, icon('external', 14), 'Demo')),
-      h('small', { class: 'stu-hint' }, '1920×1080. Double-click it for fullscreen; add ?chroma=green for a green background.')));
+        h('a', { class: 'stu-btn', href: '/studio/live', target: '_blank', rel: 'noopener', title: '1920×1080. Double-click it for fullscreen; add ?chroma=green for a green background.' }, icon('external', 14), 'Output'),
+        h('a', { class: 'stu-btn', href: '/studio/live?demo=1', target: '_blank', rel: 'noopener', title: 'With a made-up match, for trying looks' }, icon('external', 14), 'Demo'))));
   });
   return btn;
 }
@@ -71,8 +77,13 @@ function build(host) {
   const sendScene = h('span', { class: 'stu-send-scene' });
   const sendBtn = h('button', { type: 'button', class: 'stu-btn stu-send', title: 'Plays on every open output right away, also during a game; the game takes over again after a few seconds' }, icon('tv', 16), 'Show on TVs', sendScene);
   const playBtn = h('button', { type: 'button', class: 'stu-btn stu-play', title: 'Walk through the whole show in the preview' }, icon('play', 16), 'Play through');
-  const frame = h('iframe', { src: 'about:blank', title: 'Studio preview (demo match)', allow: 'camera; fullscreen', tabindex: '-1' });
+  const frame = h('iframe', { src: 'about:blank', title: 'Studio preview (demo match): click a text to change it', allow: 'camera; fullscreen', tabindex: '-1' });
   const dots = statusDots(state => { lastState = state; matchView?.update(state); });
+  const bar = presetBar({
+    beforeSwitch: flush,
+    afterSwitch: async () => { endDraft(); await loadSettings(); select(currentId); },
+    suggestName: () => (core.settings.title && core.settings.title !== DEFAULT_TITLE ? core.settings.title : '')
+  });
 
   const groupEl = (items, cls, label) => {
     const el = h('div', { class: `stu-group ${cls}`, role: 'tablist', 'aria-label': label }, h('span', { class: 'stu-pill' }));
@@ -139,19 +150,25 @@ function build(host) {
     stopCameras();
     matchView = null;
 
-    const head = h('div', { class: 'stu-title' }, icon(item.icon, 24), h('div', {}, h('h2', {}, item.label), h('small', {}, item.note)));
+    const head = h('div', { class: 'stu-title', title: item.note }, icon(item.icon, 24), h('h2', {}, item.label));
     if (stage) {
       showStage(stage);
       if (stage.match) {
         matchView = matchPanel();
         if (lastState) matchView.update(lastState);
       }
+      const back = () => showStage(stage, true);
+      const parts = PARTS_OF[stage.id];
+      // Every text of the step, folded: the preview is where texts are changed
+      const allTexts = h('details', { class: 'stu-fold stu-alltexts' },
+        h('summary', {}, icon('play', 12), 'All texts', h('small', {}, String(textCount(stage.groups)))),
+        h('div', { class: 'stu-fold-body' }, textsEditor(stage.groups, { onLeave: back, toggles: false })));
       panel.replaceChildren(...[head,
         matchView,
-        stage.live ? section('On screen', switchRow('Show overlay (off: only the cameras)', 'show_overlay')) : null,
-        stage.live ? section('Cameras on screen', layoutPicker()) : null,
+        parts ? section('On screen', partTiles(parts)) : null,
+        stage.live ? section('Cameras', layoutPicker()) : null,
         stage.live ? section('Moments', moments()) : null,
-        section('Texts', textsEditor(stage.groups, { onLeave: () => showStage(stage) }))].filter(Boolean));
+        section('Texts', allTexts)].filter(Boolean));
     } else {
       play('idle');
       panel.replaceChildren(head, item.id === 'look' ? lookPicker() : camerasPanel());
@@ -188,14 +205,27 @@ function build(host) {
   });
 
   host.replaceChildren(
-    h('div', { class: 'stu-top' }, dots, h('span', { class: 'stu-spacer' }), saveMark(), tvButton()),
+    h('div', { class: 'stu-top' }, bar, dots, h('span', { class: 'stu-spacer' }), saveMark(), tvButton()),
     h('div', { class: 'stu-rail' }, setupEl, showEl),
     h('div', { class: 'stu-body' },
       h('div', { class: 'stu-left' },
-        h('div', { class: 'stu-screen' }, frame),
+        h('div', { class: 'stu-screen' }, frame, h('span', { class: 'stu-edit-pill', 'aria-hidden': 'true' }, icon('edit', 12), 'Click a text to change it')),
         h('div', { class: 'stu-controls' }, playBtn, h('span', { class: 'stu-spacer' }), sendBtn)),
       panel));
-  return { select, frame, dots, stopPlayThrough };
+  // A text clicked in the preview: its field opens right there
+  onPickText(({ keys, rect }) => {
+    const items = textItems(keys);
+    if (!items.length || !frame.isConnected) return;
+    stopPlayThrough();
+    const f = frame.getBoundingClientRect();
+    const box = { left: f.left + rect.left, top: f.top + rect.top, right: f.left + rect.right, bottom: f.top + rect.bottom };
+    const s = STAGES.find(x => x.id === currentId);
+    const back = () => { if (s) showStage(s, true); else focusText(null); };
+    popover({ getBoundingClientRect: () => box }, h('div', { class: 'stu-tedit' }, items.map(it => textRow(it, { onLeave: back, labelled: true }))));
+    requestAnimationFrame(() => document.querySelector('.stu-tedit input')?.focus());
+  });
+
+  return { select, frame, dots, bar, stopPlayThrough };
 }
 
 async function renderStudio() {
@@ -203,9 +233,10 @@ async function renderStudio() {
   try {
     await loadSettings();
     page ||= build(host);
-    page.frame.setAttribute('src', '/studio/live?demo=1');
+    page.frame.setAttribute('src', `/studio/live?demo=1&edit=${editToken}`);
     page.select(currentId);
     page.dots.refresh();
+    page.bar.refresh();
     clearInterval(statusTimer);
     statusTimer = setInterval(page.dots.refresh, STATUS_MS);
   } catch (err) {

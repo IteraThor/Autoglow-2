@@ -1839,15 +1839,22 @@ void main() {
   var SLIDE_MS = 8e3;
   var STINGER_COVER_MS = 520;
   var STINGER_MS = 1250;
+  var stingerRun = 0;
   async function stinger(onCover) {
+    const mine = ++stingerRun;
     const box = $2("stinger");
     box.classList.remove("run");
     void box.offsetWidth;
     box.classList.add("run");
     await sleep(STINGER_COVER_MS);
+    if (mine !== stingerRun) return;
     if (onCover) onCover();
     await sleep(STINGER_MS - STINGER_COVER_MS);
-    box.classList.remove("run");
+    if (mine === stingerRun) box.classList.remove("run");
+  }
+  function stopStinger() {
+    stingerRun++;
+    $2("stinger").classList.remove("run");
   }
   var slideTimer = null;
   var slideIndex = 0;
@@ -2079,7 +2086,9 @@ void main() {
     box.classList.remove("in");
     box.hidden = true;
   }
+  var legRun = 0;
   async function showLegCard(info, { hold = false } = {}) {
+    const mine = ++legRun;
     const box = $2("legCard");
     const head = el("div", "lc-head");
     head.append(el("span", null, info.label), el("strong", null, info.title));
@@ -2099,13 +2108,15 @@ void main() {
     box.classList.add("in");
     if (hold) return;
     await sleep(LEG_CARD_MS);
-    hideLegCard();
+    if (mine === legRun) hideLegCard();
   }
   async function hideLegCard() {
+    const mine = legRun;
     const box = $2("legCard");
     if (box.hidden) return;
     box.classList.add("out");
     await sleep(450);
+    if (mine !== legRun) return;
     box.hidden = true;
     box.classList.remove("in", "out");
   }
@@ -2672,6 +2683,7 @@ void main() {
   var params = new URLSearchParams(location.search);
   ctx.demo = params.get("demo") === "1";
   var CHROMA = params.get("chroma") === "green";
+  var EDIT = ctx.demo ? params.get("edit") || "" : "";
   var POLL_MS = 400;
   var SETTINGS_MS = 5e3;
   var IDLE_AFTER_MS = 4e3;
@@ -2688,6 +2700,7 @@ void main() {
   addEventListener("resize", fit);
   fit();
   document.addEventListener("dblclick", () => {
+    if (EDIT) return;
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {
     });
@@ -2735,24 +2748,39 @@ void main() {
   }
   var queue = Promise.resolve();
   var queued = 0;
+  var epoch = 0;
+  var stale = (mine) => mine !== epoch;
   function run(sequence) {
+    const mine = epoch;
     queued++;
     busy = true;
-    queue = queue.then(sequence).catch((err) => console.error("[Studio]", err)).finally(() => {
+    queue = queue.then(() => stale(mine) ? null : sequence()).catch((err) => console.error("[Studio]", err)).finally(() => {
+      if (stale(mine)) return;
       queued--;
       busy = queued > 0;
     });
     return queue;
   }
+  function interrupt() {
+    epoch++;
+    queue = Promise.resolve();
+    queued = 0;
+    busy = false;
+    stopStinger();
+    hideMoment();
+    hideLegCard();
+    clearTimeout(matchCardTimer);
+  }
   var transitionTo = (name) => stinger(() => setScene(name));
   async function introSequence(state, next = "live") {
+    const mine = epoch;
     let intro = Promise.resolve();
     await stinger(() => {
       setScene("intro");
       intro = playIntro(state);
     });
     await intro;
-    await transitionTo(next);
+    if (!stale(mine)) await transitionTo(next);
   }
   var bullOffIntro = (bo) => ({ players: bo.players, variant: bo.variant, base_score: bo.base_score, target: bo.target });
   function showBullOff(bo) {
@@ -2794,11 +2822,14 @@ void main() {
     return true;
   }
   async function matchSequence(state, winner) {
+    const mine = epoch;
     await showMoment("match", t("moment_match"), winner ? displayName(winner) : "", winner);
+    if (stale(mine)) return;
     await stinger(() => {
       setScene("match");
       showMatchCard(state, { bestCheckout: session.bestCheckout });
     });
+    if (stale(mine) || EDIT) return;
     matchCardTimer = setTimeout(() => {
       if (scene === "match") run(() => transitionTo("idle"));
     }, MATCH_CARD_MS);
@@ -2859,7 +2890,7 @@ void main() {
     };
   }
   function detectEvents(state) {
-    if (!prev || prev.match_id !== state.match_id || scene !== "live") return;
+    if (EDIT || !prev || prev.match_id !== state.match_id || scene !== "live") return;
     const turn = state.turn || {};
     const oldTurn = prev.turn || {};
     const turnChanged = turn.id !== oldTurn.id || (turn.darts || []).length !== (oldTurn.darts || []).length;
@@ -2871,9 +2902,10 @@ void main() {
     }
     if (info) {
       run(async () => {
+        const mine = epoch;
         if (info.nine) await showMoment("nine", t("moment_nine"), displayName(info.player), info.player);
         else await showMoment("leg", info.setWon ? t("moment_set") : t("moment_game_shot"), displayName(info.player));
-        await showLegCard(info);
+        if (!stale(mine)) await showLegCard(info);
       });
       return;
     }
@@ -2968,7 +3000,7 @@ void main() {
       layoutSince = 0;
       return;
     }
-    holdUntil = Date.now() + CUE_HOLD_MS;
+    holdUntil = EDIT ? Infinity : Date.now() + CUE_HOLD_MS;
     const state = cueState();
     const first = state.players[0];
     switch (name) {
@@ -2985,7 +3017,7 @@ void main() {
         run(() => stinger());
         break;
       case "leg":
-        run(() => showLegCard({ label: tn("board_leg", state.leg || 1), title: t("leg_title"), player: first, darts: 15, average: "100.20", checkout: 121, oneEighties: 1 }));
+        run(() => showLegCard(sampleLeg(state)));
         break;
       case "match":
         run(() => {
@@ -3004,13 +3036,61 @@ void main() {
         break;
     }
   }
+  var sampleLeg = (state) => ({
+    label: tn("board_leg", state.leg || 1),
+    title: t("leg_title"),
+    player: state.players[0],
+    darts: 15,
+    average: "100.20",
+    checkout: 121,
+    oneEighties: 1
+  });
+  async function stepScene(name, quiet) {
+    const state = cueState();
+    const cut = (show) => quiet ? show() : stinger(show);
+    switch (name) {
+      case "idle":
+        return cut(() => setScene("idle"));
+      case "live":
+        return cut(() => {
+          setScene("live");
+          renderLive(state);
+        });
+      case "intro":
+        if (quiet && scene === "intro") return;
+        return cut(() => {
+          setScene("intro");
+          playIntro(state);
+        });
+      case "bulloff":
+        if (!quiet) return bullOffCue();
+        setScene("bulloff");
+        renderBullOff(sampleBullOff("decided"));
+        return;
+      case "leg":
+        return cut(() => {
+          setScene("live");
+          renderLive(state);
+          showLegCard(sampleLeg(state), { hold: true });
+        });
+      case "match":
+        return cut(() => {
+          var _a;
+          setScene("match");
+          showMatchCard(__spreadProps(__spreadValues({}, state), { finished: true, winner: (_a = state.winner) != null ? _a : 0 }), { bestCheckout: session.bestCheckout });
+        });
+      default:
+        playCue(name);
+    }
+  }
   async function bullOffCue() {
+    const mine = epoch;
     await stinger(() => {
       setScene("bulloff");
       renderBullOff(sampleBullOff("running"));
     });
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    if (scene !== "bulloff") return;
+    await sleep(2500);
+    if (scene !== "bulloff" || stale(mine)) return;
     const bo = sampleBullOff("decided");
     renderBullOff(bo);
     await showMoment("bulloff", displayName(bo.players[bo.winner]), t("bulloff_first"), bo.players[bo.winner]);
@@ -3023,6 +3103,7 @@ void main() {
     }
     if (cue && cue.id !== lastCueId) {
       lastCueId = cue.id;
+      if (EDIT && !/^(overlay|layout):/.test(cue.scene)) return;
       playCue(cue.scene);
     }
   }
@@ -3037,7 +3118,7 @@ void main() {
     const hasMatch = ((_a = state.players) == null ? void 0 : _a.length) > 0;
     setLobby(hasMatch && !state.finished ? null : state.lobby || null);
     const bo = state.bull_off || null;
-    if (bo && Date.now() >= holdUntil) {
+    if (bo && !EDIT && Date.now() >= holdUntil) {
       detectBullOff(bo);
       showBullOff(bo);
     } else if (!bo) {
@@ -3054,7 +3135,9 @@ void main() {
       if (!emptySince) emptySince = Date.now();
     }
     renderIdleStatus(state);
-    if (!busy) direct(state);
+    if (EDIT) {
+      if (scene === null) setScene("idle");
+    } else if (!busy) direct(state);
     directLayout(hasMatch ? state : null);
     prev = hasMatch ? state : prev;
   }
@@ -3255,7 +3338,7 @@ void main() {
     highlightTimer = setTimeout(() => highlight(key2), inPlace ? 30 : spec.view === "intro" ? 1700 : 950);
   }
   function endShowcase() {
-    var _a;
+    var _a, _b;
     if (!showcaseKey) return;
     showcaseKey = null;
     stage.classList.remove("no-anim");
@@ -3263,7 +3346,11 @@ void main() {
     hideMoment();
     hideLegCard();
     layoutSince = 0;
-    if ((_a = lastState == null ? void 0 : lastState.players) == null ? void 0 : _a.length) {
+    if (EDIT) {
+      if (scene === "live" && ((_a = lastState == null ? void 0 : lastState.players) == null ? void 0 : _a.length)) renderLive(lastState);
+      return;
+    }
+    if ((_b = lastState == null ? void 0 : lastState.players) == null ? void 0 : _b.length) {
       setScene("live");
       renderLive(lastState);
     } else {
@@ -3279,7 +3366,7 @@ void main() {
       showcase(showcaseKey, true);
       return;
     }
-    if ((_a = lastState == null ? void 0 : lastState.players) == null ? void 0 : _a.length) renderLive(lastState);
+    if (((_a = lastState == null ? void 0 : lastState.players) == null ? void 0 : _a.length) || EDIT && scene === "live") renderLive(cueState());
     layoutSince = 0;
     directLayout(((_b = lastState == null ? void 0 : lastState.players) == null ? void 0 : _b.length) ? lastState : null);
     if (scene === "idle") {
@@ -3299,10 +3386,13 @@ void main() {
         endShowcase();
         loadSettings().then(() => showDraft(ctx.settings));
       } else if ((data == null ? void 0 : data.type) === "play" && data.scene) {
+        interrupt();
         endShowcase();
-        playCue(data.scene);
+        if (EDIT) run(() => stepScene(data.scene, data.quiet));
+        else playCue(data.scene);
       } else if ((data == null ? void 0 : data.type) === "focus-text") {
         if (data.key) {
+          if (data.key !== showcaseKey) interrupt();
           showcaseLabel = data.label || "";
           showcase(data.key, data.key === showcaseKey);
         } else {
@@ -3310,6 +3400,61 @@ void main() {
         }
       }
     };
+  }
+  if (EDIT && "BroadcastChannel" in window) {
+    const channel = new BroadcastChannel("autoglow-studio-draft");
+    const SETTINGS_TEXTS = ["event_title", "event_subtitle"];
+    const visible = (e) => {
+      for (let n2 = e; n2 && n2 !== stage; n2 = n2.parentElement) {
+        const cs = getComputedStyle(n2);
+        if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) < 0.05) return false;
+      }
+      return true;
+    };
+    const textsAt = (x, y) => {
+      const hits = [];
+      for (const [key2, spec] of Object.entries(SHOWCASE)) {
+        for (const e of stage.querySelectorAll(spec.sel)) {
+          const r = e.getBoundingClientRect();
+          if (!r.width || x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+          const wording = t(key2).toLowerCase();
+          if (spec.text && (!wording || !e.textContent.toLowerCase().includes(wording))) continue;
+          if (visible(e)) hits.push({ e, key: key2, area: r.width * r.height });
+        }
+      }
+      if (!hits.length) return null;
+      const best2 = hits.reduce((a, b) => b.area < a.area ? b : a).e;
+      let keys = hits.filter((x2) => x2.e === best2).map((x2) => x2.key);
+      if (keys.length > 1) {
+        const text = best2.textContent.toLowerCase();
+        const shown = keys.filter((k) => SETTINGS_TEXTS.includes(k) || t(k) && text.includes(t(k).toLowerCase()));
+        if (shown.length) keys = shown;
+      }
+      return { el: best2, keys };
+    };
+    let hovered = null;
+    let moveFrame = 0;
+    const setHover = (el2) => {
+      if (hovered === el2) return;
+      hovered == null ? void 0 : hovered.classList.remove("text-hover");
+      hovered = el2;
+      hovered == null ? void 0 : hovered.classList.add("text-hover");
+      document.body.classList.toggle("edit-hover", !!el2);
+    };
+    document.addEventListener("mousemove", (e) => {
+      cancelAnimationFrame(moveFrame);
+      moveFrame = requestAnimationFrame(() => {
+        var _a;
+        return setHover(((_a = textsAt(e.clientX, e.clientY)) == null ? void 0 : _a.el) || null);
+      });
+    });
+    document.addEventListener("mouseleave", () => setHover(null));
+    document.addEventListener("click", (e) => {
+      const hit = textsAt(e.clientX, e.clientY);
+      if (!hit) return;
+      const r = hit.el.getBoundingClientRect();
+      channel.postMessage({ type: "pick-text", edit: EDIT, keys: hit.keys, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+    });
   }
   async function loadSettings() {
     try {

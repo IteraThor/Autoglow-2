@@ -15,6 +15,7 @@ mod discovery;
 mod effects;
 mod engine;
 mod errors;
+mod event_presets;
 mod extension;
 mod flow;
 mod flow_catalog;
@@ -285,6 +286,7 @@ async fn run() {
         classic: Arc::clone(&classic),
         studio,
         dashboard: Arc::new(dashboard::Dashboard::new()),
+        presets: Arc::new(event_presets::EventPresets::new()),
         cameras: Arc::clone(&cameras),
         darts,
         video: Arc::clone(&video),

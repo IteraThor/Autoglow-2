@@ -164,14 +164,14 @@ body[data-chroma="green"] .stage { background: #00b140; }
 .cams[data-cams="board"] #camPlayer,
 .cams[data-cams="player"] #camBoard,
 .cams[data-cams="none"] .cam,
-.cams:not([data-cams="both"]) /* The look of the automatic picture: drawn by WebGL (js/look.js, the box gets .gl-look); without WebGL
+.cams:not([data-cams="both"]) .cam-divider { display: none; }
+
+/* The look of the automatic picture: drawn by WebGL (js/look.js, the box gets .gl-look); without WebGL
    this SVG colour filter does its global part (js/framing.js lookFilter) */
 .cam-look:not(.gl-look) > img,
 .cam-look:not(.gl-look) > video,
 .cam-look:not(.gl-look) > canvas.cam-live,
 .cam-look:not(.gl-look) > canvas.cam-sharp { filter: var(--look); }
-
-.cam-divider { display: none; }
 
 /* Blurred copy of the picture behind it (js/fill.js): no empty bars when the picture does not cover the frame */
 .cam-fill {
@@ -1207,3 +1207,7 @@ img.avatar { object-fit: contain; }
 .stage.no-anim .text-focus { animation: none !important; }
 
 @keyframes text-focus { 50% { outline-color: rgba(255, 212, 0, 0.35); } }
+
+/* The Studio page's preview: a text under the pointer can be clicked to change it */
+.text-hover { outline: 3px dashed rgba(255, 212, 0, 0.8) !important; outline-offset: 4px; border-radius: 4px; }
+body.edit-hover { cursor: pointer; }
