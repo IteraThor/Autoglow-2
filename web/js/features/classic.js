@@ -118,7 +118,7 @@ function statusRow(name) {
       }
     },
     h('option', { value: SKIP, selected: !look.enabled }, 'Leave as is'),
-    effects.map(fx => h('option', { value: fx.id, selected: look.enabled && fx.id === look.fx }, fx.name))),
+    effects.map(fx => h('option', { value: fx.id, selected: look.enabled && fx.id === look.fx, translate: 'no' }, fx.name))),
     h('button', {
       type: 'button', class: 'ui-btn ui-btn-quiet ui-btn-sm', title: 'Show this look on the controller now, saved or not',
       onclick: e => test(name, e.currentTarget)

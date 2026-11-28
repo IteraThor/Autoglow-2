@@ -6,6 +6,13 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2711%27 fill=%27none%27 stroke=%27%2314b8a6%27 stroke-width=%273%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%274%27 fill=%27%2314b8a6%27/%3E%3C/svg%3E">
   <!-- Interface size (Settings › Interface size), set before paint so the page never jumps -->
   <script>try{var s=parseFloat(localStorage.getItem('autoglow.uiScale'));if(s>0)document.documentElement.style.setProperty('--ui-scale',s);}catch(e){}</script>
+  <!-- Language (Settings › Language): translates the page as it appears, so it loads before the body -->
+  <script src="/js/i18n.js?v=1"></script>
+  <script src="/js/i18n/de-app.js?v=1"></script>
+  <script src="/js/i18n/de-lights.js?v=1"></script>
+  <script src="/js/i18n/de-broadcast.js?v=1"></script>
+  <script src="/js/i18n/de-club.js?v=1"></script>
+  <script src="/js/i18n/de-server.js?v=1"></script>
   <link rel="stylesheet" href="/css/theme.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/tokens.css?v=2.2-p25">
   <link rel="stylesheet" href="/css/shell.css?v=2.2-p26">
@@ -401,6 +408,13 @@
           <!-- This browser: applies at once, kept per browser (not part of Save) -->
           <div class="card st-group">
             <h2 class="st-group-title">This browser <span class="st-group-note">applies at once</span></h2>
+            <div class="st-row">
+              <span class="st-label">Language</span>
+              <div class="mode-switch st-switch" id="langSwitch" role="group" aria-label="Language" translate="no">
+                <button type="button" class="mode-option" data-lang="en" aria-pressed="false"><span>English</span></button>
+                <button type="button" class="mode-option" data-lang="de" aria-pressed="false"><span>Deutsch</span></button>
+              </div>
+            </div>
             <div class="st-row">
               <span class="st-label">Interface size</span>
               <div class="mode-switch st-switch" id="uiScaleSwitch" role="group" aria-label="Interface size">

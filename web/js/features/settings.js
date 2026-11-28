@@ -152,6 +152,11 @@ export function initSettings() {
     removePin = !removePin;
     refresh();
   });
+  // Language: per browser like the size; switching reloads the page in the other language
+  document.querySelectorAll('#langSwitch [data-lang]').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.lang === window.agI18n.lang));
+    btn.addEventListener('click', () => { if (btn.dataset.lang !== window.agI18n.lang) window.agI18n.set(btn.dataset.lang); });
+  });
   document.querySelectorAll('#uiScaleSwitch [data-scale]').forEach(btn => {
     btn.addEventListener('click', () => applyScale(parseFloat(btn.dataset.scale)));
   });

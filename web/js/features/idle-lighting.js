@@ -33,7 +33,8 @@ const percent = bri => Math.round((Math.max(0, Math.min(255, Number(bri))) / 255
 
 // Searchable effect picker: a button that opens a filtered list
 export function wledEffectPicker(effects, current, onPick) {
-  const label = h('span', { class: 'fx-picker-value' }, effects.find(e => e.id === current)?.name || `Effect ${current}`);
+  // WLED's own effect names stay as WLED shows them (translate="no" for the German page)
+  const label = h('span', { class: 'fx-picker-value', translate: 'no' }, effects.find(e => e.id === current)?.name || `Effect ${current}`);
   const trigger = h('button', { type: 'button', class: 'fx-picker-trigger', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, label);
   const search = h('input', { type: 'search', class: 'ui-input fx-picker-search', placeholder: `Search ${effects.length} effects`, 'aria-label': 'Search effects' });
   const list = h('ul', { class: 'fx-picker-list', role: 'listbox', 'aria-label': 'Effects' });
@@ -64,6 +65,7 @@ export function wledEffectPicker(effects, current, onPick) {
       ? shown.map(e => h('li', {
         role: 'option',
         class: 'fx-picker-option',
+        translate: 'no',
         tabindex: '-1',
         'aria-selected': String(e.id === selected),
         onclick: () => pick(e),
