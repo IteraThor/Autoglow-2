@@ -556,6 +556,201 @@ fn fire(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
     out
 }
 
+
+// --- Looks built from light alone: layered colour, blobs, storms, glitches, mirrors, beats --------------------
+
+const WHITE: Color = (255, 255, 255);
+const AURORA: [Color; 3] = [(40, 255, 140), (40, 190, 255), (170, 80, 255)];
+
+fn hsv(h: f64, s: f64, v: f64) -> Color {
+    let h = pymod(h, 1.0) * 6.0;
+    let i = h.floor();
+    let f = h - i;
+    let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
+    let (r, g, b) = match (i as i64) % 6 {
+        0 => (v, t, p),
+        1 => (q, v, p),
+        2 => (p, v, t),
+        3 => (p, q, v),
+        4 => (t, p, v),
+        _ => (v, p, q),
+    };
+    ((r * 255.0 + 0.5) as i64, (g * 255.0 + 0.5) as i64, (b * 255.0 + 0.5) as i64)
+}
+
+/// Northern lights: three soft curtains of green, blue and violet drift and breathe through each other
+fn aurora(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut acc = [0.0, 6.0, 14.0];
+        for j in 0..3 {
+            let k = [2.0, 3.0, 5.0][j];
+            let sp = [0.21, -0.17, 0.3][j];
+            let ph = [0.0, 2.1, 4.2][j];
+            let w = (2.0 * PI * k * x + 2.0 * PI * sp * tt + ph + 1.5 * (2.0 * PI * x - 0.5 * tt + ph).sin()).sin();
+            let b = (0.5 + 0.5 * w).powf(2.5);
+            let m = 0.65 + 0.35 * (0.4 * tt + j as f64 * 2.0).sin();
+            acc[0] += AURORA[j].0 as f64 * b * m * 0.9;
+            acc[1] += AURORA[j].1 as f64 * b * m * 0.9;
+            acc[2] += AURORA[j].2 as f64 * b * m * 0.9;
+        }
+        put(&mut out, i, ((acc[0] + 0.5) as i64, (acc[1] + 0.5) as i64, (acc[2] + 0.5) as i64));
+    }
+    out
+}
+
+/// Plasma: four sine waves added up and run through every colour, the way old demos did it
+fn plasma(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let v = ((2.0 * PI * 2.0 * x + 1.1 * tt).sin() + (2.0 * PI * 3.0 * x - 0.8 * tt).sin() + (2.0 * PI * 5.0 * x + 0.7 * tt).sin() + (2.0 * PI * 7.0 * x - 0.5 * tt).sin()) / 4.0;
+        let bright = 0.55 + 0.45 * (0.5 + 0.5 * (2.0 * PI * 3.0 * x + tt).sin());
+        put(&mut out, i, hsv(0.5 + 0.5 * v + 0.05 * tt, 0.9, bright));
+    }
+    out
+}
+
+/// Lava lamp: soft blobs drift, stretch towards each other and merge into one glowing mass
+fn lava(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let (c1, c2) = (rgb(e.c1), rgb(e.c2));
+    let hot = mix(c1, WHITE, 0.6);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut field = 0.0;
+        for j in 0..4 {
+            let p = 0.5 + 0.4 * (0.21 * (j + 1) as f64 * tt + 1.7 * j as f64).sin();
+            let r = 0.07 + 0.025 * j as f64;
+            let d = if e.line { (x - p).abs() } else { wrap_dist(x, p) };
+            field += r * r / (d * d + 0.0008);
+        }
+        let glow = smoothstep((field - 0.35) / 1.0);
+        let core = smoothstep((field - 1.6) / 1.5);
+        put(&mut out, i, mix(mix(c2, c1, glow), hot, core));
+    }
+    out
+}
+
+/// A storm: now and then a jagged bolt flickers three times and leaves a violet afterglow
+fn lightning(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let c2 = rgb(e.c2);
+    let period = 1.8;
+    let k = (tt / period).floor() as i64;
+    let tau = tt - k as f64 * period;
+    let strike = hash01(k, 1) < 0.8;
+    let centre = hash01(k, 2);
+    let len = 0.25 + 0.45 * hash01(k, 3);
+    let flash = if !strike {
+        0.0
+    } else if tau < 0.10 {
+        1.0
+    } else if (0.16..0.24).contains(&tau) {
+        0.7
+    } else if (0.32..0.38).contains(&tau) {
+        0.45
+    } else {
+        0.0
+    };
+    let after = if strike && tau >= 0.1 { (-(tau - 0.1) * 2.2).exp() * 0.35 } else { 0.0 };
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let d = if e.line { (x - centre).abs() } else { wrap_dist(x, centre) };
+        let bolt = flash * (-(d / (len / 2.0)).powf(4.0)).exp() * (0.45 + 0.55 * hash01(i as i64, 500 + k));
+        let wide = after * (-(d / len).powf(2.0)).exp();
+        put(&mut out, i, mix(mix(c2, (120, 60, 200), wide), (235, 240, 255), bolt));
+    }
+    out
+}
+
+fn glitch_base(c1: Color, c2: Color, x: f64, tt: f64) -> Color {
+    mix(c1, c2, 0.5 + 0.5 * (2.0 * PI * 2.0 * pymod(x, 1.0) + 0.5 * tt).sin())
+}
+
+/// A broken screen: a calm gradient, torn by shifted blocks, split colour channels, inverted patches and dead gaps
+fn glitch(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let (c1, c2) = (rgb(e.c1), rgb(e.c2));
+    let g = (tt * 8.0).floor() as i64;
+    let active = hash01(g, 9) < 0.55;
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut col = glitch_base(c1, c2, x, tt);
+        if active {
+            for b in 0..3i64 {
+                let start = hash01(g, 10 + b);
+                let width = 0.05 + 0.2 * hash01(g, 20 + b);
+                let off = pymod(x - start, 1.0);
+                if off < width {
+                    let shift = (hash01(g, 30 + b) - 0.5) * 0.4;
+                    if hash01(g, 40 + b) < 0.25 {
+                        col = (0, 0, 0);
+                    } else {
+                        let r = glitch_base(c1, c2, x + shift + 0.02, tt).0;
+                        let gg = glitch_base(c1, c2, x + shift, tt).1;
+                        let bb = glitch_base(c1, c2, x + shift - 0.02, tt).2;
+                        col = if hash01(g, 50 + b) < 0.3 { (255 - r, 255 - gg, 255 - bb) } else { (r, gg, bb) };
+                    }
+                }
+            }
+        }
+        put(&mut out, i, col);
+    }
+    out
+}
+
+/// A kaleidoscope: the strip is mirrored into cells and a drifting colour pattern lives inside them
+fn kaleido(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = pymod((i as f64 + 0.5) / count as f64 + 0.02 * tt, 1.0);
+        let u = (pymod(x * 3.0, 1.0) * 2.0 - 1.0).abs();
+        let hue = 0.1 + 0.55 * u + 0.07 * tt;
+        let bright = 0.35 + 0.65 * (0.5 + 0.5 * (2.0 * PI * 2.0 * u - 1.3 * tt).sin()).powf(2.0);
+        put(&mut out, i, hsv(hue, 0.8, bright));
+    }
+    out
+}
+
+/// Pendulum wave: every part of the strip swings at a slightly different speed; waves form, fan out and snap back into line
+fn pendulum(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = pymod(elapsed * speed(e) / 30.0, 1.0);
+    let (c1, c2) = (rgb(e.c1), rgb(e.c2));
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let pos = (1.0 - (2.0 * x - 1.0).abs()) * 12.0;
+        let z0 = (pos.floor() as usize).min(11);
+        let swing = |z: usize| 0.5 + 0.5 * (2.0 * PI * (8 + z) as f64 * tt).sin();
+        let b = swing(z0) + (swing((z0 + 1).min(11)) - swing(z0)) * smoothstep(pos - z0 as f64);
+        put(&mut out, i, mix(c2, c1, smoothstep(b)));
+    }
+    out
+}
+
+/// Moire: two fine stripe patterns slide against each other and make slow bands where they line up
+fn moire(e: &Effect, elapsed: f64, count: usize) -> Vec<u8> {
+    let tt = elapsed * speed(e);
+    let (c1, c2) = (rgb(e.c1), rgb(e.c2));
+    let k1 = ((count / 5).max(4)) as f64;
+    let k2 = k1 + 3.0;
+    let mut out = vec![0u8; count * 3];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let v = (2.0 * PI * k1 * x + 0.6 * tt).sin() * (2.0 * PI * k2 * x - 0.9 * tt).sin();
+        put(&mut out, i, mix(c2, c1, smoothstep(0.5 + 0.5 * v)));
+    }
+    out
+}
+
 /// render_flow_frame: one frame of a Flow Matrix look
 pub fn render_flow(e: &Effect, anim: &str, o: &FlowOpts, elapsed: f64, count: usize) -> Vec<u8> {
     if count == 0 {
@@ -574,6 +769,14 @@ pub fn render_flow(e: &Effect, anim: &str, o: &FlowOpts, elapsed: f64, count: us
         "confetti" => confetti(e, elapsed, count, o),
         "ripple" => ripple(e, elapsed, count),
         "fire" => fire(e, elapsed, count),
+        "aurora" => aurora(e, elapsed, count),
+        "plasma" => plasma(e, elapsed, count),
+        "lava" => lava(e, elapsed, count),
+        "lightning" => lightning(e, elapsed, count),
+        "glitch" => glitch(e, elapsed, count),
+        "kaleido" => kaleido(e, elapsed, count),
+        "pendulum" => pendulum(e, elapsed, count),
+        "moire" => moire(e, elapsed, count),
         _ => fill(count, rgb(e.c1)),
     };
     if let Some(bri) = e.brightness {
@@ -600,6 +803,445 @@ fn lerp_all(a: &[u8], b: &[u8], t: f64) -> Vec<u8> {
         .zip(b.iter())
         .map(|(&va, &vb)| byte((va as f64 + (vb as f64 - va as f64) * t + 0.5) as i64))
         .collect()
+}
+
+
+// --- New transitions: the picture itself changes (size, turning, pieces, resolution, folds, order) --------------
+// Each works on both pictures by index only, so the browser twin in flow-looks.js gives the same bytes.
+
+fn sample_idx(p: f64, count: usize) -> usize {
+    let i = (p * count as f64).floor() as i64;
+    i.max(0).min(count as i64 - 1) as usize
+}
+
+fn px(buf: &[u8], i: usize) -> [f64; 3] {
+    [buf[i * 3] as f64, buf[i * 3 + 1] as f64, buf[i * 3 + 2] as f64]
+}
+
+/// The old picture shrinks to one bright dot where the dart landed (the middle of a line), the new one grows out of it
+fn squeeze(a: &[u8], b: &[u8], f: f64, accent: Option<(u8, u8, u8)>, line: bool, origin: Option<f64>) -> Vec<u8> {
+    let count = a.len() / 3;
+    let c = if line { 0.5 } else { pymod(origin.unwrap_or(0.0), 1.0) };
+    let (src, s) = if f < 0.5 { (a, 1.0 - smoothstep(f / 0.5)) } else { (b, smoothstep((f - 0.5) / 0.5)) };
+    let light = accent.map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).unwrap_or([255.0, 255.0, 255.0]);
+    let amp = 1.0 - (2.0 * f - 1.0).abs();
+    let core = pmax(1.5 / count as f64, 0.03);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut d = x - c;
+        if !line {
+            if d > 0.5 {
+                d -= 1.0;
+            } else if d < -0.5 {
+                d += 1.0;
+            }
+        }
+        let mut v = [0.0; 3];
+        if s > 1e-9 {
+            let rel = d / s;
+            let p = c + rel;
+            let inside = if line { (0.0..1.0).contains(&p) } else { rel.abs() <= 0.5 };
+            if inside {
+                v = px(src, sample_idx(if line { p } else { pymod(p, 1.0) }, count));
+            }
+        }
+        let g = (-(d.abs() / core).powf(2.0)).exp() * amp;
+        for k in 0..3 {
+            out[i * 3 + k] = byte((v[k] + (light[k] - v[k]) * g + 0.5) as i64);
+        }
+    }
+    out
+}
+
+/// The whole picture turns round (a line scrolls round), blurred at speed: the old one spins up, the new one spins down
+fn spin(a: &[u8], b: &[u8], f: f64, reverse: bool) -> Vec<u8> {
+    const TURNS: f64 = 2.0;
+    const TAPS: usize = 7;
+    let count = a.len() / 3;
+    let dir = if reverse { -1.0 } else { 1.0 };
+    let (src, shift, speed) = if f < 0.5 {
+        let u = f / 0.5;
+        (a, u * u * TURNS, 2.0 * u * TURNS)
+    } else {
+        let v = (f - 0.5) / 0.5;
+        (b, (1.0 - v) * (1.0 - v) * TURNS, 2.0 * (1.0 - v) * TURNS)
+    };
+    let blur = speed * 0.08;
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut sum = [0.0; 3];
+        for k in 0..TAPS {
+            let off = (k as f64 / (TAPS - 1) as f64 - 0.5) * blur;
+            let v = px(src, sample_idx(pymod(x - dir * (shift + off), 1.0), count));
+            for c in 0..3 {
+                sum[c] += v[c];
+            }
+        }
+        for c in 0..3 {
+            out[i * 3 + c] = byte((sum[c] / TAPS as f64 + 0.5) as i64);
+        }
+    }
+    out
+}
+
+/// The old picture breaks into pieces that fall (to the bottom of a loop, to one end of a line) and fade, showing the new one
+fn shatter(a: &[u8], b: &[u8], f: f64, reverse: bool, line: bool) -> Vec<u8> {
+    let count = a.len() / 3;
+    let size = (count / 12).max(2);
+    let mut out = b.to_vec();
+    let mut k = 0usize;
+    while k * size < count {
+        let q = clamp01((f - 0.5 * hash01(k as i64, 7)) / 0.5);
+        if q < 1.0 {
+            let (dir, reach) = if line {
+                (if reverse { -1i64 } else { 1 }, count as f64)
+            } else {
+                let mid = ((k * size) as f64 + size as f64 / 2.0) / count as f64;
+                (if mid < 0.5 { 1 } else { -1 }, count as f64 * 0.5)
+            };
+            let d = dir * ((q * q * reach + 0.5).floor() as i64);
+            let keep = 1.0 - q;
+            for j in (k * size)..((k + 1) * size).min(count) {
+                let t = j as i64 + d;
+                let t = if line {
+                    if t < 0 || t >= count as i64 {
+                        continue;
+                    }
+                    t as usize
+                } else {
+                    t.rem_euclid(count as i64) as usize
+                };
+                for c in 0..3 {
+                    out[t * 3 + c] = byte((a[j * 3 + c] as f64 * keep + 0.5) as i64);
+                }
+            }
+        }
+        k += 1;
+    }
+    out
+}
+
+/// The picture turns into blocks of more and more LEDs, swaps at the coarsest, then sharpens into the new one
+fn pixelate(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let unit = (count / 40).max(1);
+    let (src, stage) = if f < 0.5 {
+        (a, ((f / 0.5 * 5.0).floor() as usize).min(4))
+    } else {
+        (b, 4 - ((((f - 0.5) / 0.5) * 5.0).floor() as usize).min(4))
+    };
+    let block = if stage == 0 { 1 } else { [1usize, 2, 4, 8, 16][stage] * unit };
+    let mut out = vec![0u8; a.len()];
+    let mut start = 0;
+    while start < count {
+        let len = block.min(count - start);
+        let mut sum = [0.0; 3];
+        for i in start..start + len {
+            let v = px(src, i);
+            for c in 0..3 {
+                sum[c] += v[c];
+            }
+        }
+        for i in start..start + len {
+            for c in 0..3 {
+                out[i * 3 + c] = byte((sum[c] / len as f64 + 0.5) as i64);
+            }
+        }
+        start += block;
+    }
+    out
+}
+
+/// The strip folds like paper into more and more mirrored copies, swaps, then unfolds into the new picture
+fn fold(a: &[u8], b: &[u8], f: f64, line: bool, origin: Option<f64>) -> Vec<u8> {
+    let count = a.len() / 3;
+    let c = if line { 0.0 } else { pymod(origin.unwrap_or(0.0), 1.0) };
+    let (src, z) = if f < 0.5 { (a, 1.0 + 7.0 * smoothstep(f / 0.5)) } else { (b, 1.0 + 7.0 * smoothstep(1.0 - (f - 0.5) / 0.5)) };
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let y = pymod(x - c, 1.0) * z;
+        let mut p = 1.0 - (pymod(y, 2.0) - 1.0).abs();
+        if !line {
+            p = pymod(p + c, 1.0);
+        }
+        let j = sample_idx(p, count);
+        out[i * 3..i * 3 + 3].copy_from_slice(&src[j * 3..j * 3 + 3]);
+    }
+    out
+}
+
+/// order[r] = the LED that holds the r-th darkest colour (ties by position); rank[i] = where LED i lands
+fn sort_order(buf: &[u8]) -> (Vec<usize>, Vec<usize>) {
+    let count = buf.len() / 3;
+    let lum = |i: usize| buf[i * 3] as i64 * 3 + buf[i * 3 + 1] as i64 * 6 + buf[i * 3 + 2] as i64;
+    let mut order: Vec<usize> = (0..count).collect();
+    order.sort_by_key(|&i| (lum(i), i));
+    let mut rank = vec![0usize; count];
+    for (r, &i) in order.iter().enumerate() {
+        rank[i] = r;
+    }
+    (order, rank)
+}
+
+/// The old LEDs slide into colour order, the order swaps to the new colours, and they slide back out into the new picture
+fn shuffle(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let (order_a, rank_a) = sort_order(a);
+    let (order_b, rank_b) = sort_order(b);
+    let mut out = vec![0u8; a.len()];
+    let place = |out: &mut Vec<u8>, src: &[u8], i: usize, pos: f64| {
+        let t = ((pos + 0.5).floor() as i64).max(0).min(count as i64 - 1) as usize;
+        out[t * 3..t * 3 + 3].copy_from_slice(&src[i * 3..i * 3 + 3]);
+    };
+    if f < 0.45 {
+        let e = smoothstep(f / 0.45);
+        for i in 0..count {
+            place(&mut out, a, i, i as f64 + (rank_a[i] as f64 - i as f64) * e);
+        }
+    } else if f < 0.55 {
+        let t = smoothstep((f - 0.45) / 0.1);
+        for r in 0..count {
+            for c in 0..3 {
+                let va = a[order_a[r] * 3 + c] as f64;
+                let vb = b[order_b[r] * 3 + c] as f64;
+                out[r * 3 + c] = byte((va + (vb - va) * t + 0.5) as i64);
+            }
+        }
+    } else {
+        let e = smoothstep((f - 0.55) / 0.45);
+        for i in 0..count {
+            place(&mut out, b, i, rank_b[i] as f64 + (i as f64 - rank_b[i] as f64) * e);
+        }
+    }
+    out
+}
+
+// --- More transitions: sliding, slats, interlacing, wobbling, growing ink, turning hues ---------------------------
+
+fn blend_px(a: &[u8], b: &[u8], out: &mut [u8], i: usize, t: f64) {
+    for c in 0..3 {
+        let va = a[i * 3 + c] as f64;
+        out[i * 3 + c] = byte((va + (b[i * 3 + c] as f64 - va) * t + 0.5) as i64);
+    }
+}
+
+/// The new picture pushes the old one off the strip (round a loop, along a line)
+fn push(a: &[u8], b: &[u8], f: f64, reverse: bool) -> Vec<u8> {
+    let count = a.len() / 3;
+    let dir = if reverse { -1.0 } else { 1.0 };
+    let sh = smoothstep(f);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let q = (i as f64 + 0.5) / count as f64 - dir * sh;
+        let (src, p) = if (0.0..1.0).contains(&q) { (a, q) } else { (b, pymod(q, 1.0)) };
+        let j = sample_idx(p, count);
+        out[i * 3..i * 3 + 3].copy_from_slice(&src[j * 3..j * 3 + 3]);
+    }
+    out
+}
+
+/// Venetian blinds: the strip is six slats and every slat turns to the new picture at once, each from its own start
+fn blinds(a: &[u8], b: &[u8], f: f64, reverse: bool) -> Vec<u8> {
+    const EDGE: f64 = 0.15;
+    let count = a.len() / 3;
+    let g = smoothstep(f) * (1.0 + EDGE);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let mut fr = pymod(x * 6.0, 1.0);
+        if reverse {
+            fr = 1.0 - fr;
+        }
+        blend_px(a, b, &mut out, i, clamp01((g - fr) / EDGE));
+    }
+    out
+}
+
+/// Every other LED turns first, the rest follow: a comb of old and new for a moment
+fn interlace(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let t = if i % 2 == 0 { smoothstep(f * 2.0) } else { smoothstep(f * 2.0 - 1.0) };
+        blend_px(a, b, &mut out, i, t);
+    }
+    out
+}
+
+/// The picture wobbles like water, more and more, swaps in the middle of the shaking, then settles
+fn liquid(a: &[u8], b: &[u8], f: f64, line: bool) -> Vec<u8> {
+    let count = a.len() / 3;
+    let amp = 0.08 * (PI * f).sin();
+    let w = smoothstep((f - 0.35) / 0.3);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let d = amp * (2.0 * PI * 3.0 * x + 8.0 * PI * f).sin();
+        let p = if line { clamp01(x + d) } else { pymod(x + d, 1.0) };
+        let j = sample_idx(p, count);
+        for c in 0..3 {
+            let va = a[j * 3 + c] as f64;
+            out[i * 3 + c] = byte((va + (b[j * 3 + c] as f64 - va) * w + 0.5) as i64);
+        }
+    }
+    out
+}
+
+/// Looping value noise: lattice of `len` cells that wraps round
+fn pnoise(x: f64, len: i64, seed: i64) -> f64 {
+    let y = x * len as f64;
+    let k = y.floor() as i64;
+    let fr = y - k as f64;
+    let v0 = hash01(k.rem_euclid(len), seed);
+    let v1 = hash01((k + 1).rem_euclid(len), seed);
+    v0 + (v1 - v0) * smoothstep(fr)
+}
+
+/// The new picture grows in patches like ink spreading in water
+fn ink(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let n = 0.6 * pnoise(x, 6, 3) + 0.4 * pnoise(x, 14, 5);
+        blend_px(a, b, &mut out, i, clamp01((f * 1.25 - n) / 0.25));
+    }
+    out
+}
+
+fn hue_turn(buf: &[u8], i: usize, theta: f64) -> [f64; 3] {
+    let (ca, sa) = (theta.cos(), theta.sin());
+    let m = [
+        [0.213 + ca * 0.787 - sa * 0.213, 0.715 - ca * 0.715 - sa * 0.715, 0.072 - ca * 0.072 + sa * 0.928],
+        [0.213 - ca * 0.213 + sa * 0.143, 0.715 + ca * 0.285 + sa * 0.140, 0.072 - ca * 0.072 - sa * 0.283],
+        [0.213 - ca * 0.213 - sa * 0.787, 0.715 - ca * 0.715 + sa * 0.715, 0.072 + ca * 0.928 + sa * 0.072],
+    ];
+    let v = px(buf, i);
+    [0, 1, 2].map(|r| (m[r][0] * v[0] + m[r][1] * v[1] + m[r][2] * v[2]).max(0.0).min(255.0))
+}
+
+/// The old colours spin round the colour wheel twice while the new ones spin in and slow to a stop
+fn colour_wheel(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let w = smoothstep(f);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let ca = hue_turn(a, i, 4.0 * PI * f);
+        let cb = hue_turn(b, i, -4.0 * PI * (1.0 - f));
+        for c in 0..3 {
+            out[i * 3 + c] = byte((ca[c] + (cb[c] - ca[c]) * w + 0.5) as i64);
+        }
+    }
+    out
+}
+
+// --- Five more: split colours, smear, negative, crushed colours, glitch cut --------------------------------------
+
+fn edge_p(p: f64, line: bool) -> f64 {
+    if line {
+        clamp01(p)
+    } else {
+        pymod(p, 1.0)
+    }
+}
+
+/// The three colour channels slide apart, the picture swaps while they are split, and they slide back together
+fn prism(a: &[u8], b: &[u8], f: f64, line: bool) -> Vec<u8> {
+    let count = a.len() / 3;
+    let d = 0.12 * (PI * f).sin();
+    let w = smoothstep((f - 0.4) / 0.2);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        for c in 0..3 {
+            let j = sample_idx(edge_p(x + (c as f64 - 1.0) * d, line), count);
+            let va = a[j * 3 + c] as f64;
+            out[i * 3 + c] = byte((va + (b[j * 3 + c] as f64 - va) * w + 0.5) as i64);
+        }
+    }
+    out
+}
+
+/// The picture melts: it smears along the strip, longer and longer, and runs into the new one
+fn melt(a: &[u8], b: &[u8], f: f64, reverse: bool, line: bool) -> Vec<u8> {
+    const TAPS: usize = 8;
+    let count = a.len() / 3;
+    let dir = if reverse { -1.0 } else { 1.0 };
+    let len = 0.3 * (PI * f).sin();
+    let w = smoothstep((f - 0.3) / 0.5);
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        let (mut sa, mut sb) = ([0.0; 3], [0.0; 3]);
+        for k in 0..TAPS {
+            let j = sample_idx(edge_p(x - dir * len * k as f64 / (TAPS - 1) as f64, line), count);
+            let (va, vb) = (px(a, j), px(b, j));
+            for c in 0..3 {
+                sa[c] += va[c];
+                sb[c] += vb[c];
+            }
+        }
+        for c in 0..3 {
+            let (va, vb) = (sa[c] / TAPS as f64, sb[c] / TAPS as f64);
+            out[i * 3 + c] = byte((va + (vb - va) * w + 0.5) as i64);
+        }
+    }
+    out
+}
+
+/// Like a photographic negative: the colours invert, the picture swaps, and they turn back
+fn negative(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let count = a.len() / 3;
+    let w = smoothstep((f - 0.4) / 0.2);
+    let k = smoothstep(1.0 - (2.0 * f - 1.0).abs());
+    let mut out = vec![0u8; a.len()];
+    for i in 0..count * 3 {
+        let v = a[i] as f64 + (b[i] as f64 - a[i] as f64) * w;
+        out[i] = byte((v * (1.0 - k) + (255.0 - v) * k + 0.5) as i64);
+    }
+    out
+}
+
+/// The colours lose their depth down to a few flat shades, the picture swaps, and the depth comes back
+fn crush(a: &[u8], b: &[u8], f: f64) -> Vec<u8> {
+    let src = if f < 0.5 { a } else { b };
+    let k = smoothstep(1.0 - (2.0 * f - 1.0).abs());
+    let levels = 256.0 - (254.0 * k).floor();
+    let step = 255.0 / (levels - 1.0);
+    src.iter().map(|&v| byte(((v as f64 / step + 0.5).floor() * step + 0.5) as i64)).collect()
+}
+
+/// A glitch cut: blocks jump between old and new with torn colour channels and flipped colours, then it settles on the new picture
+fn glitch_cut(a: &[u8], b: &[u8], f: f64, line: bool) -> Vec<u8> {
+    let count = a.len() / 3;
+    let k = (PI * f).sin();
+    let g = (f * 14.0).floor() as i64;
+    let active = hash01(g, 9) < 0.9 * k;
+    let base = if f < 0.5 { a } else { b };
+    let mut out = base.to_vec();
+    if !active {
+        return out;
+    }
+    for i in 0..count {
+        let x = (i as f64 + 0.5) / count as f64;
+        for blk in 0..3i64 {
+            let off = pymod(x - hash01(g, 10 + blk), 1.0);
+            if off < 0.05 + 0.2 * hash01(g, 20 + blk) {
+                let shift = (hash01(g, 30 + blk) - 0.5) * 0.4 * k;
+                let src = if hash01(g, 40 + blk) < 0.5 { a } else { b };
+                let flip = hash01(g, 50 + blk) < 0.2;
+                for c in 0..3 {
+                    let j = sample_idx(edge_p(x + shift + (c as f64 - 1.0) * 0.02 * k, line), count);
+                    let v = src[j * 3 + c];
+                    out[i * 3 + c] = if flip { 255 - v } else { v };
+                }
+            }
+        }
+    }
+    out
 }
 
 /// blend_flow (style already normalized by Python; anything unknown fades)
@@ -710,6 +1352,23 @@ pub fn blend_flow(buf_a: &[u8], buf_b: &[u8], factor: f64, style: &str, accent: 
             let level = smoothstep((f - 0.5).abs() * 2.0);
             src.iter().map(|&v| byte((v as f64 * level + 0.5) as i64)).collect()
         }
+        "squeeze" => squeeze(&a, &b, f, accent, line, origin),
+        "spin" => spin(&a, &b, f, reverse),
+        "shatter" => shatter(&a, &b, f, reverse, line),
+        "pixelate" => pixelate(&a, &b, f),
+        "fold" => fold(&a, &b, f, line, origin),
+        "shuffle" => shuffle(&a, &b, f),
+        "push" => push(&a, &b, f, reverse),
+        "blinds" => blinds(&a, &b, f, reverse),
+        "interlace" => interlace(&a, &b, f),
+        "liquid" => liquid(&a, &b, f, line),
+        "ink" => ink(&a, &b, f),
+        "wheel" => colour_wheel(&a, &b, f),
+        "prism" => prism(&a, &b, f, line),
+        "melt" => melt(&a, &b, f, reverse, line),
+        "negative" => negative(&a, &b, f),
+        "crush" => crush(&a, &b, f),
+        "glitchcut" => glitch_cut(&a, &b, f, line),
         _ => lerp_all(&a, &b, smoothstep(f)),
     }
 }

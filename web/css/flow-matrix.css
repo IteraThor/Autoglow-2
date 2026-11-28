@@ -461,14 +461,23 @@
 }
 
 .fm-effect {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
+  position: relative;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-input);
   color: var(--text-primary);
+}
+
+.fm-effect-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  border: 0;
+  background: none;
+  color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -486,6 +495,18 @@
 .fm-effect-name {
   font-size: var(--fs-sm);
   font-weight: 600;
+}
+
+.fm-new {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  color: var(--bg-input);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
 }
 
 .fm-effect-job {

@@ -172,9 +172,10 @@ impl DartEventType {
     }
 }
 
-pub const ANIMATIONS: [&str; 22] = [
+pub const ANIMATIONS: [&str; 30] = [
     "chase", "rainbow", "pastel_rainbow", "flash", "curtain", "heartbeat", "pulse", "solid", "wipe", "breathe", "scan", "comet",
     "dual_comet", "sparkle", "fire", "radar", "off", "wave", "meteors", "fireworks", "confetti", "ripple",
+    "aurora", "plasma", "lava", "lightning", "glitch", "kaleido", "pendulum", "moire",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

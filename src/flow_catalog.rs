@@ -54,10 +54,44 @@ pub const FLOW_EFFECTS: &[FlowEffectSpec] = &[
     FlowEffectSpec { id: "confetti", label: "Confetti", job: "Sparkle in many colours", options: &[("amount", opt_amount)] },
     FlowEffectSpec { id: "ripple", label: "Ripple", job: "A wave of light from one point", options: &[] },
     FlowEffectSpec { id: "fire", label: "Fire", job: "Flickering flames", options: &[] },
+    FlowEffectSpec { id: "aurora", label: "Aurora", job: "Northern lights drifting and breathing", options: &[] },
+    FlowEffectSpec { id: "plasma", label: "Plasma", job: "Shifting colour, old-school demo style", options: &[] },
+    FlowEffectSpec { id: "lava", label: "Lava", job: "Blobs that stretch and merge", options: &[] },
+    FlowEffectSpec { id: "lightning", label: "Lightning", job: "A storm with flickering bolts", options: &[] },
+    FlowEffectSpec { id: "glitch", label: "Glitch", job: "A broken screen", options: &[] },
+    FlowEffectSpec { id: "kaleido", label: "Kaleidoscope", job: "Mirrored cells of drifting colour", options: &[] },
+    FlowEffectSpec { id: "pendulum", label: "Pendulum Wave", job: "Swings that fan out and snap into line", options: &[] },
+    FlowEffectSpec { id: "moire", label: "Moire", job: "Stripes sliding against each other", options: &[] },
 ];
 
 /// Transition id -> label. "instant" is shown as Cut.
-pub const FLOW_TRANSITIONS: &[(&str, &str)] = &[("instant", "Cut"), ("crossfade", "Fade"), ("wipe", "Wipe"), ("curtain", "Curtain"), ("flash", "Flash"), ("sweep", "Sweep"), ("spread", "From the hit"), ("dissolve", "Dissolve"), ("dip", "Dip")];
+pub const FLOW_TRANSITIONS: &[(&str, &str)] = &[("instant", "Cut"), ("crossfade", "Fade"), ("wipe", "Wipe"), ("curtain", "Curtain"), ("flash", "Flash"), ("sweep", "Sweep"), ("spread", "From the hit"), ("dissolve", "Dissolve"), ("dip", "Dip"), ("squeeze", "Squeeze"), ("spin", "Spin"), ("fold", "Fold"), ("shatter", "Shatter"), ("pixelate", "Pixelate"), ("shuffle", "Shuffle"), ("push", "Push"), ("blinds", "Blinds"), ("interlace", "Interlace"), ("liquid", "Liquid"), ("ink", "Ink"), ("wheel", "Colour wheel"), ("prism", "Prism"), ("melt", "Melt"), ("negative", "Negative"), ("crush", "Bit crush"), ("glitchcut", "Glitch cut")];
+
+/// Added after the first set: shown with a NEW tag in the picker
+const NEW_IDS: &[&str] = &["aurora", "plasma", "lava", "lightning", "glitch", "kaleido", "pendulum", "moire", "squeeze", "spin", "fold", "shatter", "pixelate", "shuffle", "push", "blinds", "interlace", "liquid", "ink", "wheel", "prism", "melt", "negative", "crush", "glitchcut"];
+
+/// Looks and transitions that read alike on the strip share one tile on the page; the variants are picked inside it.
+/// Saved profiles keep the plain ids, a family is only a grouping.
+fn family_of(id: &str) -> Value {
+    let (fid, label) = match id {
+        "chase" | "meteors" | "wave" => ("runners", "Runners"),
+        "sparkle" | "confetti" => ("twinkle", "Twinkle"),
+        "fireworks" | "ripple" => ("burst", "Burst"),
+        "wipe" | "curtain" | "sweep" | "spread" => ("reveal", "Reveal"),
+        "instant" | "crossfade" | "flash" | "dissolve" | "dip" => ("blend", "Blend"),
+        "aurora" | "plasma" | "lava" => ("liquid", "Liquid light"),
+        "kaleido" | "pendulum" | "moire" => ("pattern", "Pattern"),
+        "lightning" | "glitch" => ("chaos", "Storm and glitch"),
+        "prism" | "negative" | "crush" => ("colourtrick", "Colour trick"),
+        "melt" | "glitchcut" => ("rough", "Rough"),
+        "push" | "blinds" | "interlace" => ("slide", "Slide"),
+        "liquid" | "ink" | "wheel" => ("organic", "Organic"),
+        "squeeze" | "spin" | "fold" => ("warp", "Warp"),
+        "shatter" | "pixelate" | "shuffle" => ("breakup", "Break up"),
+        _ => return Value::Null,
+    };
+    json!({"id": fid, "label": label})
+}
 
 pub const SPEED_MIN: f64 = 0.25;
 pub const SPEED_MAX: f64 = 4.0;
@@ -180,10 +214,10 @@ pub fn catalog_for_ui() -> Value {
                     json!({"key": k, "default": d, "values": a})
                 })
                 .collect();
-            json!({"id": e.id, "label": e.label, "job": e.job, "options": opts})
+            json!({"id": e.id, "label": e.label, "job": e.job, "options": opts, "family": family_of(e.id), "new": NEW_IDS.contains(&e.id)})
         })
         .collect();
-    let transitions: Vec<Value> = FLOW_TRANSITIONS.iter().map(|(id, l)| json!({"id": id, "label": l})).collect();
+    let transitions: Vec<Value> = FLOW_TRANSITIONS.iter().map(|(id, l)| json!({"id": id, "label": l, "family": family_of(id), "new": NEW_IDS.contains(id)})).collect();
     json!({"effects": effects, "transitions": transitions})
 }
 

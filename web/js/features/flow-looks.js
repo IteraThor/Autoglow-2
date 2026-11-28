@@ -40,7 +40,8 @@ const OPTION_DEFAULTS = {
   fireworks: {},
   confetti: { amount: ['some', ['few', 'some', 'many']] },
   ripple: {},
-  fire: {}
+  fire: {},
+  aurora: {}, plasma: {}, lava: {}, lightning: {}, glitch: {}, kaleido: {}, pendulum: {}, moire: {}
 };
 
 export function normalizeOptions(id, options = {}) {
@@ -417,10 +418,172 @@ function renderFire(eff, t, n, o, line) {
   return out;
 }
 
+
+// --- Looks built from light alone: layered colour, blobs, storms, glitches, mirrors, beats ---
+// Same maths as flow.rs.
+const WHITE = [255, 255, 255];
+const AURORA = [[40, 255, 140], [40, 190, 255], [170, 80, 255]];
+
+function hsv(h, s, v) {
+  h = mod(h, 1) * 6;
+  const i = Math.floor(h), f = h - i;
+  const p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+  const [r, g, b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
+  return [round(r * 255), round(g * 255), round(b * 255)];
+}
+
+function renderAurora(eff, t, n) {
+  const tt = t * speedOf(eff);
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    const acc = [0, 6, 14];
+    for (let j = 0; j < 3; j++) {
+      const k = [2, 3, 5][j], sp = [0.21, -0.17, 0.3][j], ph = [0, 2.1, 4.2][j];
+      const w = Math.sin(2 * Math.PI * k * x + 2 * Math.PI * sp * tt + ph + 1.5 * Math.sin(2 * Math.PI * x - 0.5 * tt + ph));
+      const b = Math.pow(0.5 + 0.5 * w, 2.5);
+      const m = 0.65 + 0.35 * Math.sin(0.4 * tt + j * 2);
+      for (let c = 0; c < 3; c++) acc[c] += AURORA[j][c] * b * m * 0.9;
+    }
+    out.set([round(acc[0]), round(acc[1]), round(acc[2])], i * 3);
+  }
+  return out;
+}
+
+function renderPlasma(eff, t, n) {
+  const tt = t * speedOf(eff);
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    const v = (Math.sin(2 * Math.PI * 2 * x + 1.1 * tt) + Math.sin(2 * Math.PI * 3 * x - 0.8 * tt) + Math.sin(2 * Math.PI * 5 * x + 0.7 * tt) + Math.sin(2 * Math.PI * 7 * x - 0.5 * tt)) / 4;
+    const bright = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * x + tt));
+    out.set(hsv(0.5 + 0.5 * v + 0.05 * tt, 0.9, bright), i * 3);
+  }
+  return out;
+}
+
+function renderLava(eff, t, n, o, line) {
+  const tt = t * speedOf(eff);
+  const c1 = rgb(eff.color_primary), c2 = rgb(eff.color_secondary);
+  const hot = mix(c1, WHITE, 0.6);
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    let field = 0;
+    for (let j = 0; j < 4; j++) {
+      const p = 0.5 + 0.4 * Math.sin(0.21 * (j + 1) * tt + 1.7 * j);
+      const r = 0.07 + 0.025 * j;
+      const d = line ? Math.abs(x - p) : wrapDist(x, p);
+      field += (r * r) / (d * d + 0.0008);
+    }
+    out.set(mix(mix(c2, c1, smoothstep((field - 0.35) / 1.0)), hot, smoothstep((field - 1.6) / 1.5)), i * 3);
+  }
+  return out;
+}
+
+function renderLightning(eff, t, n, o, line) {
+  const tt = t * speedOf(eff);
+  const c2 = rgb(eff.color_secondary);
+  const period = 1.8;
+  const k = Math.floor(tt / period);
+  const tau = tt - k * period;
+  const strike = hash01(k, 1) < 0.8;
+  const centre = hash01(k, 2);
+  const len = 0.25 + 0.45 * hash01(k, 3);
+  let flash = 0;
+  if (strike) flash = tau < 0.1 ? 1 : tau >= 0.16 && tau < 0.24 ? 0.7 : tau >= 0.32 && tau < 0.38 ? 0.45 : 0;
+  const after = strike && tau >= 0.1 ? Math.exp(-(tau - 0.1) * 2.2) * 0.35 : 0;
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    const d = line ? Math.abs(x - centre) : wrapDist(x, centre);
+    const bolt = flash * Math.exp(-Math.pow(d / (len / 2), 4)) * (0.45 + 0.55 * hash01(i, 500 + k));
+    const wide = after * Math.exp(-Math.pow(d / len, 2));
+    out.set(mix(mix(c2, [120, 60, 200], wide), [235, 240, 255], bolt), i * 3);
+  }
+  return out;
+}
+
+const glitchBase = (c1, c2, x, tt) => mix(c1, c2, 0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * mod(x, 1) + 0.5 * tt));
+
+function renderGlitch(eff, t, n) {
+  const tt = t * speedOf(eff);
+  const c1 = rgb(eff.color_primary), c2 = rgb(eff.color_secondary);
+  const g = Math.floor(tt * 8);
+  const active = hash01(g, 9) < 0.55;
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    let col = glitchBase(c1, c2, x, tt);
+    if (active) {
+      for (let b = 0; b < 3; b++) {
+        const start = hash01(g, 10 + b);
+        const width = 0.05 + 0.2 * hash01(g, 20 + b);
+        if (mod(x - start, 1) < width) {
+          const shift = (hash01(g, 30 + b) - 0.5) * 0.4;
+          if (hash01(g, 40 + b) < 0.25) col = [0, 0, 0];
+          else {
+            const r = glitchBase(c1, c2, x + shift + 0.02, tt)[0];
+            const gg = glitchBase(c1, c2, x + shift, tt)[1];
+            const bb = glitchBase(c1, c2, x + shift - 0.02, tt)[2];
+            col = hash01(g, 50 + b) < 0.3 ? [255 - r, 255 - gg, 255 - bb] : [r, gg, bb];
+          }
+        }
+      }
+    }
+    out.set(col, i * 3);
+  }
+  return out;
+}
+
+function renderKaleido(eff, t, n) {
+  const tt = t * speedOf(eff);
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = mod((i + 0.5) / n + 0.02 * tt, 1);
+    const u = Math.abs(mod(x * 3, 1) * 2 - 1);
+    const hue = 0.1 + 0.55 * u + 0.07 * tt;
+    const bright = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * u - 1.3 * tt), 2);
+    out.set(hsv(hue, 0.8, bright), i * 3);
+  }
+  return out;
+}
+
+function renderPendulum(eff, t, n) {
+  const tt = mod((t * speedOf(eff)) / 30, 1);
+  const c1 = rgb(eff.color_primary), c2 = rgb(eff.color_secondary);
+  const swing = z => 0.5 + 0.5 * Math.sin(2 * Math.PI * (8 + z) * tt);
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    const pos = (1 - Math.abs(2 * x - 1)) * 12;
+    const z0 = Math.min(11, Math.floor(pos));
+    const b = swing(z0) + (swing(Math.min(11, z0 + 1)) - swing(z0)) * smoothstep(pos - z0);
+    out.set(mix(c2, c1, smoothstep(b)), i * 3);
+  }
+  return out;
+}
+
+function renderMoire(eff, t, n) {
+  const tt = t * speedOf(eff);
+  const c1 = rgb(eff.color_primary), c2 = rgb(eff.color_secondary);
+  const k1 = Math.max(4, Math.floor(n / 5));
+  const k2 = k1 + 3;
+  const out = new Uint8ClampedArray(n * 3);
+  for (let i = 0; i < n; i++) {
+    const x = (i + 0.5) / n;
+    const v = Math.sin(2 * Math.PI * k1 * x + 0.6 * tt) * Math.sin(2 * Math.PI * k2 * x - 0.9 * tt);
+    out.set(mix(c2, c1, smoothstep(0.5 + 0.5 * v)), i * 3);
+  }
+  return out;
+}
+
 const RENDERERS = {
   solid: renderSolid, breathe: renderBreathe, flash: renderFlash, chase: renderChase,
   rainbow: renderRainbow, sparkle: renderSparkle, wave: renderWave, meteors: renderMeteors,
-  fireworks: renderFireworks, confetti: renderConfetti, ripple: renderRipple, fire: renderFire
+  fireworks: renderFireworks, confetti: renderConfetti, ripple: renderRipple, fire: renderFire,
+  aurora: renderAurora, plasma: renderPlasma, lava: renderLava, lightning: renderLightning, glitch: renderGlitch,
+  kaleido: renderKaleido, pendulum: renderPendulum, moire: renderMoire
 };
 
 // One frame of a look for `count` LEDs; effect is the saved JSON form ({animation, color_primary, ...}).
@@ -446,6 +609,334 @@ function lerpAll(a, b, t) {
   return out;
 }
 
+
+// --- New transitions: the picture itself changes (size, turning, pieces, resolution, folds, order) ---
+// Same maths as flow.rs: each works on both pictures by index only.
+const sampleIdx = (p, count) => Math.max(0, Math.min(count - 1, Math.floor(p * count)));
+const px = (buf, i) => [buf[i * 3], buf[i * 3 + 1], buf[i * 3 + 2]];
+
+function squeeze(a, b, f, accent, line, origin) {
+  const count = Math.floor(a.length / 3);
+  const c = line ? 0.5 : mod(origin ?? 0, 1);
+  const [src, s] = f < 0.5 ? [a, 1 - smoothstep(f / 0.5)] : [b, smoothstep((f - 0.5) / 0.5)];
+  const light = accent || [255, 255, 255];
+  const amp = 1 - Math.abs(2 * f - 1);
+  const core = Math.max(1.5 / count, 0.03);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    let d = x - c;
+    if (!line) {
+      if (d > 0.5) d -= 1;
+      else if (d < -0.5) d += 1;
+    }
+    let v = [0, 0, 0];
+    if (s > 1e-9) {
+      const rel = d / s;
+      const p = c + rel;
+      const inside = line ? p >= 0 && p < 1 : Math.abs(rel) <= 0.5;
+      if (inside) v = px(src, sampleIdx(line ? p : mod(p, 1), count));
+    }
+    const g = Math.exp(-Math.pow(Math.abs(d) / core, 2)) * amp;
+    for (let k = 0; k < 3; k++) out[i * 3 + k] = round(v[k] + (light[k] - v[k]) * g);
+  }
+  return out;
+}
+
+function spin(a, b, f, reverse) {
+  const TURNS = 2, TAPS = 7;
+  const count = Math.floor(a.length / 3);
+  const dir = reverse ? -1 : 1;
+  let src, shift, speed;
+  if (f < 0.5) { const u = f / 0.5; src = a; shift = u * u * TURNS; speed = 2 * u * TURNS; }
+  else { const v = (f - 0.5) / 0.5; src = b; shift = (1 - v) * (1 - v) * TURNS; speed = 2 * (1 - v) * TURNS; }
+  const blur = speed * 0.08;
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    const sum = [0, 0, 0];
+    for (let k = 0; k < TAPS; k++) {
+      const off = (k / (TAPS - 1) - 0.5) * blur;
+      const v = px(src, sampleIdx(mod(x - dir * (shift + off), 1), count));
+      for (let c = 0; c < 3; c++) sum[c] += v[c];
+    }
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = round(sum[c] / TAPS);
+  }
+  return out;
+}
+
+function shatter(a, b, f, reverse, line) {
+  const count = Math.floor(a.length / 3);
+  const size = Math.max(2, Math.floor(count / 12));
+  const out = Uint8ClampedArray.from(b);
+  for (let k = 0; k * size < count; k++) {
+    const q = clamp01((f - 0.5 * hash01(k, 7)) / 0.5);
+    if (q >= 1) continue;
+    let dir, reach;
+    if (line) { dir = reverse ? -1 : 1; reach = count; }
+    else { const mid = (k * size + size / 2) / count; dir = mid < 0.5 ? 1 : -1; reach = count * 0.5; }
+    const d = dir * Math.floor(q * q * reach + 0.5);
+    const keep = 1 - q;
+    for (let j = k * size; j < Math.min((k + 1) * size, count); j++) {
+      let t = j + d;
+      if (line) { if (t < 0 || t >= count) continue; }
+      else t = ((t % count) + count) % count;
+      for (let c = 0; c < 3; c++) out[t * 3 + c] = round(a[j * 3 + c] * keep);
+    }
+  }
+  return out;
+}
+
+function pixelate(a, b, f) {
+  const count = Math.floor(a.length / 3);
+  const unit = Math.max(1, Math.floor(count / 40));
+  let src, stage;
+  if (f < 0.5) { src = a; stage = Math.min(4, Math.floor((f / 0.5) * 5)); }
+  else { src = b; stage = 4 - Math.min(4, Math.floor(((f - 0.5) / 0.5) * 5)); }
+  const block = stage === 0 ? 1 : [1, 2, 4, 8, 16][stage] * unit;
+  const out = new Uint8ClampedArray(a.length);
+  for (let start = 0; start < count; start += block) {
+    const len = Math.min(block, count - start);
+    const sum = [0, 0, 0];
+    for (let i = start; i < start + len; i++) for (let c = 0; c < 3; c++) sum[c] += src[i * 3 + c];
+    for (let i = start; i < start + len; i++) for (let c = 0; c < 3; c++) out[i * 3 + c] = round(sum[c] / len);
+  }
+  return out;
+}
+
+function fold(a, b, f, line, origin) {
+  const count = Math.floor(a.length / 3);
+  const c = line ? 0 : mod(origin ?? 0, 1);
+  const [src, z] = f < 0.5 ? [a, 1 + 7 * smoothstep(f / 0.5)] : [b, 1 + 7 * smoothstep(1 - (f - 0.5) / 0.5)];
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    const y = mod(x - c, 1) * z;
+    let p = 1 - Math.abs(mod(y, 2) - 1);
+    if (!line) p = mod(p + c, 1);
+    const j = sampleIdx(p, count);
+    for (let k = 0; k < 3; k++) out[i * 3 + k] = src[j * 3 + k];
+  }
+  return out;
+}
+
+function sortOrder(buf) {
+  const count = Math.floor(buf.length / 3);
+  const lum = i => buf[i * 3] * 3 + buf[i * 3 + 1] * 6 + buf[i * 3 + 2];
+  const order = Array.from({ length: count }, (_, i) => i).sort((x, y) => lum(x) - lum(y) || x - y);
+  const rank = new Array(count);
+  order.forEach((i, r) => { rank[i] = r; });
+  return [order, rank];
+}
+
+function shuffle(a, b, f) {
+  const count = Math.floor(a.length / 3);
+  const [orderA, rankA] = sortOrder(a);
+  const [orderB, rankB] = sortOrder(b);
+  const out = new Uint8ClampedArray(a.length);
+  const place = (src, i, pos) => {
+    const t = Math.max(0, Math.min(count - 1, Math.floor(pos + 0.5)));
+    for (let c = 0; c < 3; c++) out[t * 3 + c] = src[i * 3 + c];
+  };
+  if (f < 0.45) {
+    const e = smoothstep(f / 0.45);
+    for (let i = 0; i < count; i++) place(a, i, i + (rankA[i] - i) * e);
+  } else if (f < 0.55) {
+    const t = smoothstep((f - 0.45) / 0.1);
+    for (let r = 0; r < count; r++) for (let c = 0; c < 3; c++) {
+      const va = a[orderA[r] * 3 + c], vb = b[orderB[r] * 3 + c];
+      out[r * 3 + c] = round(va + (vb - va) * t);
+    }
+  } else {
+    const e = smoothstep((f - 0.55) / 0.45);
+    for (let i = 0; i < count; i++) place(b, i, rankB[i] + (i - rankB[i]) * e);
+  }
+  return out;
+}
+
+
+// --- More transitions: sliding, slats, interlacing, wobbling, growing ink, turning hues (same maths as flow.rs) ---
+function blendPx(a, b, out, i, t) {
+  for (let c = 0; c < 3; c++) out[i * 3 + c] = round(a[i * 3 + c] + (b[i * 3 + c] - a[i * 3 + c]) * t);
+}
+
+function push(a, b, f, reverse) {
+  const count = Math.floor(a.length / 3);
+  const dir = reverse ? -1 : 1;
+  const sh = smoothstep(f);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const q = (i + 0.5) / count - dir * sh;
+    const [src, p] = q >= 0 && q < 1 ? [a, q] : [b, mod(q, 1)];
+    const j = sampleIdx(p, count);
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = src[j * 3 + c];
+  }
+  return out;
+}
+
+function blinds(a, b, f, reverse) {
+  const EDGE = 0.15;
+  const count = Math.floor(a.length / 3);
+  const g = smoothstep(f) * (1 + EDGE);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    let fr = mod(((i + 0.5) / count) * 6, 1);
+    if (reverse) fr = 1 - fr;
+    blendPx(a, b, out, i, clamp01((g - fr) / EDGE));
+  }
+  return out;
+}
+
+function interlace(a, b, f) {
+  const count = Math.floor(a.length / 3);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) blendPx(a, b, out, i, i % 2 === 0 ? smoothstep(f * 2) : smoothstep(f * 2 - 1));
+  return out;
+}
+
+function liquid(a, b, f, line) {
+  const count = Math.floor(a.length / 3);
+  const amp = 0.08 * Math.sin(Math.PI * f);
+  const w = smoothstep((f - 0.35) / 0.3);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    const d = amp * Math.sin(2 * Math.PI * 3 * x + 8 * Math.PI * f);
+    const j = sampleIdx(line ? clamp01(x + d) : mod(x + d, 1), count);
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = round(a[j * 3 + c] + (b[j * 3 + c] - a[j * 3 + c]) * w);
+  }
+  return out;
+}
+
+function pnoise(x, len, seed) {
+  const y = x * len;
+  const k = Math.floor(y);
+  const fr = y - k;
+  const v0 = hash01(((k % len) + len) % len, seed);
+  const v1 = hash01((((k + 1) % len) + len) % len, seed);
+  return v0 + (v1 - v0) * smoothstep(fr);
+}
+
+function ink(a, b, f) {
+  const count = Math.floor(a.length / 3);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    const n = 0.6 * pnoise(x, 6, 3) + 0.4 * pnoise(x, 14, 5);
+    blendPx(a, b, out, i, clamp01((f * 1.25 - n) / 0.25));
+  }
+  return out;
+}
+
+function hueTurn(buf, i, theta) {
+  const ca = Math.cos(theta), sa = Math.sin(theta);
+  const m = [
+    [0.213 + ca * 0.787 - sa * 0.213, 0.715 - ca * 0.715 - sa * 0.715, 0.072 - ca * 0.072 + sa * 0.928],
+    [0.213 - ca * 0.213 + sa * 0.143, 0.715 + ca * 0.285 + sa * 0.14, 0.072 - ca * 0.072 - sa * 0.283],
+    [0.213 - ca * 0.213 - sa * 0.787, 0.715 - ca * 0.715 + sa * 0.715, 0.072 + ca * 0.928 + sa * 0.072]
+  ];
+  const v = px(buf, i);
+  return m.map(r => Math.max(0, Math.min(255, r[0] * v[0] + r[1] * v[1] + r[2] * v[2])));
+}
+
+function colourWheel(a, b, f) {
+  const count = Math.floor(a.length / 3);
+  const w = smoothstep(f);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const ca = hueTurn(a, i, 4 * Math.PI * f);
+    const cb = hueTurn(b, i, -4 * Math.PI * (1 - f));
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = round(ca[c] + (cb[c] - ca[c]) * w);
+  }
+  return out;
+}
+
+
+// --- Five more: split colours, smear, negative, crushed colours, glitch cut (same maths as flow.rs) ---
+const edgeP = (p, line) => (line ? clamp01(p) : mod(p, 1));
+
+function prism(a, b, f, line) {
+  const count = Math.floor(a.length / 3);
+  const d = 0.12 * Math.sin(Math.PI * f);
+  const w = smoothstep((f - 0.4) / 0.2);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    for (let c = 0; c < 3; c++) {
+      const j = sampleIdx(edgeP(x + (c - 1) * d, line), count);
+      out[i * 3 + c] = round(a[j * 3 + c] + (b[j * 3 + c] - a[j * 3 + c]) * w);
+    }
+  }
+  return out;
+}
+
+function melt(a, b, f, reverse, line) {
+  const TAPS = 8;
+  const count = Math.floor(a.length / 3);
+  const dir = reverse ? -1 : 1;
+  const len = 0.3 * Math.sin(Math.PI * f);
+  const w = smoothstep((f - 0.3) / 0.5);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    const sa = [0, 0, 0], sb = [0, 0, 0];
+    for (let k = 0; k < TAPS; k++) {
+      const j = sampleIdx(edgeP(x - (dir * len * k) / (TAPS - 1), line), count);
+      for (let c = 0; c < 3; c++) { sa[c] += a[j * 3 + c]; sb[c] += b[j * 3 + c]; }
+    }
+    for (let c = 0; c < 3; c++) {
+      const va = sa[c] / TAPS, vb = sb[c] / TAPS;
+      out[i * 3 + c] = round(va + (vb - va) * w);
+    }
+  }
+  return out;
+}
+
+function negative(a, b, f) {
+  const w = smoothstep((f - 0.4) / 0.2);
+  const k = smoothstep(1 - Math.abs(2 * f - 1));
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < a.length; i++) {
+    const v = a[i] + (b[i] - a[i]) * w;
+    out[i] = round(v * (1 - k) + (255 - v) * k);
+  }
+  return out;
+}
+
+function crush(a, b, f) {
+  const src = f < 0.5 ? a : b;
+  const k = smoothstep(1 - Math.abs(2 * f - 1));
+  const levels = 256 - Math.floor(254 * k);
+  const step = 255 / (levels - 1);
+  const out = new Uint8ClampedArray(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = round(Math.floor(src[i] / step + 0.5) * step);
+  return out;
+}
+
+function glitchCut(a, b, f, line) {
+  const count = Math.floor(a.length / 3);
+  const k = Math.sin(Math.PI * f);
+  const g = Math.floor(f * 14);
+  const active = hash01(g, 9) < 0.9 * k;
+  const out = Uint8ClampedArray.from(f < 0.5 ? a : b);
+  if (!active) return out;
+  for (let i = 0; i < count; i++) {
+    const x = (i + 0.5) / count;
+    for (let blk = 0; blk < 3; blk++) {
+      if (mod(x - hash01(g, 10 + blk), 1) < 0.05 + 0.2 * hash01(g, 20 + blk)) {
+        const shift = (hash01(g, 30 + blk) - 0.5) * 0.4 * k;
+        const src = hash01(g, 40 + blk) < 0.5 ? a : b;
+        const flip = hash01(g, 50 + blk) < 0.2;
+        for (let c = 0; c < 3; c++) {
+          const j = sampleIdx(edgeP(x + shift + (c - 1) * 0.02 * k, line), count);
+          out[i * 3 + c] = flip ? 255 - src[j * 3 + c] : src[j * 3 + c];
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // Blend look a into look b; factor runs 0..1 over the transition
 export function blendFlow(a, b, factor, style = 'crossfade', accent = null, reverse = false, line = false, origin = null) {
   const f = clamp01(factor);
@@ -453,6 +944,27 @@ export function blendFlow(a, b, factor, style = 'crossfade', accent = null, reve
   const count = Math.floor(n / 3);
   if (style === 'instant') return Uint8ClampedArray.from(f > 0 ? b : a);
   if (style === 'crossfade') return lerpAll(a, b, smoothstep(f));
+  if (['squeeze', 'spin', 'shatter', 'pixelate', 'fold', 'shuffle', 'push', 'blinds', 'interlace', 'liquid', 'ink', 'wheel', 'prism', 'melt', 'negative', 'crush', 'glitchcut'].includes(style)) {
+    const pad = x => { const y = new Uint8ClampedArray(n); y.set(x); return y; };
+    const [pa, pb] = [pad(a), pad(b)];
+    if (style === 'squeeze') return squeeze(pa, pb, f, accent, line, origin);
+    if (style === 'spin') return spin(pa, pb, f, reverse);
+    if (style === 'shatter') return shatter(pa, pb, f, reverse, line);
+    if (style === 'pixelate') return pixelate(pa, pb, f);
+    if (style === 'fold') return fold(pa, pb, f, line, origin);
+    if (style === 'push') return push(pa, pb, f, reverse);
+    if (style === 'blinds') return blinds(pa, pb, f, reverse);
+    if (style === 'interlace') return interlace(pa, pb, f);
+    if (style === 'liquid') return liquid(pa, pb, f, line);
+    if (style === 'ink') return ink(pa, pb, f);
+    if (style === 'wheel') return colourWheel(pa, pb, f);
+    if (style === 'prism') return prism(pa, pb, f, line);
+    if (style === 'melt') return melt(pa, pb, f, reverse, line);
+    if (style === 'negative') return negative(pa, pb, f);
+    if (style === 'crush') return crush(pa, pb, f);
+    if (style === 'glitchcut') return glitchCut(pa, pb, f, line);
+    return shuffle(pa, pb, f);
+  }
   if (style === 'flash') {
     const peak = fill(count, accent || [255, 255, 255]);
     if (f < FLASH_RISE) return lerpAll(a, peak, smoothstep(f / FLASH_RISE));

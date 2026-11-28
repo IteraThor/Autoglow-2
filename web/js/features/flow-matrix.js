@@ -54,8 +54,8 @@ const OPTION_LABELS = {
   edges: ['Edges', { soft: 'Soft', sharp: 'Sharp' }]
 };
 
-const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire']);
-const NO_COLOUR = new Set(['rainbow']);
+const USES_BACKGROUND = new Set(['breathe', 'flash', 'chase', 'sparkle', 'wave', 'meteors', 'fireworks', 'confetti', 'ripple', 'fire', 'lava', 'lightning', 'glitch', 'pendulum', 'moire']);
+const NO_COLOUR = new Set(['rainbow', 'aurora', 'plasma', 'kaleido']);
 const CAN_REVERSE = new Set(['chase', 'rainbow', 'wave', 'meteors', 'fire']);
 const PLAYER_STEPS = new Set(['takeout', 'takeout_in_progress', 'leg_won', 'match_won']);
 
@@ -240,14 +240,26 @@ function transitionFrame(id) {
   };
 }
 
+// Pictures with some structure, so transitions that move, split or distort a picture can be told apart in a preview
+function stripes(n, colour, dark, shift = 0) {
+  const out = new Uint8ClampedArray(n * 3);
+  const band = Math.max(2, Math.round(n / 8));
+  for (let i = 0; i < n; i++) out.set((Math.floor(i / band) + shift) % 2 ? dark : colour, i * 3);
+  return out;
+}
+
 function styleFrame(style, id) {
   return (t, n) => {
     const tr = trOf(id);
     const dur = style === 'instant' ? 0 : Math.max(0.3, tr.duration);
     const cycle = 0.5 + dur + 0.7;
     const u = t % cycle;
-    const a = new Uint8ClampedArray(n * 3).fill(30);
-    const b = renderFlowFrame(stepLook(stepOfKey(id)), 0, n, isLine());
+    const a = stripes(n, [235, 235, 235], [40, 40, 40]);
+    let b = renderFlowFrame(stepLook(stepOfKey(id)), 0, n, isLine());
+    // A look of one flat colour gets stripes of it, or a move would have nothing to show
+    let flat = true;
+    for (let i = 3; i < b.length && flat; i++) flat = b[i] === b[i % 3];
+    if (flat) b = stripes(n, [b[0], b[1], b[2]], [Math.round(b[0] * 0.2), Math.round(b[1] * 0.2), Math.round(b[2] * 0.2)], 1);
     if (u < 0.5) return a;
     if (dur <= 0 || u >= 0.5 + dur) return b;
     return blendFlow(a, b, (u - 0.5) / dur, style, tr.accent_color || null, !!tr.reverse, isLine());
@@ -1099,18 +1111,49 @@ function rangeField(label, { min, max, step, value, format, onset }) {
   return h('label', { class: 'fm-field' }, h('span', { class: 'form-label' }, label), h('span', { class: 'fm-range' }, input, out));
 }
 
-function flowLookGrid(effect, setEffect, forcePlayer, play) {
-  return h('div', { class: 'fm-effects' }, ...page.overview.catalog.effects.map(meta => {
-    const on = effect.animation === meta.id;
-    const sample = { ...effect, animation: meta.id, duration: effect.duration || 0 };
-    return h('button', {
-      type: 'button', class: `fm-effect${on ? ' is-on' : ''}`, 'aria-pressed': String(on),
-      onclick: () => { setEffect(e => { e.animation = meta.id; e.options = { colour_from: e.options?.colour_from || 'custom' }; }); play?.(); }
-    },
-    strip(lookFrame(resolved(sample, forcePlayer)), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
-    h('span', { class: 'fm-effect-name' }, meta.label),
-    h('span', { class: 'fm-effect-job' }, meta.job));
+const newTag = () => h('span', { class: 'fm-new' }, 'NEW');
+
+// Looks that read alike share one tile: the tile shows the picked variant, small buttons on hover pick another
+function familyMembers(list, id) {
+  const fam = list.find(x => x.id === id)?.family;
+  return fam ? list.filter(x => x.family?.id === fam.id) : [];
+}
+
+function familyGrid(list, currentId, { cls = '', tile, onpick }) {
+  const groups = [];
+  for (const item of list) {
+    const key = item.family?.id || item.id;
+    let g = groups.find(x => x.key === key);
+    if (!g) groups.push(g = { key, family: item.family, items: [] });
+    g.items.push(item);
+  }
+  return h('div', { class: `fm-effects ${cls}`.trim() }, ...groups.map(g => {
+    const shown = g.items.find(x => x.id === currentId) || g.items[0];
+    const on = g.items.some(x => x.id === currentId);
+    const many = g.items.length > 1;
+    return h('div', { class: `fm-effect${on ? ' is-on' : ''}${many ? ' has-variants' : ''}` },
+      h('button', { type: 'button', class: 'fm-effect-main', 'aria-pressed': String(on), onclick: () => onpick(shown) },
+        tile(shown),
+        h('span', { class: 'fm-effect-name' }, many ? g.family.label : shown.label, g.items.some(x => x.new) && newTag()),
+        shown.job && h('span', { class: 'fm-effect-job' }, shown.job)));
   }));
+}
+
+// The other versions of the picked tile, each with its own preview
+function versionRow(list, currentId, { tile, onpick }) {
+  const versions = familyMembers(list, currentId);
+  if (versions.length < 2) return null;
+  return h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Version'),
+    h('div', { class: 'fm-effects fm-versions' }, ...versions.map(x => h('div', { class: `fm-effect${x.id === currentId ? ' is-on' : ''}` },
+      h('button', { type: 'button', class: 'fm-effect-main', 'aria-pressed': String(x.id === currentId), onclick: () => onpick(x) },
+        tile(x), h('span', { class: 'fm-effect-name' }, x.label, x.new && newTag()))))));
+}
+
+function flowLookGrid(effect, setEffect, forcePlayer, play) {
+  return familyGrid(page.overview.catalog.effects, effect.animation, {
+    tile: meta => strip(lookFrame(resolved({ ...effect, animation: meta.id, duration: effect.duration || 0 }, forcePlayer)), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
+    onpick: meta => { setEffect(e => { e.animation = meta.id; e.options = { colour_from: e.options?.colour_from || 'custom' }; }); play?.(); }
+  });
 }
 
 function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false, playerChoice = false, playerWord = 'Player colour', isHit = false, play = null }) {
@@ -1121,6 +1164,10 @@ function lookEditor(effect, { setEffect: setEffectIn, timed, forcePlayer = false
     if (done) play?.();
   };
   const parts = [flowLookGrid(effect, setEffectIn, forcePlayer, play)];
+  parts.push(versionRow(page.overview.catalog.effects, effect.animation, {
+    tile: x => strip(lookFrame(resolved({ ...effect, animation: x.id, duration: effect.duration || 0 }, forcePlayer)), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
+    onpick: x => { setEffectIn(e => { e.animation = x.id; e.options = { colour_from: e.options?.colour_from || 'custom' }; }); play?.(); }
+  }));
 
   for (const opt of meta.options) {
     const [label, names] = OPTION_LABELS[opt.key] || [opt.key, {}];
@@ -1191,18 +1238,23 @@ function transitionEditor(id) {
     fn(st.from[src]);
   }, { rerender: done });
   return [
-    h('div', { class: 'fm-effects fm-transitions' }, ...page.overview.catalog.transitions.map(t => h('button', {
-      type: 'button', class: `fm-effect${tr.style === t.id ? ' is-on' : ''}`, 'aria-pressed': String(tr.style === t.id),
-      onclick: () => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); startTransitionLoop(id); }
-    }, strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }), h('span', { class: 'fm-effect-name' }, t.label)))),
+    familyGrid(page.overview.catalog.transitions, tr.style, {
+      cls: 'fm-transitions',
+      tile: t => strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
+      onpick: t => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); startTransitionLoop(id); }
+    }),
+    versionRow(page.overview.catalog.transitions, tr.style, {
+      tile: t => strip(styleFrame(t.id, id), { leds: 24, cls: 'fm-strip fm-strip-sm', ring: true }),
+      onpick: t => { setTr(x => { x.style = t.id; if (t.id !== 'instant' && !x.duration) x.duration = 0.5; }); startTransitionLoop(id); }
+    }),
     tr.style !== 'instant' && rangeField('Takes', {
       min: 0.1, max: 2, step: 0.1, value: tr.duration || 0.5, format: seconds,
       onset: (v, done) => setTr(x => { x.duration = v; }, done)
     }),
-    (tr.style === 'wipe' || tr.style === 'curtain' || tr.style === 'sweep') && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
+    (['wipe', 'curtain', 'sweep', 'spin', 'shatter', 'push', 'blinds', 'melt'].includes(tr.style)) && h('div', { class: 'fm-field' }, h('span', { class: 'form-label' }, 'Direction'),
       segmented([false, true], !!tr.reverse, v => setTr(x => { if (v) x.reverse = true; else delete x.reverse; }), directionLabels(tr.style === 'curtain'))),
-    (tr.style === 'flash' || tr.style === 'sweep') && h('details', { class: 'fm-more', open: moreOpen, ontoggle: e => { moreOpen = e.target.open; } }, h('summary', {}, 'More'),
-      colourField(tr.style === 'sweep' ? 'Light colour' : 'Flash colour', tr.accent_color || [255, 255, 255], (c, done) => setTr(x => { x.accent_color = c; }, done)))
+    (['flash', 'sweep', 'squeeze'].includes(tr.style)) && h('details', { class: 'fm-more', open: moreOpen, ontoggle: e => { moreOpen = e.target.open; } }, h('summary', {}, 'More'),
+      colourField(tr.style === 'sweep' ? 'Light colour' : tr.style === 'squeeze' ? 'Dot colour' : 'Flash colour', tr.accent_color || [255, 255, 255], (c, done) => setTr(x => { x.accent_color = c; }, done)))
   ];
 }
 
