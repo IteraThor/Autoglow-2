@@ -85,8 +85,10 @@
   .modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
   .mode{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:18px;border:2px solid transparent;background:var(--card);color:#fff;font:inherit;text-align:left;cursor:pointer;transition:all .15s;box-shadow:inset 0 -0.5px 0 0 rgba(255,255,255,.08)}
   .mode:hover{border-color:var(--blue);background:#0b55df1f;transform:translateY(-2px)}
+  .mode.on{border-color:var(--blue);background:#0b55df33}
   .mode svg{width:100%;height:74px;margin-bottom:8px;color:var(--blue2)}.mode b{font:400 26px/1 var(--display);text-transform:uppercase}
   .mode .muted{font-size:13px}.mode .small{margin-top:auto;padding-top:6px;color:#8b91a0;font-weight:700}
+  .lrules{margin:-10px 0 18px;color:var(--muted);font-weight:700;font-size:14px}
   .rules{padding:0;margin-bottom:16px}.rules>button{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;width:100%;padding:14px 20px;cursor:pointer;flex-wrap:wrap}
   .rules>button:hover .ed{color:#fff}.rules .k{font:400 20px/1 var(--display);text-transform:uppercase;color:var(--muted)}
   .rules .v{font-weight:700;flex:1;min-width:200px}.rules .ed{color:var(--blue2);font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
@@ -817,11 +819,14 @@
   const avColor = n => `hsl(${[...n].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)} 55% 38%)`;
   const avatar = n => `<span class="av" style="background:${avColor(n.trim().toLowerCase())}">${esc((n.trim()[0] || '?').toUpperCase())}</span>`;
 
-  /** Step 1 of hosting: how the tournament is played */
+  /** Step 1 of hosting: the mode and its rules, kept in a draft until the lobby opens */
   function modePage() {
-    return `<div class="ph"><div><h1>${tr('Host a tournament')}</h1><div class="sub">${tr('How is it played? Rules and players come next, and everything can still be changed in the lobby.')}</div></div><div class="r"><button class="btn sec sm" data-act="screen" data-v="start">← ${tr('Back')}</button></div></div>
-      <div class="modes">${FORMATS.map(([k, n, d, ps]) => `<button class="mode" data-act="mode" data-v="${k}"><svg viewBox="0 0 80 72" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet">${MODE_ART[k]}</svg><b>${tr(n)}</b><span class="muted">${tr(d)}</span><span class="small">${tr(ps)}</span></button>`).join('')}</div>
-      <div class="note">${tr('Every match is a normal local X01 game in Autodarts, on as many boards as you have.')}</div>`;
+    if (!lob || lob.tid) lob = { tid: '', format: 'single_ko', groups: 0, advance: 2, swiss_rounds: 0, return_round: false, ko_legs: 0, semi_legs: 0, final_legs: 0, settings: { ...DEFAULT_SETTINGS } };
+    const l = lob;
+    return `<div class="ph"><div><h1>${tr('Host a tournament')}</h1><div class="sub">${tr('Pick a mode and its rules. Players come next, in the lobby, where everything can still be changed.')}</div></div><div class="r"><button class="btn sec sm" data-act="screen" data-v="start">← ${tr('Back')}</button></div></div>
+      <div class="modes">${FORMATS.map(([k, n, d, ps]) => `<button class="mode ${k === l.format ? 'on' : ''}" data-act="mode" data-v="${k}"><svg viewBox="0 0 80 72" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" preserveAspectRatio="xMidYMid meet">${MODE_ART[k]}</svg><b>${tr(n)}</b><span class="muted">${tr(d)}</span><span class="small">${tr(ps)}</span></button>`).join('')}</div>
+      <div class="card rules open" style="margin-top:16px"><button style="cursor:default"><span class="k">${tr('Rules')}</span><span class="v">${rulesLine(l)}</span></button>${rulesBody(l)}</div>
+      <div class="card startbar"><div style="flex:1;min-width:220px" class="muted">${tr('Every match is a normal local X01 game in Autodarts, on as many boards as you have.')}</div><button class="btn" data-act="lopen">${tr('Open lobby')} →</button></div>`;
   }
 
   /** The organizer's copy, taken from AutoGlow once per lobby (another PC may have opened it) */
@@ -832,7 +837,7 @@
     const name = s.name || t.name;
     lob = { tid: t.id, name: name === 'Local Tournament' ? tr('Local Tournament') : name, format: s.format || 'single_ko', groups: s.groups || 0, advance: s.advance || 2, swiss_rounds: s.swiss_rounds || 0,
       return_round: !!s.return_round, ko_legs: s.ko_legs || 0, semi_legs: s.semi_legs || 0, final_legs: s.final_legs || 0, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) },
-      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, saveLocal: false, rulesOpen: false,
+      players: (s.players || []).map(p => ({ name: p.name, ad_name: p.ad_name || '', visitor: !!p.visitor, member: p.member || '', phone: p.phone || 0 })), roster: null, saveLocal: false,
       phone_signup: !!s.phone_signup, phoneSeen: s.phone_count || 0, qr: null };
     clubApi('members').then(r => { lob.roster = r.players || []; }, () => { lob.roster = []; }).then(() => { paintPick(); if (!typing()) { lastJson = ''; render(); } });
     return lob;
@@ -862,6 +867,7 @@
   let saveTimer = 0;
   /** Send the lobby to AutoGlow (joined boards see it too); text fields wait until typing pauses */
   function saveLobby(now) {
+    if (!lob || !lob.tid) return; // still the draft on the mode page
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try { data = await api('lobby', spec()); error = ''; } catch (e) { error = srv(e.message); }
@@ -885,16 +891,15 @@
     const l = lobbyState(t);
     return `<div class="ph"><div><input class="title-in" data-l="name" value="${esc(l.name)}" title="${tr('Click to rename')}" maxlength="60"><div class="sub">${tr('Lobby on {name} · boards on your network can join now', { name: esc(data.node.name) })}</div></div>
         <div class="r"><button class="btn sec sm" data-act="help">${tr('How it works')}</button><button class="btn danger sm" data-act="lcancel">${tr('Close lobby')}</button></div></div>
-      ${rulesCard(l)}
+      <div class="lrules">${rulesLine(l)}</div>
       <div class="lobby">${playersCard(l)}<div class="side"><div class="card" id="lboards">${lobbyBoards(t, true)}</div>${phoneCard(l)}</div></div>
       <div class="card startbar" id="lstart">${startBar(t)}</div>`;
   }
 
-  /** Folded: one line. Unfolded: every setting, the format too */
-  function rulesCard(l) {
+  /** Every setting but the format, which the mode cards above pick */
+  function rulesBody(l) {
     const s = l.settings, f = l.format;
-    const body = !l.rulesOpen ? '' : `<div class="body"><div class="ff">
-      <label>${tr('Format')}<select data-l="format">${optKV(FORMATS.map(([k, n]) => [k, tr(n)]), f)}</select></label>
+    return `<div class="body"><div class="ff">
       ${f === 'groups' ? `<label>${tr('Groups')}<select data-l="groups">${optKV([[0, tr('Automatic')], ...[1, 2, 3, 4, 5, 6, 7, 8].map(n => [n, n])], l.groups)}</select></label>
         <label>${tr('Advance per group')}<select data-l="advance">${opt([1, 2, 3, 4], l.advance)}</select></label>` : ''}
       ${f === 'swiss' ? `<label>${tr('Rounds')}<select data-l="swiss_rounds">${optKV([[0, tr('Automatic')], ...[2, 3, 4, 5, 6, 7].map(n => [n, n])], l.swiss_rounds)}</select></label>` : ''}
@@ -909,8 +914,8 @@
         <label>${tr('Final')}<select data-l="final_legs">${optKV(firstTo(tr('Same')), l.final_legs)}</select></label>`}
       ${f === 'groups' || f === 'league' ? `<label class="w ck"><input type="checkbox" data-l="return_round" ${l.return_round ? 'checked' : ''}> ${tr('Return round: every pairing plays twice, the other player throws first')}</label>` : ''}
       </div><div class="small muted" style="margin-top:14px">${esc(tr((FORMATS.find(x => x[0] === f) || [])[2] || ''))} ${s.sets ? tr('Legs are per set; the rounds count sets.') + ' ' : ''}${tr('The match length can still be changed while the tournament runs.')}</div></div>`;
-    return `<div class="card rules ${l.rulesOpen ? 'open' : ''}"><button data-act="rules"><span class="k">${tr('Rules')}</span><span class="v">${rulesLine(l)}</span><span class="ed">${l.rulesOpen ? tr('Done') : tr('Change')} <i>▾</i></span></button>${body}</div>`;
   }
+
 
   function playersCard(l) {
     const tag = (p, i) => (p.member ? `<span class="tag mem" title="${tr('Local player: the games count for their stats')}">★ ${tr('Local player')}</span>`
@@ -1265,7 +1270,7 @@
   }
 
   const helpHtml = () => `<h3>${tr('How it works')}</h3><ol style="margin:0;padding-left:20px;line-height:1.6">${[
-    tr('<b>Press Host a tournament</b> and pick how it’s played. The lobby opens: players, the boards that joined, and the rules folded into one line (press <b>Change</b> to open them). Everything is saved as you go.'),
+    tr('<b>Press Host a tournament</b>, pick the mode and its rules, then press <b>Open lobby</b>. The lobby has the players and the boards that joined, with the rules in one line under the name. Everything is saved as you go.'),
     tr('<b>Players:</b> press <b>Add local player</b> to pick your local players, or type a name to add a guest. Guests’ games stay out of the stats; switch on <b>Save as local player</b> and a typed name is saved as a local player when the tournament starts.'),
     tr('<b>More boards?</b> Each board needs its own PC with AutoGlow. Open Local Tournament there and choose <b>Join a tournament</b>: it shows up in the lobby right away. One board is enough too: then every match is played here, one after the other.'),
     tr('<b>Press Start tournament.</b> The bracket is built and the boards get their first matches. A board can still join later: it’s in at once.'),
@@ -1350,8 +1355,17 @@
       rerender();
     }
     if (a === 'wizard') { screen = 'mode'; rerender(); }
-    if (a === 'mode') act('lobby-open', { format: v }, () => { lob = null; screen = 'start'; });
-    if (a === 'rules') { lob.rulesOpen = !lob.rulesOpen; rerender(); }
+    if (a === 'mode') { lob.format = v; rerender(); }
+    if (a === 'lopen') {
+      const d = lob;
+      act('lobby-open', { format: d.format }, () => {
+        lob = null;
+        screen = 'start';
+        const { tid, ...rules } = d;
+        Object.assign(lobbyState(T()), rules, { settings: { ...d.settings } });
+        saveLobby(true);
+      });
+    }
     if (a === 'join') act('join', { address: el.dataset.addr, host_name: el.dataset.host, tournament_name: el.dataset.tour }, () => { screen = 'start'; });
     if (a === 'join-addr') act('join', { address: root.getElementById('addr').value }, () => { screen = 'start'; });
     if (a === 'end-at' && confirm(tr('End “{name}” on every board? This can’t be undone.', { name: el.dataset.tour }))) {
