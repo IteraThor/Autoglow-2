@@ -369,6 +369,12 @@ impl Tournaments {
     // -----------------------------------------------------------------------------------------
 
     pub fn local_view(&self) -> Value {
+        // The game on this PC's match page, read before the lock (tick() locks in the same order)
+        let game = self.bridge.as_ref().and_then(|b| {
+            let st = b.lock();
+            let tab = st.tab_url.split("/matches/").nth(1).map(|r| r.split(['/', '?', '#']).next().unwrap_or("").to_string());
+            st.last_match_state.clone().filter(|s| tab.is_some() && s.get("id").map(py_str) == tab)
+        });
         let g = self.lock();
         let role = if g.hosted.is_some() { "host" } else if g.join.is_some() { "board" } else { "none" };
         let assignment = match &g.hosted {
@@ -418,9 +424,15 @@ impl Tournaments {
             None if tournament.is_some() => crate::overlay::resolved(),
             None => Value::Null,
         };
+        // No tournament match on this board: a regular game gets the overlay when the lobby's switch is on
+        let casual_on = assignment.is_none() && crate::py::get_bool(&crate::overlay::load(), "casual", false);
+        let casual = game.filter(|_| casual_on).and_then(|s| agent::casual(&s, &g.node_id));
+        let overlay = if casual.is_some() { crate::overlay::resolved() } else { overlay };
         json!({
             "role": role,
             "overlay": overlay,
+            "casual_on": casual_on,
+            "casual": casual,
             "node": {"id": g.node_id, "name": g.node_name},
             "tournament": tournament,
             "join": g.join.as_ref().map(|j| {

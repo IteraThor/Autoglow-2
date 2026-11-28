@@ -11,6 +11,7 @@
 //! in % of the screen, s its size; a box without one stays where match.js puts it). face: how
 //! Autodarts' own parts are drawn: the score, the player cards, the three darts, the dartboard, its
 //! frame and hit markers, the checkout route and target, and the big moments (180, bust).
+//! casual: this PC draws it on regular games too, without a tournament (the switch in Autodarts' lobby).
 
 use crate::py::*;
 use crate::storage::project_root;
@@ -113,6 +114,8 @@ pub fn clean(v: Option<&Value>) -> Obj {
         "style" => style,
         "face" => face,
         "note" => get_str(o, "note", "").trim().chars().take(NOTE_MAX).collect::<String>(),
+        // The overlay on regular games too (no tournament): the switch in Autodarts' lobby
+        "casual" => get_bool(o, "casual", false),
     };
     for (k, opts) in PICKS {
         out.insert(k.into(), json!(pick(o, k, opts)));

@@ -352,7 +352,11 @@
   const orient = () => (window.innerHeight > window.innerWidth ? 'portrait' : 'landscape');
   /** This screen shape's settings: its parts and moved boxes (an older host: one set of parts) */
   const SCR = () => { const o = OV() || {}; return o[orient()] || { parts: o.parts || {}, boxes: {} }; };
-  const partOn = (k) => { const p = SCR().parts || {}; return k in p ? p[k] !== false : !OFF.includes(k); };
+  /** A regular game (no tournament) with the overlay: the lobby's "Tournament overlay" switch */
+  const CAS = () => !!(T() && T().casual);
+  /** The parts that only a tournament has */
+  const TOURNEY_ONLY = ['seeds', 'run', 'stake', 'next'];
+  const partOn = (k) => { if (CAS() && TOURNEY_ONLY.includes(k)) return false; const p = SCR().parts || {}; return k in p ? p[k] !== false : !OFF.includes(k); };
   const ST = () => (OV() || {}).style || {};
   let dragBox = null;   // the preview: the box being dragged, {key, box}
   /** Where a box was moved to (in px), or null: it stays where the layout puts it */
@@ -622,7 +626,7 @@
       return f.startsWith('W:') ? tr('the winner of {m}', { m: f.slice(2) }) : f.startsWith('L:') ? tr('the loser of {m}', { m: f.slice(2) }) : '';
     };
     const w = next('W'), l = next('L');
-    if (m.stage === 'group' || m.stage === 'swiss') return null;
+    if (m.stage === 'group' || m.stage === 'swiss' || t.casual) return null;
     if (!w) return { big: tr('For the title'), small: tr('The winner takes {name} 🏆', { name: esc(t.name) }) };
     const vs = other(w, 'W');
     return { big: tr('Winner → {round}', { round: esc(srv(w.label)) }), small: `${vs ? tr('against {name}', { name: esc(vs) }) : ''}${l ? `${vs ? ' · ' : ''}${tr('the loser goes on in the {round}', { round: esc(srv(l.label)) })}` : m.stage === 'lb' || m.stage === 'main' || m.stage === 'ko' ? `${vs ? ' · ' : ''}${tr('the loser is out')}` : ''}` };
@@ -780,7 +784,7 @@
   }
   const logoImg = (cls = 'logo') => { const s = logoSrc(); return s ? `<img class="${cls}" data-part="logo" src="${esc(s)}" alt="">` : ''; };
   /** The event's name from the Dashboard, else "Local Tournament" */
-  const eventName = () => esc((OV() || {}).title || '') || tr('Local Tournament');
+  const eventName = () => esc((OV() || {}).title || '') || (CAS() ? tr('Friendly match') : tr('Local Tournament'));
 
   // ---------------------------------------------------------------------------
   // Walk-on intro, winner banner, ticker
@@ -801,7 +805,7 @@
     el.className = `intro${PREVIEW && !partOn('intro') ? ' ghost' : ''}`;
     el.dataset.part = 'intro';
     el.style.setProperty('--introd', `${secs - 0.6}s`);
-    el.innerHTML = `${logoImg()}<div class="tag t1">🏆 ${eventName()}${(OV() || {}).title ? '' : ` · ${esc(t.name)}`}</div><div class="st disp">${esc(srv(m.label))}</div>
+    el.innerHTML = `${logoImg()}<div class="tag t1">🏆 ${eventName()}${(OV() || {}).title || !t.name ? '' : ` · ${esc(t.name)}`}</div><div class="st disp">${esc(srv(m.label))}</div>
       <div class="vs"><div class="p a disp">${esc(a.players[0].name)}<small>${p(0).seed ? tr('SEED {n}', { n: p(0).seed }) : ''}</small></div><div class="x disp">vs</div><div class="p b disp">${esc(a.players[1].name)}<small>${p(1).seed ? tr('SEED {n}', { n: p(1).seed }) : ''}</small></div></div>
       <div class="ft">${STAGE[m.stage] && m.stage !== 'gf' ? `${esc(STAGE[m.stage])} · ` : ''}${cap(firstTo(need, sets))} · X01 ${a.settings.base_score}</div>`;
     if (!PREVIEW) el.addEventListener('click', () => el.remove());
@@ -829,10 +833,10 @@
     const nxt = t.matches.find(x => x.sides.some(s => s.from === `W:${m.id}`));
     const champ = !nxt && !!st;
     const sc = result && !result.walkover ? `${score[won]}–${score[1 - won]}` : '';
-    const msg = champ ? `${tr('Wins {name}', { name: esc(t.name) })}${sc ? ` · ${tr('{score} in the {round}', { score: sc, round: esc(srv(m.label)) })}` : ''}` : nxt ? tr('Into the {round}', { round: esc(srv(nxt.label)) }) : tr('Wins {name}', { name: esc(srv(m.label)) });
+    const msg = t.casual ? '' : champ ? `${tr('Wins {name}', { name: esc(t.name) })}${sc ? ` · ${tr('{score} in the {round}', { score: sc, round: esc(srv(m.label)) })}` : ''}` : nxt ? tr('Into the {round}', { round: esc(srv(nxt.label)) }) : tr('Wins {name}', { name: esc(srv(m.label)) });
     // Once the result is in: what this board plays next, one click to start it
     const na = result && data.board && data.board.assignment && data.board.assignment.match !== m.id ? data.board.assignment : null;
-    const after = !result ? '' : na ? `<div class="nx">${tr('Next on this board')} · ${esc(na.match)} · <b>${esc(na.players[0].name)} vs ${esc(na.players[1].name)}</b></div><button class="go" data-go="start">▶ ${tr('Start next match')}</button>`
+    const after = !result || t.casual ? '' : na ? `<div class="nx">${tr('Next on this board')} · ${esc(na.match)} · <b>${esc(na.players[0].name)} vs ${esc(na.players[1].name)}</b></div><button class="go" data-go="start">▶ ${tr('Start next match')}</button>`
       : t.status === 'finished' ? `${!champ && t.champion ? `<div class="nx">🏆 ${tr('<b>{player}</b> wins {name}', { player: esc(pname(t.champion)), name: esc(t.name) })}</div>` : ''}<button class="go" data-go="page">${tr('Tournament page')}</button>`
       : `<div class="nx">${tr('This board gets its next match when one is ready')}</div>`;
     const h = `<span class="cl" data-go="close" title="${tr('Close')}">×</span><div class="w1 disp">🏆 ${esc(a.players[won].name)} ${champ ? `· ${tr('Champion')}` : sc}</div><div class="w2">${msg}</div>${after}`;
@@ -920,7 +924,7 @@
     }
     const sub = (OV() || {}).subtitle;
     if (sub) items.push(`<span>${esc(sub)}</span>`);
-    if (!items.length) items.push(`<span>🏆 ${eventName()} · ${esc(t.name)}</span>`);
+    if (!items.length) items.push(`<span>🏆 ${eventName()}${t.name ? ` · ${esc(t.name)}` : ''}</span>`);
     const text = items.join('');
     const speed = TICK_SPEED[(OV() || {}).ticker_speed] || 1;
     html(el, `<span class="lbl">🏆 ${eventName()}</span><div class="tw"><div class="tt" style="--tkd:${Math.round(Math.max(18, text.replace(/<[^>]+>/g, '').length * 0.22) * speed)}s">${text}</div></div>`);
@@ -938,9 +942,9 @@
     const stage = STAGE[m.stage] && m.stage !== 'gf' ? ` · ${esc(STAGE[m.stage])}` : '';
     const label = srv(m.label);
     // The ribbon in a narrow top bar: the trophy stands for the event's name
-    if (kind === 'rib') return `${logoImg()}<span class="tag">🏆${narrow ? '' : ` ${eventName()}`}</span><span class="disp">${esc(label)}</span><span class="meta">${esc(m.id)} · ${tr('first to {n}', { n: need })}</span>`;
-    const body = `<span class="tag">🏆 ${eventName()}</span><div class="name">${esc(t.name)}${stage}</div>
-      <div class="stage disp${label.length > 13 ? ' long' : ''}">${esc(label)}</div><div class="meta">${tr('Match {id}', { id: esc(m.id) })} · ${firstTo(need, sets)}</div>`;
+    if (kind === 'rib') return `${logoImg()}<span class="tag">🏆${narrow ? '' : ` ${eventName()}`}</span><span class="disp">${esc(label)}</span><span class="meta">${t.casual ? '' : `${esc(m.id)} · `}${tr('first to {n}', { n: need })}</span>`;
+    const body = `<span class="tag">🏆 ${eventName()}</span>${t.name || stage ? `<div class="name">${esc(t.name)}${stage}</div>` : ''}
+      <div class="stage disp${label.length > 13 ? ' long' : ''}">${esc(label)}</div><div class="meta">${t.casual ? '' : `${tr('Match {id}', { id: esc(m.id) })} · `}${firstTo(need, sets)}</div>`;
     return kind === 'hero' ? `${logoImg()}<div style="min-width:0">${body}</div>` : `${logoImg()}${body}`;
   }
   function raceHtml(a, score, active, need, sets, leftSide) {
@@ -1772,7 +1776,8 @@
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   // opts.intro: the Overlay page's preview plays the walk-on again
   window.autoglowMatch = (d, opts) => {
-    data = d;
+    // No tournament match on this board: a regular game with the overlay comes as data.casual {tournament, board}
+    data = d && d.casual ? { ...d, ...d.casual } : d;
     if (dragBox && dragBox.done) dragBox = null;
     if (opts && opts.intro) { introForce = true; introDone = ''; }
     scanAt = 0;

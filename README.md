@@ -2,8 +2,11 @@
 
 Real-time WLED lighting for Autodarts boards, driven by your live games.
 
-## Install (Linux)
-Open a terminal on the computer that runs Autodarts and run this as your normal user, **without** `sudo` in front:
+## Install (recommended: Fedora Linux with SUIT)
+The recommended way to run AutoGlow is on **Fedora Linux**, installed through **[SUIT](https://github.com/IteraThor/SUIT)**. Follow the instructions in the SUIT repository; it sets up AutoGlow for you.
+
+## Install (Linux, manual)
+To install without SUIT, open a terminal on the computer that runs Autodarts and run this as your normal user, **without** `sudo` in front:
 ```bash
 curl -fsSL https://github.com/IteraThor/Autoglow-2/releases/latest/download/install.sh | bash
 ```

@@ -1489,6 +1489,55 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Lobby: a "Tournament overlay" switch beside Shuffle. On: a regular game of two players (no
+  // tournament match on this board) gets the tournament match screen too (match.js, data.casual), in the look
+  // set on AutoGlow's Overlay page. Kept in AutoGlow (overlay.json "casual"), so it stays on.
+  // ---------------------------------------------------------------------------
+  const swHost = document.createElement('div');
+  swHost.setAttribute('data-autoglow', 'overlay-switch');
+  swHost.style.marginLeft = 'auto';
+  const swRoot = swHost.attachShadow({ mode: 'open' });
+  swRoot.innerHTML = `<style>
+    :host{all:initial;display:flex;margin-left:auto}
+    button{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:8px;color:#fff;font:700 12px/1 "Manrope Variable",Manrope,system-ui,sans-serif;white-space:nowrap}
+    button:hover{background:#ffffff14}button:focus-visible{outline:2px solid #2dd4bf}
+    button[disabled]{opacity:.5;cursor:default}
+    .sw{position:relative;width:36px;height:20px;border-radius:999px;background:#ffffff2e;transition:background .2s;flex:none}
+    .sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+    button[aria-checked="true"] .sw{background:#0d9488}button[aria-checked="true"] .sw::after{transform:translateX(16px)}
+  </style><button role="switch" aria-checked="false"><span class="sw"></span><span class="lb"></span></button>`;
+  const swBtn = swRoot.querySelector('button');
+  let swBusy = false;
+  swBtn.addEventListener('click', async () => {
+    if (swBusy || !data) return;
+    swBusy = true;
+    const on = !data.casual_on;
+    data.casual_on = on;
+    placeSwitch();
+    try { data = await api('casual-overlay', { on }); } catch (e) { data.casual_on = !on; flash(e.message); }
+    swBusy = false;
+    placeSwitch();
+  });
+  const shuffleButton = () => [...document.querySelectorAll('main button')].find(b => /^(shuffle|mischen)$/i.test((b.textContent || '').trim()) && b.checkVisibility());
+  function placeSwitch() {
+    // Not while this board has a tournament match: that one gets the overlay anyway
+    const sh = /^\/lobby\//.test(location.pathname) && data && !(data.board && data.board.assignment) ? shuffleButton() : null;
+    if (!sh) {
+      if (swHost.isConnected) { const old = swHost.nextElementSibling; swHost.remove(); if (old) old.style.marginLeft = ''; }
+      return;
+    }
+    // Left of Shuffle, which gives up its push to the right to the switch
+    if (swHost.nextElementSibling !== sh) sh.before(swHost);
+    sh.style.marginLeft = '0';
+    const on = !!data.casual_on;
+    swBtn.setAttribute('aria-checked', String(on));
+    swBtn.disabled = swBusy;
+    swBtn.title = tr('Show the tournament overlay in regular games of two players (X01). Its look is set on AutoGlow\'s Overlay page.');
+    const lb = swRoot.querySelector('.lb');
+    if (lb.textContent !== tr('Tournament overlay')) lb.textContent = tr('Tournament overlay');
+  }
+
+  // ---------------------------------------------------------------------------
   // Start
   // ---------------------------------------------------------------------------
   // Any of Autodarts' own links closes our pages first. Start ("/") seen from "/#autoglow-…" is the
@@ -1522,6 +1571,7 @@
     if (isOpen() !== pageHost.isConnected) sync();
     if (isOpen()) placePage();
     if (data) callout();
+    placeSwitch();
   }, 500);
   let polling = false;
   setInterval(async () => {

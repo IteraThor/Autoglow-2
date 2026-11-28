@@ -416,3 +416,39 @@ fn a_board_keeps_its_match_link_across_restarts() {
     assert_eq!(t.local_view()["board"]["linked"], "ad-9");
     std::fs::remove_dir_all(dir).ok();
 }
+
+#[test]
+fn a_regular_game_becomes_a_one_match_tournament_for_the_overlay() {
+    let st = |v: Value| v.as_object().unwrap().clone();
+    let game = st(json!({"id": "ad-1", "variant": "X01", "settings": {"baseScore": 301}, "legs": 2, "players": [{"name": "ANNA"}, {"name": "BEN"}],
+        "scores": [{"legs": 1}, {"legs": 0}], "gameScores": [120, 301], "player": 1}));
+    let c = agent::casual(&game, "me").unwrap();
+    assert_eq!(c["tournament"]["casual"], true);
+    assert_eq!(c["tournament"]["matches"][0]["id"], "ad-1");
+    assert_eq!(c["tournament"]["matches"][0]["legs_to_win"], 2);
+    assert_eq!(c["tournament"]["matches"][0]["label"], "301");
+    assert_eq!(c["board"]["linked"], "ad-1");
+    assert_eq!(c["board"]["live"]["legs"], json!([1, 0]));
+    assert_eq!(c["board"]["live"]["active"], 1);
+    // Finished: the result is in the match
+    let mut over = game.clone();
+    over.insert("winner".into(), json!(0));
+    over.insert("scores".into(), json!([{"legs": 2}, {"legs": 0}]));
+    let c = agent::casual(&over, "me").unwrap();
+    assert_eq!(c["tournament"]["matches"][0]["state"], "done");
+    assert_eq!(c["tournament"]["matches"][0]["result"]["winner"], 0);
+    // The next leg's starter comes first in Autodarts' list: the sides stay
+    let mut swapped = game.clone();
+    swapped.insert("players".into(), json!([{"name": "BEN", "index": 1}, {"name": "ANNA", "index": 0}]));
+    swapped.insert("scores".into(), json!([{"legs": 0}, {"legs": 1}]));
+    let c = agent::casual(&swapped, "me").unwrap();
+    assert_eq!(c["board"]["assignment"]["players"][0]["name"], "ANNA");
+    assert_eq!(c["board"]["live"]["legs"], json!([1, 0]));
+    // Not two players, or not X01: no overlay
+    let mut three = game.clone();
+    three.insert("players".into(), json!([{"name": "A"}, {"name": "B"}, {"name": "C"}]));
+    assert!(agent::casual(&three, "me").is_none());
+    let mut cricket = game.clone();
+    cricket.insert("variant".into(), json!("Cricket"));
+    assert!(agent::casual(&cricket, "me").is_none());
+}

@@ -222,6 +222,7 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/studio/autodarts", get(studio_routes::autodarts_state))
         .route("/api/studio/autodarts/start", post(studio_routes::autodarts_start))
         .route("/api/tournament/local", get(tournament_routes::local))
+        .route("/api/tournament/casual-overlay", post(tournament_routes::casual_overlay))
         .route("/api/tournament/demo", get(tournament_routes::demo))
         .route("/api/tournament/discover", get(tournament_routes::discover))
         .route("/api/tournament/preview", post(tournament_routes::preview))

@@ -174,3 +174,35 @@ fn bull_label(mode: &str) -> String {
         m => m.into(),
     }
 }
+
+/// A regular Autodarts game (no tournament) drawn with the tournament overlay, when the lobby's
+/// "Tournament overlay" switch is on: an X01 game of two players as a one-match tournament, in the
+/// shape match.js reads ({tournament, board}). None for any other game.
+pub fn casual(state: &Obj, me: &str) -> Option<Value> {
+    let ad = state.get("id").map(py_str).filter(|x| !x.is_empty())?;
+    // Sides by the players' own slot ("index"): Autodarts puts each leg's starter first in the list
+    let raw = state.get("players").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut slots: Vec<(i64, String)> = raw.iter().enumerate().map(|(i, p)| (p.get("index").and_then(Value::as_i64).unwrap_or(i as i64), player_name(p))).collect();
+    slots.sort_by_key(|x| x.0);
+    let names: Vec<String> = slots.into_iter().map(|x| x.1).collect();
+    let variant = state.get("variant").map(py_str).unwrap_or_default();
+    if names.len() != 2 || names.iter().any(|n| n.trim().is_empty()) || !(variant.is_empty() || variant == "X01") {
+        return None;
+    }
+    let base = num(state.get("settings").and_then(|x| x.get("baseScore")));
+    let base = if base > 0 { base } else { 501 };
+    // Autodarts sends "sets" only in sets mode; "legs" is then per set
+    let sets = num(state.get("sets"));
+    let sets = if sets > 1 { sets } else { 0 };
+    let legs = Some(num(state.get("legs"))).filter(|n| (1..=30).contains(n)).or_else(|| crate::autodarts::legs_to_win(state)).unwrap_or(1);
+    let players: Vec<Value> = names.iter().enumerate().map(|(i, n)| json!({"id": format!("C{}", i + 1), "name": n, "ad_name": n})).collect();
+    let assignment = json!({"match": ad, "players": players, "settings": {"base_score": base, "legs": legs, "sets": sets}});
+    let over = crate::autodarts::is_match_over(state);
+    let result = if over { result_of(&assignment, state, &ad).and_then(|r| serde_json::to_value(r).ok()) } else { None };
+    let m = json!({"id": ad, "label": base.to_string(), "stage": "casual", "state": if over { "done" } else { "live" }, "board": me,
+        "legs_to_win": if sets > 0 { sets } else { legs }, "sides": [{"player": "C1"}, {"player": "C2"}], "result": result});
+    Some(json!({
+        "tournament": {"id": format!("casual-{ad}"), "casual": true, "name": "", "status": "running", "players": players, "matches": [m]},
+        "board": {"assignment": assignment, "linked": ad, "live": live_of(&assignment, state)},
+    }))
+}

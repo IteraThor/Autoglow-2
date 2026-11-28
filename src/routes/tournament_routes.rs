@@ -18,6 +18,13 @@ pub async fn local(State(s): State<S>) -> ApiResult {
     ok(s.tournaments.local_view())
 }
 
+/// The lobby's "Tournament overlay" switch: the overlay on regular games (no tournament) too
+pub async fn casual_overlay(State(s): State<S>, req: Req) -> ApiResult {
+    let b = req.json()?;
+    crate::overlay::save(&crate::obj! {"casual" => crate::py::get_bool(&b, "on", false)}).map_err(AppError::persistence)?;
+    ok(s.tournaments.local_view())
+}
+
 /// A made-up tournament for the Dashboard page's demo switch; nothing is stored
 pub async fn demo(req: Req) -> ApiResult {
     let q = |k: &str| req.query.get(k).cloned().unwrap_or_default();
