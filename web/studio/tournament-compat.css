@@ -5,7 +5,6 @@
 
 /* Row layouts: space between neighbours, sideways */
 .no-flex-gap .hd > * + * { margin-left: 3.6rem; }
-.no-flex-gap[data-theme="flap"] .hd > * + * { margin-left: 4.4rem; }
 .no-flex-gap .hd-prog > div:first-child > * + * { margin-left: .8rem; }
 .no-flex-gap .pips > * + * { margin-left: .5rem; }
 .no-flex-gap h2 > * + * { margin-left: 1.2rem; }
@@ -13,7 +12,6 @@
 .no-flex-gap .lgs > * + *, .no-flex-gap .stt b > * + * { margin-left: 1rem; }
 .no-flex-gap .sc-top > * + * { margin-left: 2.4rem; }
 .no-flex-gap .sc-tabs > * + * { margin-left: .8rem; }
-.no-flex-gap[data-theme="flap"] .sc-tabs > * + * { margin-left: 2.4rem; }
 .no-flex-gap .bp > * + * { margin-left: calc(var(--bh) * .16); }
 .no-flex-gap .tr .nm > * + * { margin-left: calc(var(--e) * .5); }
 .no-flex-gap .rs-r > * + * { margin-left: calc(var(--u) * 2); }
@@ -26,8 +24,6 @@
 .no-flex-gap .ch > * + * { margin-left: 8rem; }
 .no-flex-gap .ch-s > * + * { margin-left: 2rem; }
 .no-flex-gap .tk-i > * + * { margin-left: 1.4rem; }
-.no-flex-gap[data-theme="flap"] .num[data-pad] > * + * { margin-left: .07em; }
-.no-flex-gap[data-theme="poster"] .ct-f > * + * { margin-left: 1.2rem; }
 /* The champion's road wraps, so every pill gets its own margin */
 .no-flex-gap .ch-road > * { margin: 0 1.2rem 1.2rem 0; }
 

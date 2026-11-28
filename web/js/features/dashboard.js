@@ -8,8 +8,8 @@
 import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
-import { DASH_LOOKS as LOOKS, icon } from './studio-core.js';
-import { popover, section, segmented } from './studio-parts.js';
+import { icon, loadSettings as loadStudio } from './studio-core.js';
+import { lookPicker, popover, section, segmented } from './studio-parts.js';
 import { presetBar } from './event-presets.js';
 
 const $ = id => document.getElementById(id);
@@ -46,7 +46,6 @@ const LAYOUTS = [
     set: { layout: 'single', boards: true, upnext: true, scenes: scenesIn('bracket', 'tables', 'results', 'leaders') },
     thumb: ['1fr / 1fr', 'a'] }
 ];
-const ACCENTS = ['#2f7bff', '#14b8a6', '#ff3b47', '#ffb000', '#a855f7', '#22c55e', '#ec4899'];
 // key, name, icon, what it tells
 const TICKER_ITEMS = [
   ['t180', '180s', 'flame', 'How many so far and who threw them'],
@@ -268,24 +267,6 @@ function screenTab() {
 }
 
 function lookTab() {
-  const looks = LOOKS.map(l => {
-    const b = h('button', { type: 'button', class: `stu-look${S.theme === l.id ? ' is-on' : ''}`, title: l.id === 'studio' ? 'Follows the look and accent colour of Studio › Look' : l.name, 'data-fk': `look-${l.id}` },
-      h('span', { class: 'dsh-sw', style: `background:${l.bg}` }, h('i', { style: `background:${l.id === 'studio' || !S.accent ? l.a : S.accent}` }), h('i', { style: `background:${l.row}` })), l.name);
-    b.addEventListener('click', () => change({ theme: l.id }));
-    return b;
-  });
-  const studio = S.theme === 'studio';
-  const own = h('input', { type: 'color', value: S.accent || '#2f7bff', 'aria-label': 'Own colour' });
-  own.addEventListener('change', () => change({ accent: own.value }));
-  const lookOwn = h('button', { type: 'button', class: `stu-btn stu-chip${S.accent ? '' : ' is-on'}`, 'aria-pressed': String(!S.accent), title: 'The look\'s own colour', 'data-c': '' }, 'Auto');
-  const accents = h('div', { class: `stu-accents${studio ? ' is-off' : ''}`, title: studio ? 'Set in Studio › Look' : '' },
-    lookOwn,
-    ...ACCENTS.map(c => h('button', { type: 'button', class: `stu-accent${S.accent === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}`, 'data-c': c })),
-    h('label', { class: `stu-accent stu-accent-custom${S.accent && !ACCENTS.includes(S.accent) ? ' is-on' : ''}`, title: 'Own colour' }, own));
-  accents.addEventListener('click', e => {
-    const b = e.target.closest('button');
-    if (b) change({ accent: b.dataset.c || '' });
-  });
   const size = v => {
     const on = (S.text || 'normal') === v;
     const b = h('button', { type: 'button', class: `stu-tile dsh-aa${on ? ' is-on' : ''}`, 'aria-pressed': String(on), title: v === 'large' ? 'Everything 15 % bigger; the bracket and tables in more pages' : 'Normal text', 'data-fk': `text-${v}` },
@@ -299,8 +280,8 @@ function lookTab() {
   safe.addEventListener('change', () => change({ safe: Number(safe.value) }));
   safe.addEventListener('pointerdown', () => page.safeFrame(Number(safe.value)));
   return [
-    section('Theme', h('div', { class: 'stu-looks dsh-looks' }, ...looks)),
-    section('Accent colour', accents),
+    // The look the Studio and the Overlay share; the TVs follow the Studio settings
+    lookPicker(),
     section('Screen', h('div', { class: 'stu-tiles' }, size('normal'), size('large'),
       tile('Calm', 'calm', 'waves', 'Nothing blinks or drifts; scenes fade instead of sliding')),
     h('label', { class: 'dsh-safe', title: 'A margin for TVs that cut off the edges' }, icon('frame', 18), safe, safeVal))
@@ -471,7 +452,7 @@ function build(host) {
 async function renderDashboard() {
   const host = $('dashboardPage');
   try {
-    const fresh = await api('/api/dashboard');
+    const [fresh] = await Promise.all([api('/api/dashboard'), loadStudio()]);
     if (S) Object.assign(S, fresh, pending); else S = fresh;
     page ||= build(host);
     page.frame.setAttribute('src', previewSrc());

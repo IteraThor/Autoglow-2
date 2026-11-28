@@ -285,11 +285,11 @@ mod tests {
 
     #[test]
     fn studio_part_keeps_only_the_event_settings() {
-        let raw = json!({"title": "Friday League", "theme": "pub", "accent": "#ff0000", "texts": {"intro_vs": "V"}, "layout": "board",
+        let raw = json!({"title": "Friday League", "theme": "pop", "accent": "#ff0000", "texts": {"intro_vs": "V"}, "layout": "board",
             "cameras": {"board": {"kind": "url", "url": "http://x"}}, "players": [{"id": "a", "name": "Ann"}], "relay_fps": 30});
         let p = studio_part(Some(&raw));
         assert_eq!(p["title"], "Friday League");
-        assert_eq!(p["theme"], "pub");
+        assert_eq!(p["theme"], "pop");
         assert_eq!(p["texts"], json!({"intro_vs": "V"}));
         for k in ["cameras", "players", "layout", "relay_fps", "dart_zoom", "auto_direct", "camera_resolution"] {
             assert!(p.get(k).is_none(), "{} must stay with the PC", k);
@@ -311,7 +311,7 @@ mod tests {
         assert_eq!(names, ["Friday League", "Championship"]);
         assert_eq!(s["active"], "p-1");
         assert_eq!(s["presets"][0]["studio"]["theme"], "autodarts");
-        assert_eq!(s["presets"][0]["dashboard"]["theme"], "flap");
+        assert!(s["presets"][0]["dashboard"].get("theme").is_none());
         assert_eq!(s["presets"][0]["dashboard"]["logo"], "");
         assert!(s["presets"][0]["studio"].get("cameras").is_none());
         assert!(clean_store(Some(&json!({"presets": []}))).is_none());

@@ -3,11 +3,11 @@
 
 use super::*;
 
-/// The settings, and the looks of the Dashboard and the Studio ("Same as …" previews them)
+/// The settings, and the Studio's look (the one all three pages share) for the preview
 fn view(settings: Obj) -> Value {
     let mut out = crate::obj! {"status" => "ok"};
     out.extend(settings);
-    out.insert("follow".into(), crate::overlay::follow());
+    out.insert("studio_look".into(), crate::overlay::studio_look());
     let d = crate::dashboard::Dashboard::new().load();
     out.insert("event".into(), json!({"title": get_str(&d, "title", ""), "subtitle": get_str(&d, "subtitle", ""), "logo": get_str(&d, "logo", "")}));
     Value::Object(out)

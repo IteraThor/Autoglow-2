@@ -35,30 +35,35 @@ export function switchRow(label, key, onToggle = null) {
 }
 
 // --- Look: theme swatches and accent colours --------------------------------------------------------
+// The one look the Studio, the Dashboard and the Overlay share: saved in the Studio settings wherever it
+// is picked. The Dashboard and Overlay pages load those settings first (core.loadSettings) and pass
+// onPick to show the change in their own preview.
 const ACCENTS = ['#1fa34a', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308'];
 
-export function lookPicker() {
+export function lookPicker({ onPick = null } = {}) {
+  const pickLook = values => { change(values); onPick?.(values); };
   const grid = h('div', { class: 'stu-looks' });
   const render = () => grid.replaceChildren(...THEMES.map(t => {
-    const btn = h('button', { type: 'button', class: `stu-look${S().theme === t.id ? ' is-on' : ''}`, title: t.name },
+    const btn = h('button', { type: 'button', class: `stu-look${S().theme === t.id ? ' is-on' : ''}`, title: t.name, 'data-fk': `look-${t.id}` },
       themeSwatch(t, S().accent), t.name);
-    btn.addEventListener('click', () => { change({ theme: t.id }); render(); });
+    btn.addEventListener('click', () => { pickLook({ theme: t.id }); render(); });
     return btn;
   }));
   const accents = h('div', { class: 'stu-accents' });
   const renderAccents = () => {
     const custom = h('input', { type: 'color', value: S().accent, 'aria-label': 'Own colour' });
-    custom.addEventListener('input', () => { change({ accent: custom.value }); render(); });
+    custom.addEventListener('input', () => { pickLook({ accent: custom.value }); render(); });
     custom.addEventListener('change', renderAccents);
     accents.replaceChildren(...ACCENTS.map(c => {
       const b = h('button', { type: 'button', class: `stu-accent${S().accent.toLowerCase() === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}` });
-      b.addEventListener('click', () => { change({ accent: c }); renderAccents(); render(); });
+      b.addEventListener('click', () => { pickLook({ accent: c }); renderAccents(); render(); });
       return b;
     }), h('label', { class: `stu-accent stu-accent-custom${ACCENTS.includes(S().accent.toLowerCase()) ? '' : ' is-on'}`, title: 'Own colour' }, custom));
   };
   render();
   renderAccents();
-  return h('div', { class: 'stu-look-picker' }, section('Look', grid), section('Accent colour', accents));
+  return h('div', { class: 'stu-look-picker', title: 'One look for Studio, Dashboard and Overlay' },
+    section('Look', grid), section('Accent colour', accents));
 }
 
 // --- Camera layout as little pictures; Auto = board while throwing, split at takeout -----------------

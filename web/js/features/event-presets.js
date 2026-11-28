@@ -6,24 +6,18 @@
 import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
-import { DASH_LOOKS, icon, THEMES } from './studio-core.js';
+import { icon, THEMES } from './studio-core.js';
 import { closePopover, popover } from './studio-parts.js';
 
 const logoUrl = name => `/api/dashboard/logo/${encodeURIComponent(name)}`;
 const initials = name => name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
 
-// The preset as a little TV in its dashboard colours, with its logo or initials
+// The preset as a little TV in its look's colours (the shared look), with its logo or initials
 export function presetTv(p, cls = '') {
   const d = p.dashboard || {};
   const st = p.studio || {};
-  let bg, accent, row;
-  if (d.theme === 'studio') {
-    const t = THEMES.find(x => x.id === st.theme) || THEMES[0];
-    [bg, accent, row] = [t.bg, st.accent || '#1fa34a', t.row === 'transparent' ? t.text : t.row];
-  } else {
-    const l = DASH_LOOKS.find(x => x.id === d.theme) || DASH_LOOKS[1];
-    [bg, accent, row] = [l.bg, d.accent || l.a, l.row];
-  }
+  const t = THEMES.find(x => x.id === st.theme) || THEMES[0];
+  const [bg, accent, row] = [t.bg, st.accent || '#1fa34a', t.row === 'transparent' ? t.text : t.row];
   return h('span', { class: `evp-tv ${cls}`, style: `--bg:${bg};--a:${accent};--row:${row}`, 'aria-hidden': 'true' },
     d.logo ? h('img', { src: logoUrl(d.logo), alt: '' }) : h('b', {}, initials(p.name)),
     h('i'), h('i'));

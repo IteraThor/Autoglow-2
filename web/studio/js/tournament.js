@@ -19,24 +19,23 @@ const screen = $('screen');
 
 // What the TVs show, set on the Dashboard page and saved on the server (/api/dashboard). layout:
 // overview (boards left, scene right), boards (a row per board), wall (the scene fills the screen,
-// boards in a strip), single (one scene at a time). theme "studio" takes the Studio's look and accent.
+// boards in a strip), single (one scene at a time). theme and accent: the Studio's look, shared by the
+// Studio, the Dashboard and the Overlay (the server adds them to /api/dashboard).
 // For trying, the address takes ?layout= and ?theme=; ?preview=1 is the Dashboard page's preview, which
 // also shows edits before they are saved.
 const DEFAULTS = {
-  layout: 'overview', theme: 'arena', accent: '', photos: true, clock: true, boards: true, upnext: true, safe: 0, title: '', subtitle: '', logo: '',
+  layout: 'overview', theme: 'autodarts', accent: '', photos: true, clock: true, boards: true, upnext: true, safe: 0, title: '', subtitle: '', logo: '',
   scenes: [{ id: 'bracket', secs: 14, on: true }, { id: 'tables', secs: 14, on: true }, { id: 'results', secs: 10, on: true }, { id: 'leaders', secs: 10, on: true }],
   ticker: true, ticker_speed: 'normal', ticker_items: {}, ticker_text: '', text: 'normal', calm: false
 };
 const LAYOUTS = ['overview', 'boards', 'wall', 'single'];
-const THEMES = ['arena', 'flap', 'poster', 'mono', 'gazette', 'blueprint', 'pop', 'worldcup'];
-// The Studio's looks, as the dashboard look closest to each
-const STUDIO_LOOK = { autodarts: 'arena', neon: 'arena', velocity: 'arena', arena: 'flap', pub: 'flap', tv: 'poster', daylight: 'poster', glass: 'poster', mono: 'mono', gazette: 'gazette', blueprint: 'blueprint', pop: 'pop', worldcup: 'worldcup' };
+const THEMES = ['autodarts', 'arena', 'mono', 'gazette', 'blueprint', 'pop', 'worldcup'];
 const query = new URLSearchParams(location.search);
 const preview = query.has('preview');
 const demo = preview ? query.get('demo') || '' : '';   // "format:state": the Dashboard page's made-up tournament
 let saved = {};          // the settings from the server
 let draft = null;        // unsaved edits from the Dashboard page (preview only)
-let studioLook = { theme: 'autodarts', accent: '' };
+let studioDraft = null;  // the look being picked right now (preview only), from the Studio settings draft
 let hold = '';           // the scene shown now ("" = the rotation): a peek, else what every TV holds
 let savedHold = '';      // what every TV holds
 let peekHold = null;     // the Dashboard page's preview: a scene shown for a moment (switched on in the rotation)
@@ -45,11 +44,8 @@ const cfg = { ...DEFAULTS };
 
 // The settings in force: saved, edits in the preview, the Studio's look, the address
 function resolveCfg() {
-  const src = { ...DEFAULTS, ...saved, ...(draft || {}) };
-  if (src.theme === 'studio') {
-    src.theme = STUDIO_LOOK[studioLook.theme] || 'arena';
-    src.accent = studioLook.accent || '';
-  }
+  const src = { ...DEFAULTS, ...saved, ...(draft || {}), ...(studioDraft || {}) };
+  if (!THEMES.includes(src.theme)) src.theme = 'autodarts';
   if (LAYOUTS.includes(query.get('layout'))) src.layout = query.get('layout');
   if (THEMES.includes(query.get('theme'))) src.theme = query.get('theme');
   src.logo = src.logo ? `/api/dashboard/logo/${encodeURIComponent(src.logo)}` : '';
@@ -222,7 +218,7 @@ function render() {
     if ($('side')) patch($('side'), sidePanel(M));
     scene(M, kind);
   }
-  syncNums(screen, cfg.theme === 'flap');
+  syncNums(screen);
   const items = cfg.ticker && kind !== 'none' ? tickerItems(M, cfg) : [];
   ticker.update(items, cfg);
   $('stage').classList.toggle('with-tk', items.length > 0);
@@ -241,11 +237,6 @@ async function loadRoster() {
       const body = await r.json();
       const st = body.data ?? body;
       roster = st.players || [];
-      const look = { theme: st.theme || 'autodarts', accent: st.accent || '' };
-      if (look.theme !== studioLook.theme || look.accent !== studioLook.accent) {
-        studioLook = look;
-        resolveCfg();
-      }
     }
   } catch (err) { /* the names still show, without pictures */ }
   setTimeout(loadRoster, ROSTER_MS);
@@ -296,6 +287,14 @@ if (preview && 'BroadcastChannel' in window) {
     else if (e.data?.type === 'hold') savedHold = e.data.scene || '';
     else if (e.data?.type === 'peek') peekHold = e.data.scene ?? null;
     setHold();
+    resolveCfg();
+    if (data) render();
+  };
+  // The shared look picked on any page of this browser (Studio, Dashboard or Overlay › Look)
+  new BroadcastChannel('autoglow-studio-draft').onmessage = e => {
+    if (e.data?.type === 'draft') studioDraft = { theme: e.data.settings.theme, accent: e.data.settings.accent };
+    else if (e.data?.type === 'clear') studioDraft = null;
+    else return;
     resolveCfg();
     if (data) render();
   };

@@ -207,34 +207,17 @@ export function icon(name, size = 20) {
   return h('span', { class: 'stu-icon', 'aria-hidden': 'true' }, document.importNode(svg, true));
 }
 
-// --- Looks, as swatches: a tiny scoreboard drawn in each look's colours (web/studio/live.css) --------
+// --- Looks, as swatches: a tiny scoreboard drawn in each look's colours ----------------------------
+// One look for the Studio, the Dashboard and the Overlay (Studio settings theme + accent, src/studio.rs
+// THEMES): web/studio/looks.css, web/studio/tournament-looks.css and chrome_extension/match.js draw them
 export const THEMES = [
   { id: 'autodarts', name: 'Autodarts', bg: '#1b2330', row: '#2a3546', text: '#e8eef6', accent: true },
-  { id: 'tv', name: 'TV', bg: '#ffffff', row: '#111111', text: '#111111' },
-  { id: 'arena', name: 'Arena', bg: '#0b0b0b', row: '#1a1608', text: '#e7c46a' },
-  { id: 'neon', name: 'Neon', bg: '#0a0614', row: 'transparent', text: '#c7a6ff', outline: '#a26bff' },
-  { id: 'velocity', name: 'Velocity', bg: '#121212', row: '#e2342d', text: '#ffffff', slant: true },
-  { id: 'glass', name: 'Glass', bg: 'rgba(160,190,220,.35)', row: 'rgba(255,255,255,.35)', text: '#0d1b2a' },
-  { id: 'pub', name: 'Pub', bg: '#2a3a2e', row: '#3a2a1a', text: '#f3ecd7', frame: '#6b4a2b' },
-  { id: 'daylight', name: 'Daylight', bg: '#f4f5f7', row: '#ffffff', text: '#1d2430' },
+  { id: 'arena', name: 'Arena', bg: '#060a14', row: '#1a2440', text: '#f5f7fc', accent: true },
   { id: 'mono', name: 'Mono', bg: '#000000', row: 'transparent', text: '#ffffff', outline: 'rgba(255,255,255,.22)' },
   { id: 'gazette', name: 'Gazette', bg: '#f4efe4', row: '#1a1814', text: '#f4efe4' },
   { id: 'blueprint', name: 'Blueprint', bg: '#12449a', row: 'transparent', text: '#eaf2ff', outline: '#eaf2ff' },
   { id: 'pop', name: 'Pop', bg: '#ffd60a', row: '#fffdf5', text: '#141414', outline: '#141414' },
   { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', row: '#4b1fa8', text: '#f7c948' }
-];
-
-// The Dashboard's TV looks as swatches (web/studio/tournament*.css); "studio" follows the look above
-export const DASH_LOOKS = [
-  { id: 'studio', name: 'Same as Studio', bg: '#1b2330', a: '#004cff', row: '#2a3546' },
-  { id: 'arena', name: 'Arena', bg: '#060a14', a: '#2f7bff', row: '#1a2440' },
-  { id: 'flap', name: 'Flap board', bg: '#09090a', a: '#ffb000', row: '#2c2c31' },
-  { id: 'poster', name: 'Poster', bg: '#efeae0', a: '#ff4a1c', row: '#14110f' },
-  { id: 'mono', name: 'Mono', bg: '#000000', a: '#ffffff', row: '#3a3a3a' },
-  { id: 'gazette', name: 'Gazette', bg: '#f4efe4', a: '#c41e1e', row: '#1a1814' },
-  { id: 'blueprint', name: 'Blueprint', bg: '#12449a', a: '#ffd23f', row: '#eaf2ff' },
-  { id: 'pop', name: 'Pop', bg: '#ffd60a', a: '#2f5bff', row: '#141414' },
-  { id: 'worldcup', name: 'World Cup', bg: '#1a0b3d', a: '#f7c948', row: '#ff4fa3' }
 ];
 
 export function themeSwatch(t, accent) {

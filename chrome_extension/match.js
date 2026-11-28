@@ -26,18 +26,14 @@
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ---------------------------------------------------------------------------
-  // Looks: the Dashboard's TV looks (web/studio/tournament-looks.css) as colours and fonts, plus
-  // Autodarts' own. light: a light page, where Autodarts' bars turn dark (the look's ink).
+  // Looks: the one look Studio, Dashboard and Overlay share (the Studio settings' theme, sent with the
+  // tournament as data.overlay.look) as colours and fonts. Autodarts: Autodarts' own. light: a light page, where Autodarts' bars turn dark (the look's ink).
   // ---------------------------------------------------------------------------
   const LOOKS = {
     autodarts: { bg: '#01040b', panel: '#1b1f29', panel2: '#292c33', ink: '#fafafa', muted: '#b5b5b5', line: 'rgb(255 255 255 / .12)', accent: '#0b55df', on: '#fff', gold: '#f7d458', live: '#ff6b84',
       fc: '"Bebas Neue",Manrope,sans-serif', fl: '"Manrope Variable",Manrope,system-ui,sans-serif', rad: 16, act: 'linear-gradient(to right bottom,#75148b,#da3954)', fonts: '' },
     arena: { bg: '#060a14', panel: '#0e1526', panel2: '#1a2440', ink: '#f5f7fc', muted: '#8d9cbd', line: 'rgba(255,255,255,.1)', accent: '#2f7bff', on: '#fff', gold: '#ffc531', live: '#ff3b47',
       fc: '"Barlow Condensed","Arial Narrow",sans-serif', fl: '"Barlow Condensed","Arial Narrow",sans-serif', rad: 12, fonts: 'Barlow+Condensed:wght@500;600;700;800' },
-    flap: { bg: '#09090a', panel: '#141416', panel2: '#1f1f23', ink: '#f7f2e4', muted: '#8e8b83', line: 'rgba(255,255,255,.09)', accent: '#ffb000', on: '#111', gold: '#ffb000', live: '#ff4d3d',
-      fc: '"Oswald","Arial Narrow",sans-serif', fl: '"JetBrains Mono",monospace', rad: 8, fonts: 'Oswald:wght@500;600;700&family=JetBrains+Mono:wght@500;700' },
-    poster: { bg: '#efeae0', panel: '#fffdf8', panel2: '#e6dfd1', ink: '#14110f', muted: '#8a8378', line: 'rgba(20,17,15,.18)', accent: '#ff4a1c', on: '#fff', gold: '#ff4a1c', live: '#ff4a1c',
-      fc: '"Anton",Impact,sans-serif', fl: '"Archivo",sans-serif', rad: 0, light: true, fonts: 'Anton&family=Archivo:wght@600;700;800' },
     mono: { bg: '#000', panel: '#0b0b0b', panel2: '#161616', ink: '#fff', muted: '#8a8a8a', line: 'rgba(255,255,255,.2)', accent: '#ffffff', on: '#000', gold: '#fff', live: '#ff4d3d',
       fc: '"Inter Tight","Helvetica Neue",Arial,sans-serif', fl: '"Inter Tight","Helvetica Neue",Arial,sans-serif', rad: 0, fonts: 'Inter+Tight:wght@400;500;700;800' },
     gazette: { bg: '#f4efe4', panel: '#faf6ec', panel2: '#e7dfcd', ink: '#1a1814', muted: '#6b6457', line: 'rgba(26,24,20,.24)', accent: '#c41e1e', on: '#fff', gold: '#c41e1e', live: '#c41e1e',
@@ -447,7 +443,7 @@
     if (!skin) { unskin(); return; }
     const sv = { bg: L.bg, panel: L.panel, panel2: L.panel2, ink: L.ink, muted: L.muted, line: L.line, accent: L.accent, on: L.on, fc: L.fc, fl: L.fl, rad: `${L.rad}px`,
       act: L.act && L.accent === LOOKS.autodarts.accent ? L.act : `linear-gradient(135deg,${L.accent},color-mix(in srgb,${L.accent} 55%,${L.bg}))`,
-      // A light page gets dark bars (the look's ink), like the Dashboard's poster and gazette rows
+      // A light page gets dark bars (the look's ink), like the Dashboard's gazette rows
       bar: L.light ? L.ink : L.panel, 'bar-ink': L.light ? L.bg : L.ink };
     for (const k of SKIN_VARS) html.style.setProperty(`--ag-${k}`, sv[k]);
     html.setAttribute('data-ag-skin', L.light ? 'light' : 'dark');
@@ -1311,7 +1307,7 @@
   // ---------------------------------------------------------------------------
   const FACE = () => ({ score: 'auto', card: 'classic', throws: 'classic', board: 'classic', frame: 'none', markers: 'look', checkout: true, target: true, moments: true, logos: true, ...((OV() || {}).face || {}) });
   /** Score › Auto: each look's own score */
-  const AUTO_SCORE = { autodarts: 'classic', arena: 'broadcast', flap: 'flap', poster: 'roll', mono: 'led', gazette: 'roll', blueprint: 'led', pop: 'roll', worldcup: 'neon' };
+  const AUTO_SCORE = { autodarts: 'classic', arena: 'broadcast', mono: 'led', gazette: 'roll', blueprint: 'led', pop: 'roll', worldcup: 'neon' };
   const scoreStyle = () => { const f = FACE().score; return f === 'auto' ? AUTO_SCORE[(OV() || {}).look] || 'classic' : f; };
   const isC = (e, c) => e && e.classList && e.classList.contains(c);
 

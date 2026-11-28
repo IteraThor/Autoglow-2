@@ -85,7 +85,7 @@ export function reset(el) {
   el._slots = undefined;
 }
 
-// --- Numbers: counting, or split-flap tiles ---------------------------------------------------------------
+// --- Numbers: counting ---------------------------------------------------------------------------------
 function count(el, from, to) {
   cancelAnimationFrame(el._raf);
   const a = Number(from);
@@ -105,30 +105,13 @@ function count(el, from, to) {
   if (b > a && el.hasAttribute('data-pop') && !calm()) el.animate([{ transform: 'none' }, { transform: 'scale(1.35)' }, { transform: 'none' }], { duration: 520, easing: EASE });
 }
 
-function flap(el, to, pad, first) {
-  const s = String(to).padStart(pad, ' ');
-  if (el.children.length !== s.length) {
-    el.innerHTML = [...s].map(() => '<span class="fl"> </span>').join('');
-    first = true;
-  }
-  [...el.children].forEach((t, i) => {
-    if (t.textContent === s[i]) return;
-    t.textContent = s[i];
-    if (!first) t.animate([{ transform: 'rotateX(-88deg)' }, { transform: 'rotateX(14deg)', offset: 0.6 }, { transform: 'none' }], { duration: 480, delay: i * 70, easing: 'cubic-bezier(.3, .7, .3, 1)', fill: 'backwards' });
-  });
-}
-
-// tiles: the look shows padded numbers (data-pad) as split-flap tiles
-export function syncNums(root, tiles) {
+export function syncNums(root) {
   for (const el of root.querySelectorAll('.num')) {
     const to = el.dataset.num;
-    const mode = tiles && +el.dataset.pad ? 'tiles' : 'text';
-    if (el._v === to && el._mode === mode) continue;
-    const from = el._mode === mode ? el._v : undefined;
+    if (el._v === to) continue;
+    const from = el._v;
     el._v = to;
-    el._mode = mode;
-    if (mode === 'tiles') flap(el, to, +el.dataset.pad, from === undefined);
-    else count(el, from, to);
+    count(el, from, to);
   }
 }
 

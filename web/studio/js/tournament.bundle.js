@@ -265,28 +265,13 @@
     el._raf = requestAnimationFrame(step);
     if (b > a && el.hasAttribute("data-pop") && !calm()) el.animate([{ transform: "none" }, { transform: "scale(1.35)" }, { transform: "none" }], { duration: 520, easing: EASE });
   }
-  function flap(el, to, pad, first) {
-    const s = String(to).padStart(pad, " ");
-    if (el.children.length !== s.length) {
-      el.innerHTML = [...s].map(() => '<span class="fl"> </span>').join("");
-      first = true;
-    }
-    [...el.children].forEach((t, i) => {
-      if (t.textContent === s[i]) return;
-      t.textContent = s[i];
-      if (!first) t.animate([{ transform: "rotateX(-88deg)" }, { transform: "rotateX(14deg)", offset: 0.6 }, { transform: "none" }], { duration: 480, delay: i * 70, easing: "cubic-bezier(.3, .7, .3, 1)", fill: "backwards" });
-    });
-  }
-  function syncNums(root, tiles) {
+  function syncNums(root) {
     for (const el of root.querySelectorAll(".num")) {
       const to = el.dataset.num;
-      const mode = tiles && +el.dataset.pad ? "tiles" : "text";
-      if (el._v === to && el._mode === mode) continue;
-      const from = el._mode === mode ? el._v : void 0;
+      if (el._v === to) continue;
+      const from = el._v;
       el._v = to;
-      el._mode = mode;
-      if (mode === "tiles") flap(el, to, +el.dataset.pad, from === void 0);
-      else count(el, from, to);
+      count(el, from, to);
     }
   }
   function flyWinners(body) {
@@ -785,7 +770,7 @@
   var screen = $("screen");
   var DEFAULTS = {
     layout: "overview",
-    theme: "arena",
+    theme: "autodarts",
     accent: "",
     photos: true,
     clock: true,
@@ -804,14 +789,13 @@
     calm: false
   };
   var LAYOUTS = ["overview", "boards", "wall", "single"];
-  var THEMES = ["arena", "flap", "poster", "mono", "gazette", "blueprint", "pop", "worldcup"];
-  var STUDIO_LOOK = { autodarts: "arena", neon: "arena", velocity: "arena", arena: "flap", pub: "flap", tv: "poster", daylight: "poster", glass: "poster", mono: "mono", gazette: "gazette", blueprint: "blueprint", pop: "pop", worldcup: "worldcup" };
+  var THEMES = ["autodarts", "arena", "mono", "gazette", "blueprint", "pop", "worldcup"];
   var query = new URLSearchParams(location.search);
   var preview = query.has("preview");
   var demo = preview ? query.get("demo") || "" : "";
   var saved = {};
   var draft = null;
-  var studioLook = { theme: "autodarts", accent: "" };
+  var studioDraft = null;
   var hold = "";
   var savedHold = "";
   var peekHold = null;
@@ -820,11 +804,8 @@
   };
   var cfg = __spreadValues({}, DEFAULTS);
   function resolveCfg() {
-    const src = __spreadValues(__spreadValues(__spreadValues({}, DEFAULTS), saved), draft || {});
-    if (src.theme === "studio") {
-      src.theme = STUDIO_LOOK[studioLook.theme] || "arena";
-      src.accent = studioLook.accent || "";
-    }
+    const src = __spreadValues(__spreadValues(__spreadValues(__spreadValues({}, DEFAULTS), saved), draft || {}), studioDraft || {});
+    if (!THEMES.includes(src.theme)) src.theme = "autodarts";
     if (LAYOUTS.includes(query.get("layout"))) src.layout = query.get("layout");
     if (THEMES.includes(query.get("theme"))) src.theme = query.get("theme");
     src.logo = src.logo ? `/api/dashboard/logo/${encodeURIComponent(src.logo)}` : "";
@@ -976,7 +957,7 @@
       if ($("side")) patch($("side"), sidePanel(M));
       scene(M, kind);
     }
-    syncNums(screen, cfg.theme === "flap");
+    syncNums(screen);
     const items = cfg.ticker && kind !== "none" ? tickerItems(M, cfg) : [];
     ticker.update(items, cfg);
     $("stage").classList.toggle("with-tk", items.length > 0);
@@ -994,11 +975,6 @@
         const body = await r.json();
         const st = (_a2 = body.data) != null ? _a2 : body;
         roster = st.players || [];
-        const look = { theme: st.theme || "autodarts", accent: st.accent || "" };
-        if (look.theme !== studioLook.theme || look.accent !== studioLook.accent) {
-          studioLook = look;
-          resolveCfg();
-        }
       }
     } catch (err) {
     }
@@ -1048,6 +1024,14 @@
       else if (((_c = e.data) == null ? void 0 : _c.type) === "hold") savedHold = e.data.scene || "";
       else if (((_d = e.data) == null ? void 0 : _d.type) === "peek") peekHold = (_e = e.data.scene) != null ? _e : null;
       setHold();
+      resolveCfg();
+      if (data) render();
+    };
+    new BroadcastChannel("autoglow-studio-draft").onmessage = (e) => {
+      var _a2, _b;
+      if (((_a2 = e.data) == null ? void 0 : _a2.type) === "draft") studioDraft = { theme: e.data.settings.theme, accent: e.data.settings.accent };
+      else if (((_b = e.data) == null ? void 0 : _b.type) === "clear") studioDraft = null;
+      else return;
       resolveCfg();
       if (data) render();
     };

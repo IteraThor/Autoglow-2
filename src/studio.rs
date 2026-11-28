@@ -18,7 +18,8 @@ pub const PROFILE_FIELDS: [(&str, usize); 12] = [
     ("favourite_double", 10), ("playing_since", 10), ("stat_average", 10), ("stat_180s", 10), ("stat_best_checkout", 10),
 ];
 const PICTURE_SLOTS: [&str; 1] = ["image"];
-const THEMES: [&str; 13] = ["autodarts", "tv", "arena", "neon", "velocity", "glass", "pub", "daylight", "mono", "gazette", "blueprint", "pop", "worldcup"];
+/// The one look the Studio, the Dashboard and the Overlay share (with the accent colour)
+pub const THEMES: [&str; 7] = ["autodarts", "arena", "mono", "gazette", "blueprint", "pop", "worldcup"];
 const LAYOUTS: [&str; 3] = ["split", "board", "player"];
 const MAX_TEXT_LENGTH: usize = 80;
 
@@ -298,7 +299,11 @@ pub fn clean_settings(raw: Option<&Value>) -> Obj {
         "idle_blur" => get_bool(r, "idle_blur", true),
         "auto_direct" => get_bool(r, "auto_direct", true),
         "layout" => pick("layout", &LAYOUTS, "split"),
-        "theme" => pick("theme", &THEMES, "autodarts"),
+        // Looks that are gone: the dark, bold ones become Arena, the rest Autodarts
+        "theme" => match r.get("theme").and_then(Value::as_str) {
+            Some("neon" | "velocity" | "pub") => "arena".to_string(),
+            _ => pick("theme", &THEMES, "autodarts"),
+        },
         "camera_resolution" => if ["480p", "720p", "1080p"].contains(&res.as_str()) { res } else { "720p".into() },
         "relay_fps" => fps,
         "dart_zoom" => clean_dart_zoom(r.get("dart_zoom")),

@@ -29,7 +29,10 @@ pub async fn rename(State(s): State<S>, Path(id): Path<String>, req: Req) -> Api
 }
 
 pub async fn activate(State(s): State<S>, Path(id): Path<String>) -> ApiResult {
-    ok(s.presets.activate(&s.studio, &s.dashboard, &id).map_err(err)?)
+    let out = s.presets.activate(&s.studio, &s.dashboard, &id).map_err(err)?;
+    // A preset brings its own look, which the boards' overlay shares
+    s.tournaments.overlay_changed();
+    ok(out)
 }
 
 pub async fn remove(State(s): State<S>, Path(id): Path<String>) -> ApiResult {

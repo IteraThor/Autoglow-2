@@ -15,7 +15,7 @@
 /* Rows: spacing sideways */
 .no-flex-gap .board-name > * + * { margin-left: 12px; }
 .no-flex-gap .visit > * + * { margin-left: 6px; }
-.no-flex-gap[data-theme="glass"] .visit > * + *, .no-flex-gap[data-theme="pop"] .visit > * + * { margin-left: 10px; }
+.no-flex-gap[data-theme="pop"] .visit > * + * { margin-left: 10px; }
 .no-flex-gap[data-theme="blueprint"] .sp-stats > * + * { margin-left: 30px; }
 .no-flex-gap[data-theme="pop"] .sp-stats > * + * { margin-left: 26px; }
 .no-flex-gap[data-theme="blueprint"] .intro-stats > * + * { margin-top: 16px; }
@@ -32,4 +32,3 @@
 .no-flex-gap .bo-row > * + * { margin-left: 20px; }
 .no-flex-gap .bo-history div > * + * { margin-left: 16px; }
 .no-flex-gap .lc-who > * + * { margin-left: 20px; }
-.no-flex-gap[data-theme="arena"] .sb-kicker > * + *, .no-flex-gap[data-theme="arena"] .sp-kicker > * + *, .no-flex-gap[data-theme="arena"] .intro-club > * + *, .no-flex-gap[data-theme="arena"] .mc-kicker > * + * { margin-left: 22px; }

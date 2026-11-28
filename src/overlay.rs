@@ -3,8 +3,8 @@
 //! studio/overlay.json on the PC that hosts the tournament; the host sends it to every board with
 //! the tournament (src/tournament/mod.rs), so all boards look the same.
 //!
-//! look: one of the Dashboard's looks, "autodarts" (Autodarts' own colours) or "dashboard"/"studio"
-//! (follow that page's look and accent). skin "page" restyles the whole Autodarts page in the look,
+//! The look and accent colour are the Studio's (one look for the Studio, the Dashboard and the
+//! Overlay, src/studio.rs THEMES); resolved() adds them. skin "page" restyles the whole Autodarts page in the look,
 //! "panels" only adds the tournament panels on top of it. style: panels, corners, motion, the page's
 //! background, the active card and the display font. landscape / portrait: each screen shape has its
 //! own parts (what is shown) and boxes (where a box was moved to on the Overlay page: x, y and width
@@ -20,9 +20,6 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-/// The looks match.js knows; "dashboard" and "studio" are resolved to one of them
-pub const LOOKS: [&str; 9] = ["autodarts", "arena", "flap", "poster", "mono", "gazette", "blueprint", "pop", "worldcup"];
-pub const FOLLOW: [&str; 2] = ["dashboard", "studio"];
 pub const SKINS: [&str; 2] = ["page", "panels"];
 /// Every part of the overlay that can be switched off, with its default
 pub const PARTS: [(&str, bool); 13] = [
@@ -56,22 +53,6 @@ const PICKS: [(&str, &[&str]); 2] = [("ticker_speed", &["normal", "slow", "fast"
 pub const NOTE_MAX: usize = 140;
 pub const INTRO_SECS: (i64, i64, i64) = (2, 4, 10);
 
-/// The Studio's looks, as the dashboard look closest to each (same as web/studio/js/tournament.js)
-fn studio_to_look(theme: &str) -> &'static str {
-    match theme {
-        "autodarts" => "autodarts",
-        "neon" | "velocity" => "arena",
-        "arena" | "pub" => "flap",
-        "tv" | "daylight" | "glass" => "poster",
-        "mono" => "mono",
-        "gazette" => "gazette",
-        "blueprint" => "blueprint",
-        "pop" => "pop",
-        "worldcup" => "worldcup",
-        _ => "arena",
-    }
-}
-
 fn file() -> PathBuf {
     project_root().join("studio").join("overlay.json")
 }
@@ -87,8 +68,6 @@ fn hex(s: &str) -> String {
 pub fn clean(v: Option<&Value>) -> Obj {
     let empty = Obj::new();
     let o = v.and_then(Value::as_object).unwrap_or(&empty);
-    let look = get_str(o, "look", "dashboard");
-    let look = if LOOKS.contains(&look.as_str()) || FOLLOW.contains(&look.as_str()) { look } else { "dashboard".into() };
     let skin = get_str(o, "skin", "page");
     // Before the screens had their own: one set of parts for both
     let old_parts = o.get("parts").and_then(Value::as_object).unwrap_or(&empty);
@@ -107,8 +86,6 @@ pub fn clean(v: Option<&Value>) -> Obj {
         face.insert(k.into(), Value::Bool(get_bool(face_in, k, d)));
     }
     let mut out = crate::obj! {
-        "look" => look,
-        "accent" => hex(&get_str(o, "accent", "")),
         "skin" => if SKINS.contains(&skin.as_str()) { skin } else { "page".into() },
         "intro_secs" => clamp(safe_int(o.get("intro_secs"), INTRO_SECS.1), INTRO_SECS.0, INTRO_SECS.2),
         "style" => style,
@@ -188,31 +165,20 @@ pub fn save(changes: &Obj) -> Result<Obj, String> {
     Ok(new)
 }
 
-/// What the Dashboard and the Studio look like now, as overlay looks: {"dashboard": {look, accent}, "studio": {...}}
-pub fn follow() -> Value {
+/// The shared look as the boards draw it: {look, accent} from the Studio's settings
+pub fn studio_look() -> Value {
     let st = crate::studio::Studio::new().load_settings();
-    let studio = json!({"look": studio_to_look(&get_str(&st, "theme", "autodarts")), "accent": hex(&get_str(&st, "accent", ""))});
-    let d = crate::dashboard::Dashboard::new().load();
-    let theme = get_str(&d, "theme", "arena");
-    let dash = if theme == "studio" { studio.clone() } else { json!({"look": theme, "accent": hex(&get_str(&d, "accent", ""))}) };
-    json!({"dashboard": dash, "studio": studio})
+    json!({"look": get_str(&st, "theme", "autodarts"), "accent": hex(&get_str(&st, "accent", ""))})
 }
 
 /// The settings as the boards use them: the look resolved, with the event's name and logo from
 /// the Dashboard. This is what goes out with the tournament.
 pub fn resolved() -> Value {
     let s = load();
-    let f = follow();
-    let mut out = Value::Object(s.clone());
-    let look = get_str(&s, "look", "dashboard");
-    if let Some(src) = f.get(look.as_str()) {
-        out["look"] = src["look"].clone();
-        // An own accent wins over the followed page's
-        if get_str(&s, "accent", "").is_empty() {
-            out["accent"] = src["accent"].clone();
-        }
-    }
-    out["choice"] = json!(look);
+    let l = studio_look();
+    let mut out = Value::Object(s);
+    out["look"] = l["look"].clone();
+    out["accent"] = l["accent"].clone();
     let d = crate::dashboard::Dashboard::new().load();
     out["title"] = json!(get_str(&d, "title", ""));
     out["subtitle"] = json!(get_str(&d, "subtitle", ""));
@@ -238,8 +204,8 @@ mod tests {
             "style": {"motion": "pop", "bg": "nope", "opacity": 5}, "clock": "both", "note": "x".repeat(300),
             "portrait": {"parts": {"race": false}, "boxes": {"header": {"x": -5, "y": 40.123, "w": 500, "s": 9}, "bogus": {"x": 1}}}});
         let c = clean(Some(&v));
-        assert_eq!(c["look"], "dashboard");
-        assert_eq!(c["accent"], "#abcdef");
+        // The look and accent are the Studio's (resolved adds them)
+        assert!(c.get("look").is_none() && c.get("accent").is_none());
         assert_eq!(c["skin"], "page");
         // The old shared parts carry over to a screen without its own
         assert_eq!(c["landscape"]["parts"]["intro"], false);
@@ -266,13 +232,5 @@ mod tests {
         assert_eq!(f["face"]["score"], "flap");
         assert_eq!(f["face"]["board"], "classic");
         assert_eq!(f["face"]["checkout"], false);
-    }
-
-    #[test]
-    fn follow_looks_and_studio_map() {
-        assert_eq!(clean(Some(&json!({"look": "studio"})))["look"], "studio");
-        assert_eq!(clean(Some(&json!({"look": "flap"})))["look"], "flap");
-        assert_eq!(studio_to_look("tv"), "poster");
-        assert_eq!(studio_to_look("whatever"), "arena");
     }
 }

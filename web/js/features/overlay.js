@@ -1,6 +1,6 @@
 // AutoGlow 2 - Overlay page: how Autodarts' match page looks on every board while it plays a Local
-// Tournament match (drawn by the Bridge, chrome_extension/match.js). The look (one of the Dashboard's,
-// or the same as the Dashboard or the Studio), the whole page restyled or only panels on top, the
+// Tournament match (drawn by the Bridge, chrome_extension/match.js). The look (the one look Studio,
+// Dashboard and Overlay share, kept in the Studio settings), the whole page restyled or only panels on top, the
 // style, and for each screen shape (landscape, portrait) its own parts and where its boxes stand.
 // Pictures instead of notes: the preview is the Bridge's own code on a stand-in match page
 // (web/studio/overlay.html) at a board screen's real size. In it a click selects a part, a drag moves
@@ -11,21 +11,19 @@
 import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
 import { toast } from '../core/toast.js';
-import { DASH_LOOKS, icon } from './studio-core.js';
-import { section, segmented } from './studio-parts.js';
+import * as studio from './studio-core.js';
+import { icon } from './studio-core.js';
+import { lookPicker, section, segmented } from './studio-parts.js';
 
 const $ = id => document.getElementById(id);
 const SAVE_DELAY_MS = 500;
 const STATUS_MS = 3000;
-const ACCENTS = ['#2f7bff', '#14b8a6', '#ff3b47', '#ffb000', '#a855f7', '#22c55e', '#ec4899'];
-// The looks: following another page, Autodarts' own, then the Dashboard's (studio-core.js swatches)
-const LOOKS = [
-  { id: 'dashboard', name: 'Same as Dashboard', follow: true },
-  { id: 'studio', name: 'Same as Studio', follow: true },
-  { id: 'autodarts', name: 'Autodarts', bg: '#01040b', a: '#0b55df', row: '#1b1f29' },
-  ...DASH_LOOKS.filter(l => l.id !== 'studio')
-];
-const SWATCH = Object.fromEntries(LOOKS.filter(l => !l.follow).map(l => [l.id, l]));
+// Each look's page and bar colours for the little pictures (chrome_extension/match.js LOOKS)
+const SWATCH = {
+  autodarts: { bg: '#01040b', row: '#1b1f29' }, arena: { bg: '#060a14', row: '#1a2440' }, mono: { bg: '#000000', row: '#3a3a3a' },
+  gazette: { bg: '#f4efe4', row: '#1a1814' }, blueprint: { bg: '#12449a', row: '#eaf2ff' }, pop: { bg: '#ffd60a', row: '#141414' },
+  worldcup: { bg: '#1a0b3d', row: '#ff4fa3' }
+};
 // key, name, icon, what it is
 const PARTS = [
   ['intro', 'Walk-on', 'play', 'Both players, full screen, when the match starts'],
@@ -142,14 +140,13 @@ function saveMark() {
 }
 
 // --- The preview ---------------------------------------------------------------------------------
-/** The settings as a board gets them: the followed look resolved, the event's name and logo */
+/** The settings as a board gets them: the shared look (Studio settings), the event's name and logo */
 function resolved() {
-  const src = S.follow?.[S.look];
   const ev = S.event || {};
   return {
     ...S,
-    look: src ? src.look : S.look,
-    accent: S.accent || (src ? src.accent : ''),
+    look: S.studio_look?.look || 'autodarts',
+    accent: S.studio_look?.accent || '',
     title: ev.title || '', subtitle: ev.subtitle || '', logo: ev.logo || '',
     logo_url: ev.logo ? `/api/dashboard/logo/${encodeURIComponent(ev.logo)}` : ''
   };
@@ -225,11 +222,6 @@ function statusChips() {
 }
 
 // --- Small controls ---------------------------------------------------------------------------------
-function lookSwatch(l) {
-  const src = l.follow ? SWATCH[S.follow?.[l.id]?.look] || SWATCH.arena : l;
-  const accent = S.accent || (l.follow ? S.follow?.[l.id]?.accent : '') || src.a;
-  return h('span', { class: `dsh-sw${l.follow ? ' ovl-follow' : ''}`, style: `background:${src.bg}` }, h('i', { style: `background:${accent}` }), h('i', { style: `background:${src.row}` }));
-}
 /** A row of picture tiles for one choice: [value, name, icon name or picture, note] */
 function choice(key, options, get, set) {
   return h('div', { class: 'stu-tiles ovl-choice' }, ...options.map(([v, name, p, note]) => {
@@ -262,29 +254,14 @@ function skinCard(id, name, note) {
 }
 
 function lookTab() {
-  const looks = LOOKS.map(l => {
-    const b = h('button', { type: 'button', class: `stu-look${S.look === l.id ? ' is-on' : ''}`, title: l.follow ? `Follows ${l.id === 'studio' ? 'Studio › Look' : 'Dashboard › Look'}` : l.name, 'data-fk': `look-${l.id}` }, lookSwatch(l), l.name);
-    b.addEventListener('click', () => change({ look: l.id }));
-    return b;
-  });
-  const own = h('input', { type: 'color', value: S.accent || '#2f7bff', 'aria-label': 'Own colour' });
-  own.addEventListener('change', () => change({ accent: own.value }));
-  const auto = h('button', { type: 'button', class: `stu-btn stu-chip${S.accent ? '' : ' is-on'}`, 'aria-pressed': String(!S.accent), title: 'The look\'s own colour', 'data-c': '' }, 'Auto');
-  const accents = h('div', { class: 'stu-accents' }, auto,
-    ...ACCENTS.map(c => h('button', { type: 'button', class: `stu-accent${S.accent === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}`, 'data-c': c })),
-    h('label', { class: `stu-accent stu-accent-custom${S.accent && !ACCENTS.includes(S.accent) ? ' is-on' : ''}`, title: 'Own colour' }, own));
-  accents.addEventListener('click', e => {
-    const b = e.target.closest('button');
-    if (b) change({ accent: b.dataset.c || '' });
-  });
   const st = S.style || {};
   const font = (v, name, family) => [v, name, h('b', { class: 'ovl-aa', style: family ? `font-family:${family}` : '' }, 'Aa')];
   return [
     section('Screen', h('div', { class: 'dsh-presets ovl-skins' },
       skinCard('page', 'Whole page', 'Autodarts\' page turns into the tournament\'s: background, player cards, bars and buttons in the look'),
       skinCard('panels', 'Panels only', 'Autodarts\' page stays as it is; the tournament panels go around it'))),
-    section('Look', h('div', { class: 'stu-looks dsh-looks' }, ...looks)),
-    section('Accent colour', accents),
+    // The look Studio and Dashboard share: picked here, it changes there too
+    lookPicker({ onPick: () => { S.studio_look = { look: studio.settings.theme, accent: studio.settings.accent }; sendPreview(); } }),
     section('Big letters', choice('font', [font('look', 'Look'), font('bebas', 'Bebas', '"Bebas Neue"'), font('oswald', 'Oswald', 'Oswald'), font('anton', 'Anton', 'Anton'),
       font('unbounded', 'Unbounded', 'Unbounded'), font('serif', 'Serif', '"DM Serif Display",serif'), font('black', 'Black', '"Archivo Black"')], () => st.font || 'look', v => change({ style: { font: v } })))
   ];
@@ -409,7 +386,7 @@ function layoutTab() {
 
 // Score & board: Autodarts' own parts, each choice a little picture of itself
 const FACE_DEFAULT = { score: 'auto', card: 'classic', throws: 'classic', board: 'classic', frame: 'none', markers: 'look', checkout: true, target: true, moments: true, logos: true };
-const FACE_AUTO = { autodarts: 'classic', arena: 'broadcast', flap: 'flap', poster: 'roll', mono: 'led', gazette: 'roll', blueprint: 'led', pop: 'roll', worldcup: 'neon' };
+const FACE_AUTO = { autodarts: 'classic', arena: 'broadcast', mono: 'led', gazette: 'roll', blueprint: 'led', pop: 'roll', worldcup: 'neon' };
 const SEG7 = { 1: 'bc', 4: 'fgbc', 0: 'abcdef' };
 const segDigit = n => h('i', { class: 'ovl-7' }, ...'abcdefg'.split('').map(k => h('b', { class: `g-${k}${SEG7[n].includes(k) ? ' on' : ''}` })));
 function scorePic(style) {
@@ -429,7 +406,7 @@ const BOARD_PIC = {
 };
 function boardPic(k) {
   const src = SWATCH[resolved().look] || SWATCH.autodarts;
-  const [r, g, d, l, sur] = k === 'look' ? [S.accent || src.a, '#d9d9d9', src.row, '#cfcfcf', src.bg] : BOARD_PIC[k];
+  const [r, g, d, l, sur] = k === 'look' ? [resolved().accent || '#3b82f6', '#d9d9d9', src.row, '#cfcfcf', src.bg] : BOARD_PIC[k];
   return h('span', { class: `ovl-bd b-${k}`, 'aria-hidden': 'true', style: `--r:${r};--g:${g};--d:${d};--l:${l};--sur:${sur}` });
 }
 const framePic = k => h('span', { class: `ovl-bd ovl-fr f-${k}`, 'aria-hidden': 'true', style: '--r:#E72946;--g:#009856;--d:#01040B;--l:#EAD3C4;--sur:#060C1A' });
@@ -550,7 +527,7 @@ function build(host) {
 async function renderOverlay() {
   const host = $('overlayPage');
   try {
-    const fresh = await api('/api/overlay');
+    const [fresh] = await Promise.all([api('/api/overlay'), studio.loadSettings()]);
     if (S) Object.assign(S, fresh, pending); else S = fresh;
     if (!page) { previewReady = false; page = build(host); }
     page.refresh(true);

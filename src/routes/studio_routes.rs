@@ -53,6 +53,10 @@ pub async fn get_studio(State(s): State<S>, req: Req) -> ApiResult {
 pub async fn post_studio(State(s): State<S>, req: Req) -> ApiResult {
     let data = req.json()?;
     let settings = s.studio.save_settings(&data).map_err(AppError::persistence)?;
+    // The look is shared with the Overlay: the boards of a tournament this PC hosts follow at once
+    if data.contains_key("theme") || data.contains_key("accent") {
+        s.tournaments.overlay_changed();
+    }
     let mut out = crate::obj! {"status" => "ok"};
     out.extend(settings);
     out.extend(studio::text_info());

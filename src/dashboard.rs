@@ -12,8 +12,6 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 pub const LAYOUTS: [&str; 4] = ["overview", "boards", "wall", "single"];
-/// "studio": the look and accent the Studio uses
-pub const THEMES: [&str; 9] = ["arena", "flap", "poster", "mono", "gazette", "blueprint", "pop", "worldcup", "studio"];
 pub const PRESETS: [&str; 6] = ["overview", "boards", "wall", "standings", "minimal", "custom"];
 /// The scenes the dashboard rotates through, with their default seconds
 pub const SCENES: [(&str, i64); 4] = [("bracket", 14), ("tables", 14), ("results", 10), ("leaders", 10)];
@@ -62,9 +60,6 @@ fn text(o: &Obj, key: &str, max: usize) -> String {
 pub fn clean(v: Option<&Value>) -> Obj {
     let empty = Obj::new();
     let o = v.and_then(Value::as_object).unwrap_or(&empty);
-    let accent = get_str(o, "accent", "");
-    let hex = accent.len() == 7 && accent.starts_with('#') && accent[1..].chars().all(|c| c.is_ascii_hexdigit());
-    let accent = if hex { accent.to_lowercase() } else { String::new() };
     let logo = get_str(o, "logo", "");
     // Each scene once, in the order given; scenes not given keep their default at the end
     let mut scenes: Vec<Value> = Vec::new();
@@ -100,8 +95,6 @@ pub fn clean(v: Option<&Value>) -> Obj {
     crate::obj! {
         "preset" => pick(o, "preset", &PRESETS, "overview"),
         "layout" => pick(o, "layout", &LAYOUTS, "overview"),
-        "theme" => pick(o, "theme", &THEMES, "arena"),
-        "accent" => accent,
         "photos" => get_bool(o, "photos", true),
         "clock" => get_bool(o, "clock", true),
         "boards" => get_bool(o, "boards", true),
@@ -188,12 +181,12 @@ mod tests {
 
     #[test]
     fn clean_keeps_known_values_and_fills_defaults() {
-        let v = json!({"layout": "wall", "theme": "nope", "accent": "#FF8800", "safe": 9, "title": " Friday ",
+        let v = json!({"layout": "wall", "theme": "flap", "accent": "#FF8800", "safe": 9, "title": " Friday ",
             "logo": "../x.png", "scenes": [{"id": "results", "secs": 2, "on": false}, {"id": "bogus"}, {"id": "results"}], "extra": 1});
         let c = clean(Some(&v));
         assert_eq!(c["layout"], "wall");
-        assert_eq!(c["theme"], "arena");
-        assert_eq!(c["accent"], "#ff8800");
+        // The look is the Studio's (src/studio.rs THEMES)
+        assert!(c.get("theme").is_none() && c.get("accent").is_none());
         assert_eq!(c["safe"], 5);
         assert_eq!(c["title"], "Friday");
         assert_eq!(c["logo"], "");
