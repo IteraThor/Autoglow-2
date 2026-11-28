@@ -46,7 +46,7 @@ const FACE: [(&str, &[&str]); 6] = [
     ("score", &["auto", "classic", "broadcast", "flap", "roll", "led", "neon"]),
     ("card", &["classic", "strip", "lower", "minimal"]),
     ("throws", &["classic", "tiles"]),
-    ("board", &["classic", "look", "mono", "neon", "wire"]),
+    ("board", &["classic", "look", "mono", "neon", "wire", "gold"]),
     ("frame", &["none", "leds", "rings"]),
     ("markers", &["look", "classic"]),
 ];

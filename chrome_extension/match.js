@@ -244,6 +244,7 @@
   .brd .fr.rings .rg{fill:none;stroke:var(--accent);stroke-width:8;filter:drop-shadow(0 0 12px var(--accent))}
   .brd .fr.rings .rg2{fill:none;stroke:color-mix(in srgb,var(--accent) 50%,transparent);stroke-width:3}
   .brd.party .fr.rings .rg{stroke:var(--gold);animation:party .3s steps(2) infinite}
+  .brd .rim{fill:none;stroke:#c8955a;stroke-width:9}
   .brd .mk circle{fill:var(--accent);stroke:#fff;stroke-width:4;filter:drop-shadow(0 2px 4px #000a)}
   .brd .mk text{fill:var(--on);font:800 21px var(--fl);text-anchor:middle}
   .mo{position:fixed;z-index:6;pointer-events:none;text-align:center;white-space:nowrap;animation:mo 2.3s cubic-bezier(.2,1.2,.3,1) forwards}
@@ -1456,6 +1457,7 @@
     if (kind === 'mono') return ['#f2f2f2', '#8c8c8c', '#0b0b0b', '#3a3a3a', '#5a5a5a', '#000', '#bdbdbd'];
     if (kind === 'neon') return ['#ff2bd6', '#19f0ff', '#05060c', '#141b30', '#2c3d6e', '#030409', '#9fb3ff'];
     if (kind === 'wire') return ['#ffd23f', '#eaf2ff', '#0a2a5e', '#0e3878', '#9fc0f5', '#08224d', '#eaf2ff'];
+    if (kind === 'gold') return ['#f43c30', '#20ad4b', '#2a2a2a', '#4b4f52', '#c8955a', '#2e2e2e', '#e3a55f'];
     const gold = L.gold !== L.accent ? L.gold : `color-mix(in srgb,${L.accent} 45%,${L.ink})`;
     return L.light ? [L.accent, gold, L.ink, L.panel, L.muted, L.ink, L.bg]
       : [L.accent, gold, `color-mix(in srgb,${L.bg} 70%,#000)`, `color-mix(in srgb,${L.ink} 78%,${L.bg})`, L.muted, L.bg, L.muted];
@@ -1685,13 +1687,15 @@
     const frame = F.frame === 'leds' ? Array.from({ length: 60 }, (_, i) => { const a = i * Math.PI / 30; return `<circle cx="${(488 * Math.sin(a)).toFixed(1)}" cy="${(-488 * Math.cos(a)).toFixed(1)}" r="6" style="animation-delay:${(i * 0.05).toFixed(2)}s"/>`; }).join('')
       : F.frame === 'rings' ? '<circle r="494" class="rg"/><circle r="384" class="rg2"/>' : '';
     const tg = F.target && target ? targetPath(target) : '';
-    const svg = `<svg viewBox="-500 -500 1000 1000"><g class="fr ${F.frame}">${frame}</g><g class="tg">${tg}</g><g class="mk">${marks.map(([x, y], i) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="17"/><text y="7">${i + 1}</text></g>`).join('')}</g></svg>`;
+    // The Gold board's metal rim round the numbers
+    const rim = F.board === 'gold' ? '<circle r="486" class="rim"/>' : '';
+    const svg = `<svg viewBox="-500 -500 1000 1000">${rim}<g class="fr ${F.frame}">${frame}</g><g class="tg">${tg}</g><g class="mk">${marks.map(([x, y], i) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><circle r="17"/><text y="7">${i + 1}</text></g>`).join('')}</g></svg>`;
     html(el, svg);
     el.style.left = `${Math.round(b.left)}px`;
     el.style.top = `${Math.round(b.top)}px`;
     el.style.width = `${Math.round(b.width)}px`;
     el.style.height = `${Math.round(b.height)}px`;
-    el.classList.toggle('on', !!(frame || tg || marks.length));
+    el.classList.toggle('on', !!(rim || frame || tg || marks.length));
   }
 
   /** 180, 140+, 100+, bust and the leg's last dart: big over the board for a moment */

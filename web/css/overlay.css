@@ -130,6 +130,7 @@
 .ovl-bd { position: relative; display: block; width: 30px; height: 30px; border-radius: 50%;
   background: radial-gradient(circle, var(--r) 0 7%, var(--g) 7% 14%, transparent 14% 53%, var(--r) 53% 59%, transparent 59% 89%, var(--g) 89% 95%, var(--sur) 95%),
     repeating-conic-gradient(from -9deg, var(--d) 0 18deg, var(--l) 18deg 36deg); }
+.ovl-bd.b-gold { box-shadow: inset 0 0 0 1.5px #c8955a; }
 .ovl-fr.f-leds { box-shadow: 0 0 0 2px #0b1530, 0 0 0 4px transparent; outline: 2px dotted var(--accent-primary); outline-offset: 1px; }
 .ovl-fr.f-rings { box-shadow: 0 0 0 2px var(--accent-primary), 0 0 8px 2px var(--accent-primary); }
 .ovl-fr.f-none { opacity: .85; }

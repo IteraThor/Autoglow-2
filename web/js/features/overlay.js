@@ -48,12 +48,18 @@ const BOXES = [['header', 'Stage', 'header'], ['race', 'Legs', 'race'], ['runL',
   ['next', 'Up next', 'next'], ['winner', 'Winner', 'winner'], ['clock', 'Clock', 'clock'], ['note', 'Note', 'note']];
 const BOX = Object.fromEntries(BOXES.map(b => [b[0], b]));
 const SCENES = [{ value: 'intro', icon: 'play', title: 'Walk-on: the match starts' }, { value: 'play', icon: 'target', title: 'Playing' }, { value: 'won', icon: 'trophy', title: 'Won' }];
-const ORIENTS = [{ value: 'landscape', icon: 'tv', title: 'Landscape screen' }, { value: 'portrait', icon: 'frame', title: 'Portrait screen' }];
+const ORIENTS = [{ value: 'landscape', icon: 'landscape', title: 'Landscape screen' }, { value: 'portrait', icon: 'portrait', title: 'Portrait screen' }];
 const FORMATS = [{ value: 'ko', label: 'KO', title: 'A knockout match' }, { value: 'groups', label: 'Groups', title: 'A group match' }];
-// Board screens the preview can be
-const SIZES = {
-  landscape: [[1920, 1080], [1600, 900], [1280, 720]],
-  portrait: [[1080, 1920], [800, 1280], [720, 1280]]
+// Board screens the preview can be: the screen this page runs on first, then common ones
+const COMMON_SIZES = {
+  landscape: [[1920, 1080], [2560, 1440]],
+  portrait: [[1080, 1920], [1440, 2560]]
+};
+const sizesFor = orient => {
+  const long = Math.max(window.screen.width, window.screen.height) || 1920;
+  const short = Math.min(window.screen.width, window.screen.height) || 1080;
+  const own = orient === 'portrait' ? [short, long] : [long, short];
+  return [own, ...COMMON_SIZES[orient].filter(([w, hh]) => w !== own[0] || hh !== own[1])];
 };
 const ORIENT_NAME = { landscape: 'Landscape', portrait: 'Portrait' };
 // Ready-made sets of parts (where the boxes stand is left to the layout, or to you)
@@ -73,7 +79,7 @@ let page = null;
 let statusTimer = null;
 let tab = 'look';
 let picked = null;          // the part selected in the preview: { key, part, box, moved }
-let view = { orient: 'landscape', scene: 'play', format: 'ko', size: { landscape: 1, portrait: 0 }, grid: false };
+let view = { orient: 'landscape', scene: 'play', format: 'ko', size: {}, grid: false };
 try { Object.assign(view, JSON.parse(localStorage.getItem(viewKey)) || {}); } catch (err) { /* defaults */ }
 
 // --- Saving -------------------------------------------------------------------------------------
@@ -157,7 +163,9 @@ function sendPreview(replay = false, select, moment) {
   if (moment) msg.moment = moment;
   win.postMessage(msg, location.origin);
 }
-const screenSize = () => SIZES[view.orient][view.size?.[view.orient] ?? 0] || SIZES[view.orient][0];
+// The picked size is kept as "1920x1080"; anything else (or none) means this screen
+const sizeIndex = () => Math.max(0, sizesFor(view.orient).findIndex(([w, hh]) => `${w}x${hh}` === view.size?.[view.orient]));
+const screenSize = () => sizesFor(view.orient)[sizeIndex()];
 function setView(patch) {
   view = { ...view, ...patch };
   try { localStorage.setItem(viewKey, JSON.stringify(view)); } catch (err) { /* not remembered */ }
@@ -416,12 +424,13 @@ const BOARD_PIC = {
   classic: ['#E72946', '#009856', '#01040B', '#EAD3C4', '#060C1A'],
   mono: ['#f2f2f2', '#8c8c8c', '#0b0b0b', '#3a3a3a', '#000'],
   neon: ['#ff2bd6', '#19f0ff', '#05060c', '#141b30', '#030409'],
-  wire: ['#ffd23f', '#eaf2ff', '#0a2a5e', '#0e3878', '#08224d']
+  wire: ['#ffd23f', '#eaf2ff', '#0a2a5e', '#0e3878', '#08224d'],
+  gold: ['#f43c30', '#20ad4b', '#2a2a2a', '#4b4f52', '#2e2e2e']
 };
 function boardPic(k) {
   const src = SWATCH[resolved().look] || SWATCH.autodarts;
   const [r, g, d, l, sur] = k === 'look' ? [S.accent || src.a, '#d9d9d9', src.row, '#cfcfcf', src.bg] : BOARD_PIC[k];
-  return h('span', { class: 'ovl-bd', 'aria-hidden': 'true', style: `--r:${r};--g:${g};--d:${d};--l:${l};--sur:${sur}` });
+  return h('span', { class: `ovl-bd b-${k}`, 'aria-hidden': 'true', style: `--r:${r};--g:${g};--d:${d};--l:${l};--sur:${sur}` });
 }
 const framePic = k => h('span', { class: `ovl-bd ovl-fr f-${k}`, 'aria-hidden': 'true', style: '--r:#E72946;--g:#009856;--d:#01040B;--l:#EAD3C4;--sur:#060C1A' });
 const markPic = k => h('span', { class: `ovl-mk m-${k}`, 'aria-hidden': 'true' }, h('i', {}, k === 'look' ? '1' : ''), h('i', {}, k === 'look' ? '2' : ''));
@@ -452,10 +461,10 @@ function faceTab() {
     section('Player cards', choice('fcard', [['classic', 'Autodarts', cardPic('classic')], ['strip', 'Strip', cardPic('strip')], ['lower', 'Lower third', cardPic('lower')], ['minimal', 'Minimal', cardPic('minimal')]],
       () => f.card, set('card'))),
     section('Darts', choice('fthrows', [['classic', 'Autodarts', throwPic('classic')], ['tiles', 'Tiles', throwPic('tiles')]], () => f.throws, set('throws'))),
-    section('Dartboard', choice('fboard', [['classic', 'Autodarts', boardPic('classic')], ['look', 'Look', boardPic('look')], ['mono', 'Mono', boardPic('mono')], ['neon', 'Neon', boardPic('neon')], ['wire', 'Blueprint', boardPic('wire')]],
-      () => f.board, set('board')),
-    choice('fframe', [['none', 'No frame', framePic('none')], ['leds', 'Lights', framePic('leds')], ['rings', 'Rings', framePic('rings')]], () => f.frame, set('frame')),
-    choice('fmarkers', [['look', 'Darts 1-2-3', markPic('look')], ['classic', 'Autodarts darts', markPic('classic')]], () => f.markers, set('markers'))),
+    section('Dartboard', choice('fboard', [['classic', 'Autodarts', boardPic('classic')], ['look', 'Look', boardPic('look')], ['mono', 'Mono', boardPic('mono')], ['neon', 'Neon', boardPic('neon')], ['wire', 'Blueprint', boardPic('wire')], ['gold', 'Gold', boardPic('gold')]],
+      () => f.board, set('board'))),
+    section('Board frame', choice('fframe', [['none', 'No frame', framePic('none')], ['leds', 'Lights', framePic('leds')], ['rings', 'Rings', framePic('rings')]], () => f.frame, set('frame'))),
+    section('Hit markers', choice('fmarkers', [['look', 'Darts 1-2-3', markPic('look')], ['classic', 'Autodarts darts', markPic('classic')]], () => f.markers, set('markers'))),
     section('Extras', h('div', { class: 'stu-tiles ovl-tiles' }, ...toggles),
       h('div', { class: 'ovl-row' }, showMoment('180', 'Show 180', 'flame'), showMoment('bust', 'Show bust', 'minus'), showMoment('leg', 'Show game shot', 'trophy')))
   ];
@@ -506,8 +515,8 @@ function build(host) {
   const scenes = segmented(SCENES, view.scene, v => setView({ scene: v }), 'Moment');
   const sizes = h('div', { class: 'ovl-sizes' });
   sizes.update = () => {
-    const seg = segmented(SIZES[view.orient].map(([w, hh], i) => ({ value: String(i), label: `${w}×${hh}`, title: 'A board screen of this size' })), String(view.size?.[view.orient] ?? 0),
-      v => setView({ size: { ...view.size, [view.orient]: Number(v) } }), 'Screen size');
+    const seg = segmented(sizesFor(view.orient).map(([w, hh], i) => ({ value: String(i), label: `${w}×${hh}`, title: i ? 'A board screen of this size' : 'This screen' })), String(sizeIndex()),
+      v => { const [w, hh] = sizesFor(view.orient)[Number(v)]; setView({ size: { ...view.size, [view.orient]: Number(v) ? `${w}x${hh}` : null } }); }, 'Screen size');
     sizes.replaceChildren(seg);
   };
   sizes.update();
