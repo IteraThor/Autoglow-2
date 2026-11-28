@@ -1,10 +1,11 @@
 //! Event presets: one saved setup per event (Friday League, Club Championship …) for the Studio
-//! broadcast and the Local Tournament dashboard together: names, logo, looks, texts, TV screens and
+//! broadcast, the Local Tournament dashboard and the boards' overlay together: names, logo, looks, texts, TV screens and
 //! ticker. Kept in studio/presets.json. The active preset is the live settings themselves: edits go
 //! there, and the live settings are copied into it before switching away, so nothing is lost.
 //! Cameras, players and camera settings stay with the PC.
 
 use crate::dashboard::{self, Dashboard};
+use crate::overlay;
 use crate::py::*;
 use crate::studio::{self, Studio};
 use log::warn;
@@ -14,8 +15,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// The Studio settings an event preset holds; the rest belongs to the PC (cameras, players)
-pub const STUDIO_KEYS: [&str; 12] = [
-    "title", "subtitle", "accent", "theme", "texts", "hidden_texts", "show_player_card", "show_checkout", "show_dartboard", "show_intro", "show_overlay",
+pub const STUDIO_KEYS: [&str; 13] = [
+    "title", "subtitle", "accent", "theme", "look_sync", "texts", "hidden_texts", "show_player_card", "show_checkout", "show_dartboard", "show_intro", "show_overlay",
     "idle_blur",
 ];
 const MAX_NAME: usize = 40;
@@ -63,7 +64,12 @@ pub fn clean_store(raw: Option<&Value>) -> Option<Obj> {
         if !valid_id(&id) || name.is_empty() || presets.iter().any(|x| x["id"] == id.as_str()) {
             continue;
         }
-        presets.push(json!({"id": id, "name": name, "studio": studio_part(p.get("studio")), "dashboard": dashboard::clean(p.get("dashboard"))}));
+        let mut preset = json!({"id": id, "name": name, "studio": studio_part(p.get("studio")), "dashboard": dashboard::clean(p.get("dashboard"))});
+        // Presets from before the Overlay was in them have none: switching to one leaves the Overlay as it is
+        if p.get("overlay").is_some_and(Value::is_object) {
+            preset["overlay"] = Value::Object(overlay::preset_part(p.get("overlay")));
+        }
+        presets.push(preset);
     }
     if presets.is_empty() {
         return None;
@@ -136,8 +142,8 @@ impl EventPresets {
     }
 
     /// The live settings as a preset's parts
-    fn live(studio: &Studio, dash: &Dashboard) -> (Obj, Obj) {
-        (studio_part(Some(&Value::Object(studio.load_settings()))), dash.load())
+    fn live(studio: &Studio, dash: &Dashboard) -> (Obj, Obj, Obj) {
+        (studio_part(Some(&Value::Object(studio.load_settings()))), dash.load(), overlay::preset_part(Some(&Value::Object(overlay::load()))))
     }
 
     /// The stored presets; the first time a "Standard" one made from the live settings
@@ -145,20 +151,21 @@ impl EventPresets {
         if let Some(s) = read() {
             return Ok(s);
         }
-        let (st, da) = Self::live(studio, dash);
-        let store = crate::obj! {"active" => "p-first", "presets" => vec![json!({"id": "p-first", "name": FIRST_NAME, "studio": st, "dashboard": da})]};
+        let (st, da, ov) = Self::live(studio, dash);
+        let store = crate::obj! {"active" => "p-first", "presets" => vec![json!({"id": "p-first", "name": FIRST_NAME, "studio": st, "dashboard": da, "overlay": ov})]};
         write(&store)?;
         Ok(store)
     }
 
     /// Copy the live settings into the active preset; returns the logo it held before
     fn capture(store: &mut Obj, studio: &Studio, dash: &Dashboard) -> String {
-        let (st, da) = Self::live(studio, dash);
+        let (st, da, ov) = Self::live(studio, dash);
         let active = get_str(store, "active", "");
         let Some(p) = find(store, &active) else { return String::new() };
         let old_logo = p["dashboard"]["logo"].as_str().unwrap_or("").to_string();
         p["studio"] = Value::Object(st);
         p["dashboard"] = Value::Object(da);
+        p["overlay"] = Value::Object(ov);
         old_logo
     }
 
@@ -176,17 +183,21 @@ impl EventPresets {
     fn apply(preset: &Value, studio: &Studio, dash: &Dashboard) -> Result<(), String> {
         studio.save_settings(&obj_or_empty(preset.get("studio")))?;
         dash.save(&obj_or_empty(preset.get("dashboard")))?;
+        if let Some(ov) = preset.get("overlay").and_then(Value::as_object) {
+            overlay::save(ov)?;
+        }
         Ok(())
     }
 
     /// The presets for the page; the active one shows the live settings
     fn view(store: &Obj, studio: &Studio, dash: &Dashboard) -> Value {
         let mut out = store.clone();
-        let (st, da) = Self::live(studio, dash);
+        let (st, da, ov) = Self::live(studio, dash);
         let active = get_str(store, "active", "");
         if let Some(p) = find(&mut out, &active) {
             p["studio"] = Value::Object(st);
             p["dashboard"] = Value::Object(da);
+            p["overlay"] = Value::Object(ov);
         }
         out.insert("status".into(), json!("ok"));
         Value::Object(out)
@@ -213,9 +224,9 @@ impl EventPresets {
             return Err(PresetError::Invalid(format!("There is already a preset called {}", name)));
         }
         let old_logo = Self::capture(&mut store, studio, dash);
-        let (st, da) = Self::live(studio, dash);
+        let (st, da, ov) = Self::live(studio, dash);
         let id = new_id(&store);
-        presets_mut(&mut store).push(json!({"id": id, "name": name, "studio": st, "dashboard": da}));
+        presets_mut(&mut store).push(json!({"id": id, "name": name, "studio": st, "dashboard": da, "overlay": ov}));
         store.insert("active".into(), json!(id));
         write(&store)?;
         Self::prune(&store, dash, &[old_logo]);
@@ -304,16 +315,21 @@ mod tests {
             {"id": "p-1", "name": "Twice"},
             {"id": "bad id!", "name": "X"},
             {"id": "p-2", "name": ""},
-            {"id": "p-3", "name": "Championship"}
+            {"id": "p-3", "name": "Championship", "overlay": {"look": "pop", "casual": true}}
         ]});
         let s = clean_store(Some(&raw)).unwrap();
         let names: Vec<&str> = s["presets"].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
         assert_eq!(names, ["Friday League", "Championship"]);
         assert_eq!(s["active"], "p-1");
         assert_eq!(s["presets"][0]["studio"]["theme"], "autodarts");
-        assert!(s["presets"][0]["dashboard"].get("theme").is_none());
+        // A look that is gone: the Dashboard's default
+        assert_eq!(s["presets"][0]["dashboard"]["theme"], "arena");
+        // Stored before the Overlay was in presets: none, so switching leaves the Overlay alone
+        assert!(s["presets"][0].get("overlay").is_none());
         assert_eq!(s["presets"][0]["dashboard"]["logo"], "");
         assert!(s["presets"][0]["studio"].get("cameras").is_none());
+        assert_eq!(s["presets"][1]["overlay"]["look"], "pop");
+        assert!(s["presets"][1]["overlay"].get("casual").is_none(), "casual stays with the PC");
         assert!(clean_store(Some(&json!({"presets": []}))).is_none());
         assert!(clean_store(None).is_none());
     }

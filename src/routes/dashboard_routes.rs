@@ -6,14 +6,14 @@ use crate::dashboard;
 use axum::body::Body;
 use axum::extract::Path;
 
-/// The settings, the shared look (the Studio's theme and accent, the same on Studio, Dashboard and
-/// Overlay), what the TVs hold now and the address to open on a TV
+/// The settings with the look in force (its own, or the shared one: src/look.rs), what the TVs hold
+/// now and the address to open on a TV
 fn view(s: &S, req: &Req, settings: crate::py::Obj) -> Value {
     let mut out = crate::obj! {"status" => "ok"};
     out.extend(settings);
-    let look = crate::overlay::studio_look();
-    out.insert("theme".into(), look["look"].clone());
-    out.insert("accent".into(), look["accent"].clone());
+    let (theme, accent) = crate::look::of("dashboard");
+    out.insert("theme".into(), json!(theme));
+    out.insert("accent".into(), json!(accent));
     out.insert("hold".into(), s.dashboard.hold.lock().unwrap().clone());
     let ip = studio_routes::lan_ip();
     let port = req.header("host").and_then(|h| h.rsplit_once(':')).and_then(|(_, p)| p.parse::<u16>().ok()).unwrap_or(80);

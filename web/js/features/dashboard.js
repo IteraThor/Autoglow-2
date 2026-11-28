@@ -280,8 +280,8 @@ function lookTab() {
   safe.addEventListener('change', () => change({ safe: Number(safe.value) }));
   safe.addEventListener('pointerdown', () => page.safeFrame(Number(safe.value)));
   return [
-    // The look the Studio and the Overlay share; the TVs follow the Studio settings
-    lookPicker(),
+    // The look: the same on Studio, Dashboard and Overlay, or the TVs' own
+    lookPicker({ page: 'dashboard', onPick: v => { Object.assign(S, v.dashboard); draft(); } }),
     section('Screen', h('div', { class: 'stu-tiles' }, size('normal'), size('large'),
       tile('Calm', 'calm', 'waves', 'Nothing blinks or drifts; scenes fade instead of sliding')),
     h('label', { class: 'dsh-safe', title: 'A margin for TVs that cut off the edges' }, icon('frame', 18), safe, safeVal))

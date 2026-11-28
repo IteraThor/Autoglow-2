@@ -23,6 +23,7 @@ mod flow_runtime;
 mod game_flow;
 mod http;
 mod led_thread;
+mod look;
 mod legacy_cleanup;
 mod models;
 mod overlay;

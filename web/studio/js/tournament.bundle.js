@@ -1029,7 +1029,7 @@
     };
     new BroadcastChannel("autoglow-studio-draft").onmessage = (e) => {
       var _a2, _b;
-      if (((_a2 = e.data) == null ? void 0 : _a2.type) === "draft") studioDraft = { theme: e.data.settings.theme, accent: e.data.settings.accent };
+      if (((_a2 = e.data) == null ? void 0 : _a2.type) === "draft") studioDraft = e.data.settings.look_sync === false ? null : { theme: e.data.settings.theme, accent: e.data.settings.accent };
       else if (((_b = e.data) == null ? void 0 : _b.type) === "clear") studioDraft = null;
       else return;
       resolveCfg();

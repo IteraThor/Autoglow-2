@@ -553,3 +553,16 @@ pub async fn camera_video(State(s): State<S>, req: Req) -> ApiResult {
     r.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
     Ok(r)
 }
+
+/// The look of the Studio, the Dashboard and the Overlay, and whether it is the same on all three
+/// (src/look.rs)
+pub async fn get_look() -> ApiResult {
+    ok(crate::look::view())
+}
+
+pub async fn post_look(State(s): State<S>, req: Req) -> ApiResult {
+    let out = crate::look::set(&s.studio, &s.dashboard, &req.json()?).map_err(AppError::validation)?;
+    // The boards of a tournament this PC hosts follow at once
+    s.tournaments.overlay_changed();
+    ok(out)
+}

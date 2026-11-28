@@ -1,7 +1,9 @@
 // AutoGlow 2 - Studio: the building blocks of the Studio steps. Each builder returns an element bound to
 // the live settings; edits go through change(), which saves them by itself.
 
+import { api } from '../core/api.js';
 import { h } from '../core/dom.js';
+import { toast } from '../core/toast.js';
 import * as core from './studio-core.js';
 import { change, focusText, icon, THEMES, themeSwatch } from './studio-core.js';
 
@@ -35,35 +37,57 @@ export function switchRow(label, key, onToggle = null) {
 }
 
 // --- Look: theme swatches and accent colours --------------------------------------------------------
-// The one look the Studio, the Dashboard and the Overlay share: saved in the Studio settings wherever it
-// is picked. The Dashboard and Overlay pages load those settings first (core.loadSettings) and pass
-// onPick to show the change in their own preview.
+// The same picker on the Studio, Dashboard and Overlay pages (/api/look, src/look.rs). The switch on top:
+// the same look on all three (a change here changes the other two), or this page's own. onPick gets
+// every page's look after a change, for the page's own preview.
 const ACCENTS = ['#1fa34a', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308'];
+let lookState = null;   // { sync, studio: {theme, accent}, dashboard: {…}, overlay: {…} } as the server has it
 
-export function lookPicker({ onPick = null } = {}) {
-  const pickLook = values => { change(values); onPick?.(values); };
-  const grid = h('div', { class: 'stu-looks' });
-  const render = () => grid.replaceChildren(...THEMES.map(t => {
-    const btn = h('button', { type: 'button', class: `stu-look${S().theme === t.id ? ' is-on' : ''}`, title: t.name, 'data-fk': `look-${t.id}` },
-      themeSwatch(t, S().accent), t.name);
-    btn.addEventListener('click', () => { pickLook({ theme: t.id }); render(); });
-    return btn;
-  }));
-  const accents = h('div', { class: 'stu-accents' });
-  const renderAccents = () => {
-    const custom = h('input', { type: 'color', value: S().accent, 'aria-label': 'Own colour' });
-    custom.addEventListener('input', () => { pickLook({ accent: custom.value }); render(); });
-    custom.addEventListener('change', renderAccents);
-    accents.replaceChildren(...ACCENTS.map(c => {
-      const b = h('button', { type: 'button', class: `stu-accent${S().accent.toLowerCase() === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}` });
-      b.addEventListener('click', () => { pickLook({ accent: c }); renderAccents(); render(); });
+export function lookPicker({ page = 'studio', onPick = null } = {}) {
+  const root = h('div', { class: 'stu-look-picker' });
+  const send = async body => {
+    const mine = lookState[page];
+    if (body.theme) mine.theme = body.theme;
+    if (body.accent) mine.accent = body.accent;
+    if ('sync' in body) lookState.sync = body.sync;
+    render();
+    try {
+      lookState = await api('/api/look', { body: { page, ...body } });
+    } catch (err) {
+      toast.error(err.message);
+    }
+    render();
+    // The Studio's own look and the switch: its preview and other open pages show them at once
+    core.showDraft({ theme: lookState.studio.theme, accent: lookState.studio.accent, look_sync: lookState.sync });
+    onPick?.(lookState);
+  };
+  const render = () => {
+    if (!lookState) return;
+    const mine = lookState[page];
+    const accent = mine.accent || '#3b82f6';
+    const sw = h('input', { type: 'checkbox', class: 'stu-switch', checked: lookState.sync, 'data-fk': 'look-sync' });
+    sw.addEventListener('change', () => send({ sync: sw.checked }));
+    const grid = h('div', { class: 'stu-looks' }, ...THEMES.map(t => {
+      const btn = h('button', { type: 'button', class: `stu-look${mine.theme === t.id ? ' is-on' : ''}`, title: t.name, 'data-fk': `look-${t.id}` },
+        themeSwatch(t, accent), t.name);
+      btn.addEventListener('click', () => send({ theme: t.id }));
+      return btn;
+    }));
+    const custom = h('input', { type: 'color', value: accent, 'aria-label': 'Own colour' });
+    custom.addEventListener('change', () => send({ accent: custom.value }));
+    const accents = h('div', { class: 'stu-accents' }, ...ACCENTS.map(c => {
+      const b = h('button', { type: 'button', class: `stu-accent${mine.accent.toLowerCase() === c ? ' is-on' : ''}`, style: `background:${c}`, 'aria-label': `Accent ${c}` });
+      b.addEventListener('click', () => send({ accent: c }));
       return b;
-    }), h('label', { class: `stu-accent stu-accent-custom${ACCENTS.includes(S().accent.toLowerCase()) ? '' : ' is-on'}`, title: 'Own colour' }, custom));
+    }), h('label', { class: `stu-accent stu-accent-custom${mine.accent && !ACCENTS.includes(mine.accent.toLowerCase()) ? ' is-on' : ''}`, title: 'Own colour' }, custom));
+    root.replaceChildren(
+      h('label', { class: 'stu-switch-row', title: 'On: a change here changes the Studio, the Dashboard and the Overlay. Off: each page keeps its own look.' },
+        sw, 'Same look on Studio, Dashboard and Overlay'),
+      section('Look', grid), section('Accent colour', accents));
   };
   render();
-  renderAccents();
-  return h('div', { class: 'stu-look-picker', title: 'One look for Studio, Dashboard and Overlay' },
-    section('Look', grid), section('Accent colour', accents));
+  api('/api/look').then(v => { lookState = v; render(); }).catch(err => toast.error(err.message));
+  return root;
 }
 
 // --- Camera layout as little pictures; Auto = board while throwing, split at takeout -----------------

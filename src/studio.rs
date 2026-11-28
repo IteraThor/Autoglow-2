@@ -18,7 +18,7 @@ pub const PROFILE_FIELDS: [(&str, usize); 12] = [
     ("favourite_double", 10), ("playing_since", 10), ("stat_average", 10), ("stat_180s", 10), ("stat_best_checkout", 10),
 ];
 const PICTURE_SLOTS: [&str; 1] = ["image"];
-/// The one look the Studio, the Dashboard and the Overlay share (with the accent colour)
+/// The looks; the Studio, the Dashboard and the Overlay pick from the same ones (src/look.rs)
 pub const THEMES: [&str; 7] = ["autodarts", "arena", "mono", "gazette", "blueprint", "pop", "worldcup"];
 const LAYOUTS: [&str; 3] = ["split", "board", "player"];
 const MAX_TEXT_LENGTH: usize = 80;
@@ -300,6 +300,8 @@ pub fn clean_settings(raw: Option<&Value>) -> Obj {
         "auto_direct" => get_bool(r, "auto_direct", true),
         "layout" => pick("layout", &LAYOUTS, "split"),
         // Looks that are gone: the dark, bold ones become Arena, the rest Autodarts
+        // One look for the Studio, the Dashboard and the Overlay (src/look.rs)
+        "look_sync" => get_bool(r, "look_sync", true),
         "theme" => match r.get("theme").and_then(Value::as_str) {
             Some("neon" | "velocity" | "pub") => "arena".to_string(),
             _ => pick("theme", &THEMES, "autodarts"),

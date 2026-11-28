@@ -1,6 +1,6 @@
 // AutoGlow 2 - Overlay page: how Autodarts' match page looks on every board while it plays a Local
-// Tournament match (drawn by the Bridge, chrome_extension/match.js). The look (the one look Studio,
-// Dashboard and Overlay share, kept in the Studio settings), the whole page restyled or only panels on top, the
+// Tournament match (drawn by the Bridge, chrome_extension/match.js). The look (the same as the Studio's
+// and the Dashboard's, or the boards' own: src/look.rs), the whole page restyled or only panels on top, the
 // style, and for each screen shape (landscape, portrait) its own parts and where its boxes stand.
 // Pictures instead of notes: the preview is the Bridge's own code on a stand-in match page
 // (web/studio/overlay.html) at a board screen's real size. In it a click selects a part, a drag moves
@@ -14,6 +14,7 @@ import { toast } from '../core/toast.js';
 import * as studio from './studio-core.js';
 import { icon } from './studio-core.js';
 import { lookPicker, section, segmented } from './studio-parts.js';
+import { presetBar } from './event-presets.js';
 
 const $ = id => document.getElementById(id);
 const SAVE_DELAY_MS = 500;
@@ -140,13 +141,13 @@ function saveMark() {
 }
 
 // --- The preview ---------------------------------------------------------------------------------
-/** The settings as a board gets them: the shared look (Studio settings), the event's name and logo */
+/** The settings as a board gets them: the look in force (own or shared), the event's name and logo */
 function resolved() {
   const ev = S.event || {};
   return {
     ...S,
-    look: S.studio_look?.look || 'autodarts',
-    accent: S.studio_look?.accent || '',
+    look: S.look_now?.look || 'autodarts',
+    accent: S.look_now?.accent || '',
     title: ev.title || '', subtitle: ev.subtitle || '', logo: ev.logo || '',
     logo_url: ev.logo ? `/api/dashboard/logo/${encodeURIComponent(ev.logo)}` : ''
   };
@@ -260,8 +261,8 @@ function lookTab() {
     section('Screen', h('div', { class: 'dsh-presets ovl-skins' },
       skinCard('page', 'Whole page', 'Autodarts\' page turns into the tournament\'s: background, player cards, bars and buttons in the look'),
       skinCard('panels', 'Panels only', 'Autodarts\' page stays as it is; the tournament panels go around it'))),
-    // The look Studio and Dashboard share: picked here, it changes there too
-    lookPicker({ onPick: () => { S.studio_look = { look: studio.settings.theme, accent: studio.settings.accent }; sendPreview(); } }),
+    // The look: the same on Studio, Dashboard and Overlay, or the boards' own
+    lookPicker({ page: 'overlay', onPick: v => { S.look_now = { look: v.overlay.theme, accent: v.overlay.accent }; sendPreview(); } }),
     section('Big letters', choice('font', [font('look', 'Look'), font('bebas', 'Bebas', '"Bebas Neue"'), font('oswald', 'Oswald', 'Oswald'), font('anton', 'Anton', 'Anton'),
       font('unbounded', 'Unbounded', 'Unbounded'), font('serif', 'Serif', '"DM Serif Display",serif'), font('black', 'Black', '"Archivo Black"')], () => st.font || 'look', v => change({ style: { font: v } })))
   ];
@@ -461,6 +462,12 @@ function build(host) {
   const frame = h('iframe', { src: '/overlay/preview', title: 'Board preview', class: 'ovl-frame' });
   const screen = h('div', { class: 'stu-screen ovl-screen' }, frame);
   const dots = statusChips();
+  // The event preset: Studio, Dashboard and Overlay together (web/js/features/event-presets.js)
+  const bar = presetBar({
+    beforeSwitch: flush,
+    afterSwitch: renderOverlay,
+    suggestName: () => S.event?.title || ''
+  });
   const tabs = h('div', { class: 'stu-group dsh-rail', role: 'tablist', 'aria-label': 'Overlay' }, h('span', { class: 'stu-pill' }),
     ...TABS.map(([id, label, , ico, note]) => {
       const b = h('button', { type: 'button', role: 'tab', class: 'stu-stage', 'data-id': id, title: note }, icon(ico, 22), h('span', {}, label));
@@ -514,14 +521,14 @@ function build(host) {
   };
 
   host.replaceChildren(
-    h('div', { class: 'stu-top' }, dots, h('span', { class: 'stu-spacer' }), saveMark()),
+    h('div', { class: 'stu-top' }, bar, dots, h('span', { class: 'stu-spacer' }), saveMark()),
     tabs,
     h('div', { class: 'stu-body ovl-body' },
       h('div', { class: 'stu-left' },
         screen,
         h('div', { class: 'dsh-now ovl-view' }, orients, sizes, scenes, replay, formats)),
       panel));
-  return { frame, dots, refresh, fit, scenes, orients };
+  return { frame, dots, bar, refresh, fit, scenes, orients };
 }
 
 async function renderOverlay() {
@@ -534,6 +541,7 @@ async function renderOverlay() {
     page.fit();
     sendPreview();
     page.dots.refresh();
+    page.bar.refresh();
     clearInterval(statusTimer);
     statusTimer = setInterval(page.dots.refresh, STATUS_MS);
   } catch (err) {

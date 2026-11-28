@@ -19,8 +19,8 @@ const screen = $('screen');
 
 // What the TVs show, set on the Dashboard page and saved on the server (/api/dashboard). layout:
 // overview (boards left, scene right), boards (a row per board), wall (the scene fills the screen,
-// boards in a strip), single (one scene at a time). theme and accent: the Studio's look, shared by the
-// Studio, the Dashboard and the Overlay (the server adds them to /api/dashboard).
+// boards in a strip), single (one scene at a time). theme and accent: the look in force, the same as the
+// Studio's or the TVs' own (the server puts it in /api/dashboard, src/look.rs).
 // For trying, the address takes ?layout= and ?theme=; ?preview=1 is the Dashboard page's preview, which
 // also shows edits before they are saved.
 const DEFAULTS = {
@@ -290,9 +290,9 @@ if (preview && 'BroadcastChannel' in window) {
     resolveCfg();
     if (data) render();
   };
-  // The shared look picked on any page of this browser (Studio, Dashboard or Overlay › Look)
+  // The look picked on any page of this browser while it is the same everywhere (Studio, Dashboard or Overlay › Look)
   new BroadcastChannel('autoglow-studio-draft').onmessage = e => {
-    if (e.data?.type === 'draft') studioDraft = { theme: e.data.settings.theme, accent: e.data.settings.accent };
+    if (e.data?.type === 'draft') studioDraft = e.data.settings.look_sync === false ? null : { theme: e.data.settings.theme, accent: e.data.settings.accent };
     else if (e.data?.type === 'clear') studioDraft = null;
     else return;
     resolveCfg();

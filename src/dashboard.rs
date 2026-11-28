@@ -60,6 +60,8 @@ fn text(o: &Obj, key: &str, max: usize) -> String {
 pub fn clean(v: Option<&Value>) -> Obj {
     let empty = Obj::new();
     let o = v.and_then(Value::as_object).unwrap_or(&empty);
+    let accent = get_str(o, "accent", "");
+    let hex = accent.len() == 7 && accent.starts_with('#') && accent[1..].chars().all(|c| c.is_ascii_hexdigit());
     let logo = get_str(o, "logo", "");
     // Each scene once, in the order given; scenes not given keep their default at the end
     let mut scenes: Vec<Value> = Vec::new();
@@ -95,6 +97,9 @@ pub fn clean(v: Option<&Value>) -> Obj {
     crate::obj! {
         "preset" => pick(o, "preset", &PRESETS, "overview"),
         "layout" => pick(o, "layout", &LAYOUTS, "overview"),
+        // Its own look, used when the look is not the same everywhere (src/look.rs)
+        "theme" => pick(o, "theme", &crate::studio::THEMES, "arena"),
+        "accent" => if hex { accent.to_lowercase() } else { String::new() },
         "photos" => get_bool(o, "photos", true),
         "clock" => get_bool(o, "clock", true),
         "boards" => get_bool(o, "boards", true),
@@ -185,8 +190,8 @@ mod tests {
             "logo": "../x.png", "scenes": [{"id": "results", "secs": 2, "on": false}, {"id": "bogus"}, {"id": "results"}], "extra": 1});
         let c = clean(Some(&v));
         assert_eq!(c["layout"], "wall");
-        // The look is the Studio's (src/studio.rs THEMES)
-        assert!(c.get("theme").is_none() && c.get("accent").is_none());
+        assert_eq!(c["theme"], "arena");
+        assert_eq!(c["accent"], "#ff8800");
         assert_eq!(c["safe"], 5);
         assert_eq!(c["title"], "Friday");
         assert_eq!(c["logo"], "");

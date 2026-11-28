@@ -359,7 +359,8 @@ window.agI18n.add({
   'Large': 'Groß',
   'Safe-area margin': 'Sicherheitsrand',
   'Accent colour': 'Akzentfarbe',
-  'One look for Studio, Dashboard and Overlay': 'Ein Look für Studio, Dashboard und Overlay',
+  'Same look on Studio, Dashboard and Overlay': 'Gleicher Look für Studio, Dashboard und Overlay',
+  'On: a change here changes the Studio, the Dashboard and the Overlay. Off: each page keeps its own look.': 'An: eine Änderung hier ändert Studio, Dashboard und Overlay. Aus: jede Seite behält ihren eigenen Look.',
   'Screen': 'Bildschirm',
   'Calm': 'Ruhig',
   'Nothing blinks or drifts; scenes fade instead of sliding': 'Nichts blinkt oder wandert; Szenen blenden über statt zu gleiten',
@@ -396,7 +397,7 @@ window.agI18n.add({
   'Lobby': 'Lobby',
 
   // Event presets
-  'Event presets: Studio and Dashboard together': 'Veranstaltungsvorlagen: Studio und Dashboard zusammen',
+  'Event presets: Studio, Dashboard and Overlay together': 'Veranstaltungsvorlagen: Studio, Dashboard und Overlay zusammen',
   'e.g. Friday League': 'z. B. Freitagsliga',
   'Preset name': 'Name der Vorlage',
   'Delete {}': '{} löschen',

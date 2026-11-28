@@ -1,5 +1,5 @@
-// AutoGlow 2 - Event presets on the Studio and Dashboard pages: one saved setup per event (names, logo,
-// looks, texts, TV screens) for both pages together. The active preset is the live settings: edits go
+// AutoGlow 2 - Event presets on the Studio, Dashboard and Overlay pages: one saved setup per event (names,
+// logo, looks, texts, TV screens, the boards' overlay) for all three together. The active preset is the live settings: edits go
 // into it by themselves, and switching keeps them there before putting another one live
 // (src/event_presets.rs, /api/presets). Cameras and players stay with the PC.
 
@@ -12,12 +12,13 @@ import { closePopover, popover } from './studio-parts.js';
 const logoUrl = name => `/api/dashboard/logo/${encodeURIComponent(name)}`;
 const initials = name => name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
 
-// The preset as a little TV in its look's colours (the shared look), with its logo or initials
+// The preset as a little TV in its TVs' look (the shared one, or the Dashboard's own), with its logo or initials
 export function presetTv(p, cls = '') {
   const d = p.dashboard || {};
   const st = p.studio || {};
-  const t = THEMES.find(x => x.id === st.theme) || THEMES[0];
-  const [bg, accent, row] = [t.bg, st.accent || '#1fa34a', t.row === 'transparent' ? t.text : t.row];
+  const own = st.look_sync === false;
+  const t = THEMES.find(x => x.id === (own ? d.theme : st.theme)) || THEMES[0];
+  const [bg, accent, row] = [t.bg, (own ? d.accent : st.accent) || st.accent || '#1fa34a', t.row === 'transparent' ? t.text : t.row];
   return h('span', { class: `evp-tv ${cls}`, style: `--bg:${bg};--a:${accent};--row:${row}`, 'aria-hidden': 'true' },
     d.logo ? h('img', { src: logoUrl(d.logo), alt: '' }) : h('b', {}, initials(p.name)),
     h('i'), h('i'));
@@ -28,7 +29,7 @@ let data = null;   // { active, presets } as the server last sent it
 export function presetBar({ beforeSwitch = async () => {}, afterSwitch = async () => {}, suggestName = () => '' } = {}) {
   let tv = h('span');
   const name = h('span', { class: 'evp-name' });
-  const btn = h('button', { type: 'button', class: 'stu-btn evp-btn', 'data-pop': '', title: 'Event presets: Studio and Dashboard together' },
+  const btn = h('button', { type: 'button', class: 'stu-btn evp-btn', 'data-pop': '', title: 'Event presets: Studio, Dashboard and Overlay together' },
     tv, name, icon('chevron', 14));
   const active = () => data?.presets.find(p => p.id === data.active);
 

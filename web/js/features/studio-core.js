@@ -51,6 +51,12 @@ export function change(values) {
   saveTimer = setTimeout(flush, SAVE_DELAY_MS);
 }
 
+// Values the server already saved (the look, /api/look): into the settings and the demo preview, not saved again
+export function showDraft(values) {
+  Object.assign(settings, values);
+  draftChannel?.postMessage({ type: 'draft', settings });
+}
+
 export async function flush() {
   clearTimeout(saveTimer);
   if (!Object.keys(pending).length) return;

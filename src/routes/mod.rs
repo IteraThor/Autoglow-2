@@ -214,6 +214,7 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/dashboard/logo/{name}", get(dashboard_routes::logo))
         .route("/api/dashboard/hold", post(dashboard_routes::hold))
         .route("/api/overlay", get(overlay_routes::get).post(overlay_routes::post))
+        .route("/api/look", get(studio_routes::get_look).post(studio_routes::post_look))
         .route("/api/tournament/overlay-logo", get(tournament_routes::overlay_logo))
         .route("/api/presets", get(preset_routes::list).post(preset_routes::create))
         .route("/api/presets/{id}", post(preset_routes::rename).merge(delete(preset_routes::remove)))

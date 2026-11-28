@@ -3,8 +3,8 @@
 //! studio/overlay.json on the PC that hosts the tournament; the host sends it to every board with
 //! the tournament (src/tournament/mod.rs), so all boards look the same.
 //!
-//! The look and accent colour are the Studio's (one look for the Studio, the Dashboard and the
-//! Overlay, src/studio.rs THEMES); resolved() adds them. skin "page" restyles the whole Autodarts page in the look,
+//! look / accent: its own look, used when the look is not the same everywhere (src/look.rs);
+//! resolved() puts the look in force. skin "page" restyles the whole Autodarts page in the look,
 //! "panels" only adds the tournament panels on top of it. style: panels, corners, motion, the page's
 //! background, the active card and the display font. landscape / portrait: each screen shape has its
 //! own parts (what is shown) and boxes (where a box was moved to on the Overlay page: x, y and width
@@ -85,7 +85,10 @@ pub fn clean(v: Option<&Value>) -> Obj {
     for (k, d) in FACE_ON {
         face.insert(k.into(), Value::Bool(get_bool(face_in, k, d)));
     }
+    let look = get_str(o, "look", "autodarts");
     let mut out = crate::obj! {
+        "look" => if crate::studio::THEMES.contains(&look.as_str()) { look } else { "autodarts".into() },
+        "accent" => hex(&get_str(o, "accent", "")),
         "skin" => if SKINS.contains(&skin.as_str()) { skin } else { "page".into() },
         "intro_secs" => clamp(safe_int(o.get("intro_secs"), INTRO_SECS.1), INTRO_SECS.0, INTRO_SECS.2),
         "style" => style,
@@ -165,20 +168,21 @@ pub fn save(changes: &Obj) -> Result<Obj, String> {
     Ok(new)
 }
 
-/// The shared look as the boards draw it: {look, accent} from the Studio's settings
-pub fn studio_look() -> Value {
-    let st = crate::studio::Studio::new().load_settings();
-    json!({"look": get_str(&st, "theme", "autodarts"), "accent": hex(&get_str(&st, "accent", ""))})
+/// An event preset's part: everything but what belongs to this PC (casual)
+pub fn preset_part(v: Option<&Value>) -> Obj {
+    let mut o = clean(v);
+    o.remove("casual");
+    o
 }
 
 /// The settings as the boards use them: the look resolved, with the event's name and logo from
 /// the Dashboard. This is what goes out with the tournament.
 pub fn resolved() -> Value {
     let s = load();
-    let l = studio_look();
+    let (look, accent) = crate::look::of("overlay");
     let mut out = Value::Object(s);
-    out["look"] = l["look"].clone();
-    out["accent"] = l["accent"].clone();
+    out["look"] = json!(look);
+    out["accent"] = json!(accent);
     let d = crate::dashboard::Dashboard::new().load();
     out["title"] = json!(get_str(&d, "title", ""));
     out["subtitle"] = json!(get_str(&d, "subtitle", ""));
@@ -204,8 +208,8 @@ mod tests {
             "style": {"motion": "pop", "bg": "nope", "opacity": 5}, "clock": "both", "note": "x".repeat(300),
             "portrait": {"parts": {"race": false}, "boxes": {"header": {"x": -5, "y": 40.123, "w": 500, "s": 9}, "bogus": {"x": 1}}}});
         let c = clean(Some(&v));
-        // The look and accent are the Studio's (resolved adds them)
-        assert!(c.get("look").is_none() && c.get("accent").is_none());
+        assert_eq!(c["look"], "autodarts");
+        assert_eq!(c["accent"], "#abcdef");
         assert_eq!(c["skin"], "page");
         // The old shared parts carry over to a screen without its own
         assert_eq!(c["landscape"]["parts"]["intro"], false);
