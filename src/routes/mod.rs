@@ -23,6 +23,7 @@ mod dashboard_routes;
 mod flow_routes;
 mod hub;
 mod misc_routes;
+mod overlay_routes;
 mod power;
 mod preset_routes;
 mod studio_routes;
@@ -89,7 +90,7 @@ pub fn parse_multipart(req: &Req) -> Vec<Part> {
 /// Every page of the single-page app. The first group is canonical; the rest are older links that
 /// web/js/core/router.js redirects to their canonical page.
 pub const SPA_PATHS: &[&str] = &[
-    "/", "/hub", "/setup", "/setup/controllers", "/setup/connection", "/lighting", "/lighting/matrix", "/lighting/flow", "/studio", "/dashboard", "/players", "/studio/broadcast",
+    "/", "/hub", "/setup", "/setup/controllers", "/setup/connection", "/lighting", "/lighting/matrix", "/lighting/flow", "/studio", "/dashboard", "/overlay", "/players", "/studio/broadcast",
     "/studio/match", "/studio/players", "/studio/cameras", "/classic", "/power", "/settings", "/index.html", "/home", "/devices", "/wled-devices",
     "/autodarts", "/autodarts-account", "/matrix", "/event-matrix", "/simulator", "/led-simulator", "/power-timers", "/idle", "/idle-mode", "/updates",
     "/updates-backups", "/backups",
@@ -109,6 +110,13 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
     r = r.route("/join", get(move || no_store_file(join.clone())));
     let signup = web_dir.join("signup.html");
     r = r.route("/signup", get(move || no_store_file(signup.clone())));
+    // The Overlay page's preview runs the extension's own match screen code
+    for name in ["match.js", "i18n.js"] {
+        let p = crate::extension::extension_dir().join(name);
+        r = r.route(&format!("/bridge/{}", name), get(move || no_store_file(p.clone())));
+    }
+    let ovp = web_dir.join("studio").join("overlay.html");
+    r = r.route("/overlay/preview", get(move || no_store_file(ovp.clone())));
     let tv = web_dir.join("studio").join("tournament.html");
     r = r.route("/tournament/live", get(move || no_store_file(tv.clone())));
     let js_dir = web_dir.join("studio").join("js");
@@ -205,6 +213,8 @@ pub fn register(mut r: Router<S>, web_dir: &Path) -> Router<S> {
         .route("/api/dashboard/logo", post(dashboard_routes::logo_upload))
         .route("/api/dashboard/logo/{name}", get(dashboard_routes::logo))
         .route("/api/dashboard/hold", post(dashboard_routes::hold))
+        .route("/api/overlay", get(overlay_routes::get).post(overlay_routes::post))
+        .route("/api/tournament/overlay-logo", get(tournament_routes::overlay_logo))
         .route("/api/presets", get(preset_routes::list).post(preset_routes::create))
         .route("/api/presets/{id}", post(preset_routes::rename).merge(delete(preset_routes::remove)))
         .route("/api/presets/{id}/activate", post(preset_routes::activate))

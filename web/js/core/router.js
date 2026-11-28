@@ -23,6 +23,8 @@ export const VIEWS = [
   { id: 'studio', label: 'Studio', path: '/studio', pane: 'tab-studio' },
   // The Local Tournament TVs: presets, scenes, look (web/js/features/dashboard.js)
   { id: 'dashboard', label: 'Dashboard', path: '/dashboard', pane: 'tab-dashboard' },
+  // The Local Tournament match screen on the boards: look and parts (web/js/features/overlay.js)
+  { id: 'overlay', label: 'Overlay', path: '/overlay', pane: 'tab-overlay' },
   // The club roster: members with pictures and profiles (web/js/features/players.js)
   { id: 'players', label: 'Players', path: '/players', pane: 'tab-players' },
   // The original AutoGlow 1: Board Manager API -> one WLED controller on USB (web/js/features/classic.js)

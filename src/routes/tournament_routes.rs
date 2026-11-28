@@ -218,3 +218,21 @@ pub async fn peer_ws(State(s): State<S>, ws: WebSocketUpgrade) -> Response {
     let t = Arc::clone(&s.tournaments);
     ws.on_upgrade(move |sock| t.peer_session(sock))
 }
+
+/// The event logo for the match screen (chrome_extension/match.js), as a data: address. A board
+/// asks its host for it, since the logo lives where the Dashboard is set up.
+pub async fn overlay_logo(State(s): State<S>, req: Req) -> ApiResult {
+    let name = req.query.get("name").cloned().unwrap_or_default();
+    if let Some(data) = crate::overlay::logo_data(&name) {
+        return ok(json!({"data": data}));
+    }
+    let Some(addr) = s.tournaments.host_address() else { return ok(json!({"data": ""})) };
+    let addr = if addr.contains(':') { addr } else { format!("{}:8080", addr) };
+    let url = format!("http://{}/api/tournament/overlay-logo", addr);
+    let data = tokio::task::spawn_blocking(move || {
+        ureq::get(&url).query("name", &name).timeout(std::time::Duration::from_secs(5)).call().ok().and_then(|r| r.into_json::<Value>().ok()).map(|v| crate::py::py_str(&v["data"])).unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default();
+    ok(json!({"data": data}))
+}

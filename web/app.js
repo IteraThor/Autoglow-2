@@ -9,6 +9,8 @@ function activatePane(targetId) {
   if (studioOpen && !targetId.startsWith('tab-studio') && window.leaveStudio) window.leaveStudio();
   const dashboardOpen = !!document.querySelector('.dashboard-page.active');
   if (dashboardOpen && targetId !== 'tab-dashboard' && window.leaveDashboard) window.leaveDashboard();
+  const overlayOpen = !!document.querySelector('.overlay-page.active');
+  if (overlayOpen && targetId !== 'tab-overlay' && window.leaveOverlay) window.leaveOverlay();
 
   const pane = document.getElementById(targetId);
   if (pane) pane.classList.add('active');
@@ -17,6 +19,7 @@ function activatePane(targetId) {
   if (targetId === 'tab-autodarts') renderAutodartsTab();
   if (targetId.startsWith('tab-studio') && window.renderStudio) window.renderStudio(targetId);
   if (targetId === 'tab-dashboard' && window.renderDashboard) window.renderDashboard();
+  if (targetId === 'tab-overlay' && window.renderOverlay) window.renderOverlay();
   if (targetId === 'tab-players' && window.renderPlayers) window.renderPlayers();
   if (targetId === 'tab-settings' && window.renderNetwork) window.renderNetwork();
   if (targetId === 'tab-simulator') {

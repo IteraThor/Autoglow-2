@@ -63,6 +63,8 @@ struct Join {
     backup: Option<Value>,
     offline_since: f64,
     look_at: f64,
+    /// How the host wants the match screen to look (src/overlay.rs, resolved)
+    overlay: Value,
 }
 
 /// What this PC's board does for its assigned match
@@ -410,8 +412,15 @@ impl Tournaments {
             }),
         };
         let a = &g.agent;
+        // How the match screen looks: the host's settings (a board has them from the host)
+        let overlay = match g.join.as_ref().filter(|j| g.hosted.is_none() && j.overlay.is_object()) {
+            Some(j) => j.overlay.clone(),
+            None if tournament.is_some() => crate::overlay::resolved(),
+            None => Value::Null,
+        };
         json!({
             "role": role,
+            "overlay": overlay,
             "node": {"id": g.node_id, "name": g.node_name},
             "tournament": tournament,
             "join": g.join.as_ref().map(|j| {
@@ -430,6 +439,23 @@ impl Tournaments {
     // -----------------------------------------------------------------------------------------
     // Host actions
     // -----------------------------------------------------------------------------------------
+
+    /// The overlay settings changed: every board gets them at once
+    pub fn overlay_changed(&self) {
+        let mut g = self.lock();
+        if g.hosted.is_some() {
+            self.host_changed(&mut g);
+        }
+    }
+
+    /// The host's address while this PC is a board of another PC's tournament
+    pub fn host_address(&self) -> Option<String> {
+        let g = self.lock();
+        if g.hosted.is_some() {
+            return None;
+        }
+        g.join.as_ref().map(|j| j.address.clone()).filter(|a| !a.is_empty())
+    }
 
     fn with_host<R>(&self, f: impl FnOnce(&mut Inner) -> Result<R, String>) -> Result<R, String> {
         let mut g = self.lock();
@@ -450,9 +476,10 @@ impl Tournaments {
         // Approved boards keep the whole tournament, so one of them can take over if this PC is gone
         let full = serde_json::to_value(t).unwrap_or(Value::Null);
         let live = Self::live_scores(g);
+        let overlay = if g.peers.is_empty() { Value::Null } else { crate::overlay::resolved() };
         for (node, tx) in &g.peers {
             let approved = t.boards.iter().any(|b| &b.node_id == node && b.approved);
-            let msg = json!({"t": "state", "approved": approved, "host_name": g.node_name, "host_node": g.node_id, "tid": t.id, "tournament": if approved { view.clone() } else { json!({"name": t.name}) }, "full": if approved { full.clone() } else { Value::Null }, "live": live, "assignment": engine::assignment_for(t, node)});
+            let msg = json!({"t": "state", "approved": approved, "host_name": g.node_name, "host_node": g.node_id, "tid": t.id, "tournament": if approved { view.clone() } else { json!({"name": t.name}) }, "full": if approved { full.clone() } else { Value::Null }, "live": live, "assignment": engine::assignment_for(t, node), "overlay": overlay});
             let _ = tx.send(msg.to_string());
         }
         self.save(g);
@@ -1238,6 +1265,9 @@ impl Tournaments {
                 j.tournament_name = v["tournament"]["name"].as_str().unwrap_or(&j.tournament_name).to_string();
                 j.tournament = if approved { Some(v["tournament"].clone()) } else { None };
                 j.live = v["live"].clone();
+                if v["overlay"].is_object() {
+                    j.overlay = v["overlay"].clone();
+                }
                 j.assignment = v.get("assignment").filter(|a| !a.is_null()).cloned();
                 if let Some(t) = v["tid"].as_str().filter(|t| !t.is_empty()) {
                     j.tid = t.into();

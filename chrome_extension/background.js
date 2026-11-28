@@ -235,7 +235,8 @@ function wledPower(on, ip) {
 
 // Local Tournament page (tournament.js): only AutoGlow's /api/tournament/* endpoints
 async function tournamentApi(path, body) {
-  if (!/^[a-z-]+$/.test(path || '')) throw new Error('Unknown tournament request');
+  // overlay-logo?name=…: the match screen's event logo (match.js)
+  if (!/^[a-z-]+(\?name=[A-Za-z0-9%._-]*)?$/.test(path || '')) throw new Error('Unknown tournament request');
   const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
   const res = await fetch(`${SERVER_URL}/api/tournament/${path}`, opts);
   const data = await res.json().catch(() => ({}));

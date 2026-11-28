@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/css/pages.css?v=2.2-p26">
   <link rel="stylesheet" href="/css/studio.css?v=2.5">
   <link rel="stylesheet" href="/css/dashboard.css?v=3">
+  <link rel="stylesheet" href="/css/overlay.css?v=1">
   <link rel="stylesheet" href="/css/players.css?v=10">
   <link rel="stylesheet" href="/css/network.css?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,6 +59,10 @@
         <a href="/dashboard" data-link data-view="dashboard" class="rail-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M7 13v-2M11 13V7M15 13V9"/></svg>
           <span>Dashboard</span>
+        </a>
+        <a href="/overlay" data-link data-view="overlay" class="rail-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="12" cy="12" r="4"/><path d="M5 7h3M16 7h3M5 17h3M16 17h3"/></svg>
+          <span>Overlay</span>
         </a>
         <span class="rail-divider" role="separator"></span>
         <span class="rail-group-label" aria-hidden="true">Club</span>
@@ -294,6 +299,11 @@
         <!-- DASHBOARD: what the Local Tournament TVs show (/tournament/live), built by web/js/features/dashboard.js -->
         <section id="tab-dashboard" class="tab-pane dashboard-page">
           <div class="dsh-page" id="dashboardPage"></div>
+        </section>
+
+        <!-- OVERLAY: how the boards' Autodarts match page looks in a Local Tournament (chrome_extension/match.js), built by web/js/features/overlay.js -->
+        <section id="tab-overlay" class="tab-pane overlay-page">
+          <div class="dsh-page" id="overlayPage"></div>
         </section>
 
         <!-- PLAYERS: the club roster, built by web/js/features/players.js -->

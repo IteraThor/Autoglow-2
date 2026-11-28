@@ -25,6 +25,7 @@ mod http;
 mod led_thread;
 mod legacy_cleanup;
 mod models;
+mod overlay;
 mod py;
 mod pyrandom;
 mod routes;
